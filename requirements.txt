@@ -1,0 +1,6 @@
+flask
+replicate
+python-dotenv
+pycryptodome
+requests
+flask-cors
