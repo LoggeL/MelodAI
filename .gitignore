@@ -1,3 +1,5 @@
 songs
 .env
 *.pyc
+.venv
+venv
