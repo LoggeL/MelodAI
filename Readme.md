@@ -16,7 +16,7 @@
 - **Python 3.10+**
 - Deezer ARL Token, Replicate API, and Hugging Face Access (read-only) token
 
-### Installation
+### Installation (Without Docker)
 
 1. Clone the repo and install dependencies:
    ```bash
@@ -45,6 +45,16 @@
    flask --app main run --port 5000
    ```
 4. Open `http://localhost:5000` in your browser to run the frontend.
+
+### Installation (With Docker)
+
+Prerequisites: Docker is installed
+
+```bash
+docker compose up
+```
+
+Access the frontend at `http://localhost`
 
 ## API Endpoints
 
