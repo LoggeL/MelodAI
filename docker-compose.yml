@@ -1,0 +1,15 @@
+services:
+  backend:
+    build:
+      context: .
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./songs:/app/songs 
+  frontend:
+    image: nginx
+    volumes:
+      - ./index.html:/usr/share/nginx/html/index.html
+      - ./songs:/usr/share/nginx/html/songs
+    ports:
+     - "80:80"

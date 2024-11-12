@@ -16,12 +16,19 @@
 - **Python 3.10+**
 - Deezer ARL Token, Replicate API, and Hugging Face Access (read-only) token
 
-### Installation
+### Installation (Without Docker)
 
 1. Clone the repo and install dependencies:
    ```bash
+   # Setup repository
    git clone <repo-url>
-   cd melodai
+   cd melodai-min
+
+   # Optional: Setup virtual environment
+   python -m venv .venv
+   source .venv/bin/activate
+
+   # Install requirements
    pip install -r requirements.txt
    ```
 2. Add environment variables in a `.env` file:
@@ -32,9 +39,22 @@
    ```
 3. Start the backend:
    ```bash
-   python app.py
+   # Start the backend via
+   python main.py
+   # OR
+   flask --app main run --port 5000
    ```
-4. Open `http://localhost:3000` in your browser to run the frontend.
+4. Open `http://localhost:5000` in your browser to run the frontend.
+
+### Installation (With Docker)
+
+Prerequisites: Docker is installed
+
+```bash
+docker compose up
+```
+
+Access the frontend at `http://localhost`
 
 ## API Endpoints
 
