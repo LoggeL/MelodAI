@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MelodAI Admin</title>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, sans-serif;
+        background: #f0f0f0;
+        margin: 0;
+        padding: 20px;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+      }
+
+      .card {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        margin-bottom: 1rem;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        padding: 0.75rem;
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+      }
+
+      th {
+        background: #f8f9fa;
+      }
+
+      button {
+        padding: 0.5rem 1rem;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+
+      .approve-btn {
+        background: #28a745;
+        color: white;
+      }
+
+      .approve-btn:hover {
+        background: #218838;
+      }
+
+      .btn-container {
+        display: flex;
+        justify-content: flex-end;
+      }
+
+      .home-btn {
+        background: #007bff;
+        color: white;
+        margin-right: 1rem;
+      }
+
+      .home-btn:hover {
+        background: #0056b3;
+      }
+
+      .logout-btn {
+        background: #dc3545;
+        color: white;
+      }
+
+      .logout-btn:hover {
+        background: #c82333;
+      }
+
+      .status {
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.875rem;
+      }
+
+      .status-pending {
+        background: #ffeeba;
+        color: #856404;
+      }
+
+      .status-approved {
+        background: #d4edda;
+        color: #155724;
+      }
+
+      .tab-container {
+        margin-bottom: 1rem;
+      }
+
+      .tab {
+        padding: 0.5rem 1rem;
+        border: none;
+        background: none;
+        cursor: pointer;
+        font-size: 1rem;
+        color: #6c757d;
+      }
+
+      .tab.active {
+        color: #007bff;
+        border-bottom: 2px solid #007bff;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>Admin Dashboard</h1>
+        <div class="btn-container">
+          <button class="home-btn" onclick="window.location.href = '/'">
+            Home
+          </button>
+          <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+      </div>
+
+      <div class="tab-container">
+        <button class="tab active" onclick="showTab('users')">Users</button>
+        <button class="tab" onclick="showTab('usage')">Usage Logs</button>
+      </div>
+
+      <div id="usersTab" class="card">
+        <h2>User Management</h2>
+        <table id="usersTable">
+          <thead>
+            <tr>
+              <th>Username</th>
+              <th>Created At</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div id="usageTab" class="card" style="display: none">
+        <h2>Usage Logs</h2>
+        <table id="usageTable">
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Action</th>
+              <th>Track ID</th>
+              <th>Timestamp</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <script>
+      async function checkAuth() {
+        try {
+          const response = await fetch('http://127.0.0.1:5000/admin/users', {
+            credentials: 'include',
+          })
+          if (!response.ok) {
+            window.location.href = '/login.html'
+          }
+        } catch (error) {
+          window.location.href = '/login.html'
+        }
+      }
+
+      async function loadUsers() {
+        try {
+          const response = await fetch('http://127.0.0.1:5000/admin/users', {
+            credentials: 'include',
+          })
+          const users = await response.json()
+
+          const tbody = document.querySelector('#usersTable tbody')
+          tbody.innerHTML = users
+            .map(
+              (user) => `
+                    <tr>
+                        <td>${user.username}</td>
+                        <td>${new Date(user.created_at).toLocaleString()}</td>
+                        <td>
+                            <span class="status ${
+                              user.is_approved
+                                ? 'status-approved'
+                                : 'status-pending'
+                            }">
+                                ${user.is_approved ? 'Approved' : 'Pending'}
+                            </span>
+                        </td>
+                        <td>
+                            ${
+                              !user.is_approved
+                                ? `<button class="approve-btn" onclick="approveUser(${user.id})">Approve</button>`
+                                : ''
+                            }
+                        </td>
+                    </tr>
+                `
+            )
+            .join('')
+        } catch (error) {
+          console.error('Error loading users:', error)
+        }
+      }
+
+      async function loadUsageLogs() {
+        try {
+          const response = await fetch('http://127.0.0.1:5000/admin/usage', {
+            credentials: 'include',
+          })
+          const usageLogs = await response.json()
+
+          const tbody = document.querySelector('#usageTable tbody')
+          tbody.innerHTML = usageLogs
+            .map(
+              (log) => `
+                    <tr>
+                        <td>${log.username}</td>
+                        <td>${log.action}</td>
+                        <td>${log.track_id}</td>
+                        <td>${new Date(log.created_at).toLocaleString()}</td>
+                    </tr>
+                `
+            )
+            .join('')
+        } catch (error) {
+          console.error('Error loading usage logs:', error)
+        }
+      }
+
+      async function approveUser(userId) {
+        try {
+          const response = await fetch(
+            `http://127.0.0.1:5000/admin/users/${userId}/approve`,
+            {
+              method: 'POST',
+              credentials: 'include',
+            }
+          )
+          if (response.ok) {
+            loadUsers()
+          }
+        } catch (error) {
+          console.error('Error approving user:', error)
+        }
+      }
+
+      async function logout() {
+        try {
+          await fetch('http://127.0.0.1:5000/auth/logout', {
+            method: 'POST',
+            credentials: 'include',
+          })
+          window.location.href = '/login.html'
+        } catch (error) {
+          console.error('Error logging out:', error)
+        }
+      }
+
+      function showTab(tabName) {
+        document.querySelectorAll('.tab').forEach((tab) => {
+          tab.classList.remove('active')
+        })
+        document
+          .querySelector(`.tab[onclick="showTab('${tabName}')"]`)
+          .classList.add('active')
+
+        document.getElementById('usersTab').style.display =
+          tabName === 'users' ? 'block' : 'none'
+        document.getElementById('usageTab').style.display =
+          tabName === 'usage' ? 'block' : 'none'
+
+        if (tabName === 'users') {
+          loadUsers()
+        } else if (tabName === 'usage') {
+          loadUsageLogs()
+        }
+      }
+
+      // Initialize
+      checkAuth()
+      loadUsers()
+    </script>
+  </body>
+</html>

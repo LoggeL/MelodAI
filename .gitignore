@@ -1,5 +1,13 @@
+# Songs folder
 songs
+
+# Secrets
 .env
+
+# Python
 *.pyc
 .venv
 venv
+
+# Database
+*.db

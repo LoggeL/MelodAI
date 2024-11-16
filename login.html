@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MelodAI Login</title>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, sans-serif;
+        background: #f0f0f0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+      }
+
+      .auth-container {
+        background: white;
+        padding: 2rem;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        width: 100%;
+        max-width: 400px;
+      }
+
+      .form-group {
+        margin-bottom: 1rem;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 0.5rem;
+        color: #333;
+      }
+
+      input {
+        width: 100%;
+        padding: 0.5rem;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 1rem;
+      }
+
+      button {
+        width: 100%;
+        padding: 0.75rem;
+        background: #007bff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        font-size: 1rem;
+        cursor: pointer;
+        margin-top: 1rem;
+      }
+
+      button:hover {
+        background: #0056b3;
+      }
+
+      .error {
+        color: #dc3545;
+        margin-top: 1rem;
+        text-align: center;
+      }
+
+      .toggle-form {
+        text-align: center;
+        margin-top: 1rem;
+        color: #007bff;
+        cursor: pointer;
+      }
+
+      h1 {
+        text-align: center;
+        margin-bottom: 2rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="auth-container">
+      <div id="loginForm">
+        <h1>Login</h1>
+        <div class="form-group">
+          <label for="loginUsername">Username</label>
+          <input type="text" id="loginUsername" required />
+        </div>
+        <div class="form-group">
+          <label for="loginPassword">Password</label>
+          <input type="password" id="loginPassword" required />
+        </div>
+        <button onclick="login()" type="submit">Login</button>
+        <div class="toggle-form" onclick="toggleForm('register')">
+          Need an account? Register
+        </div>
+        <div id="loginError" class="error"></div>
+      </div>
+
+      <div id="registerForm" style="display: none">
+        <h1>Register</h1>
+        <div class="form-group">
+          <label for="registerUsername">Username</label>
+          <input type="text" id="registerUsername" required />
+        </div>
+        <div class="form-group">
+          <label for="registerPassword">Password</label>
+          <input type="password" id="registerPassword" required />
+        </div>
+        <button onclick="register()">Register</button>
+        <div class="toggle-form" onclick="toggleForm('login')">
+          Already have an account? Login
+        </div>
+        <div id="registerError" class="error"></div>
+      </div>
+    </div>
+
+    <script>
+      function toggleForm(form) {
+        document.getElementById('loginForm').style.display =
+          form === 'login' ? 'block' : 'none'
+        document.getElementById('registerForm').style.display =
+          form === 'register' ? 'block' : 'none'
+      }
+
+      async function login(e) {
+        e.preventDefault()
+        const username = document.getElementById('loginUsername').value
+        const password = document.getElementById('loginPassword').value
+
+        try {
+          const response = await fetch('http://127.0.0.1:5000/auth/login', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password }),
+          })
+
+          const data = await response.json()
+
+          if (response.ok) {
+            if (data.is_admin) {
+              window.location.href = '/admin'
+            } else {
+              window.location.href = '/'
+            }
+          } else {
+            document.getElementById('loginError').textContent = data.error
+          }
+        } catch (error) {
+          document.getElementById('loginError').textContent =
+            'An error occurred. Please try again.'
+        }
+      }
+
+      async function register() {
+        const username = document.getElementById('registerUsername').value
+        const password = document.getElementById('registerPassword').value
+
+        try {
+          const response = await fetch('http://127.0.0.1:5000/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password }),
+          })
+
+          const data = await response.json()
+
+          if (response.ok) {
+            document.getElementById('registerError').textContent = data.message
+            setTimeout(() => toggleForm('login'), 2000)
+          } else {
+            document.getElementById('registerError').textContent = data.error
+          }
+        } catch (error) {
+          document.getElementById('registerError').textContent =
+            'An error occurred. Please try again.'
+        }
+      }
+    </script>
+  </body>
+</html>

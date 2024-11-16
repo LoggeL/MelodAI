@@ -1,70 +1,272 @@
 import deezer
-from flask import Flask, request, jsonify
+from flask import Flask, redirect, request, jsonify, send_from_directory, session
 from flask_cors import CORS
+from flask_socketio import SocketIO, emit
+from werkzeug.security import generate_password_hash, check_password_hash
 import os
 import replicate
 import requests
 import json
+import sqlite3
+from functools import wraps
+import time
 
 # env
 from dotenv import load_dotenv
+
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+app.secret_key = os.getenv("SECRET_KEY", "dev")  # Change in production
+CORS(app, supports_credentials=True)
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 print("Starting Deezer")
 deezer.init_deezer_session()
 deezer.test_deezer_login()
 
 
+def get_db():
+    db = sqlite3.connect("database.db")
+    db.row_factory = sqlite3.Row
+    return db
+
+
+def init_db():
+    with app.app_context():
+        db = get_db()
+        with app.open_resource("schema.sql", mode="r") as f:
+            db.cursor().executescript(f.read())
+        db.commit()
+
+
+if not os.path.isfile("database.db"):
+    init_db()
+
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if "user_id" not in session:
+            return jsonify({"error": "Unauthorized"}), 401
+        return f(*args, **kwargs)
+
+    return decorated_function
+
+
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if "user_id" not in session:
+            return jsonify({"error": "Unauthorized"}), 401
+
+        db = get_db()
+        user = db.execute(
+            "SELECT is_admin FROM users WHERE id = ?", (session["user_id"],)
+        ).fetchone()
+
+        if not user or not user["is_admin"]:
+            return jsonify({"error": "Admin access required"}), 403
+        return f(*args, **kwargs)
+
+    return decorated_function
+
+
+@app.route("/auth/register", methods=["POST"])
+def register():
+    data = request.get_json()
+    username = data.get("username")
+    password = data.get("password")
+
+    if not username or not password:
+        return jsonify({"error": "Missing credentials"}), 400
+
+    db = get_db()
+
+    # if first user, make them admin
+    if db.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0:
+        is_admin = True
+        is_approved = True
+    else:
+        is_admin = False
+        is_approved = False
+
+    try:
+        db.execute(
+            "INSERT INTO users (username, password_hash, is_admin, is_approved) VALUES (?, ?, ?, ?)",
+            (username, generate_password_hash(password), is_admin, is_approved),
+        )
+        db.commit()
+        return jsonify({"message": "Registration successful. Waiting for approval."})
+    except sqlite3.IntegrityError:
+        return jsonify({"error": "Username already exists"}), 400
+
+
+@app.route("/auth/login", methods=["POST"])
+def login():
+    data = request.get_json()
+    username = data.get("username")
+    password = data.get("password")
+
+    db = get_db()
+    user = db.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+
+    if user and check_password_hash(user["password_hash"], password):
+        if not user["is_approved"]:
+            return jsonify({"error": "Account pending approval"}), 403
+        session["user_id"] = user["id"]
+        return jsonify({"message": "Login successful", "is_admin": user["is_admin"]})
+
+    return jsonify({"error": "Invalid credentials"}), 401
+
+
+@app.route("/auth/logout", methods=["POST"])
+def logout():
+    session.clear()
+    return jsonify({"message": "Logged out"})
+
+
+@app.route("/admin/users", methods=["GET"])
+@admin_required
+def list_users():
+    db = get_db()
+    users = db.execute(
+        "SELECT id, username, is_approved, is_admin, created_at FROM users"
+    ).fetchall()
+    return jsonify([dict(user) for user in users])
+
+
+@app.route("/admin/users/<int:user_id>/approve", methods=["POST"])
+@admin_required
+def approve_user(user_id):
+    db = get_db()
+    db.execute("UPDATE users SET is_approved = TRUE WHERE id = ?", (user_id,))
+    db.commit()
+    return jsonify({"message": "User approved"})
+
+
+@app.route("/", methods=["GET"])
+def index():
+    # if not logged in, redirect to login
+    if "user_id" not in session:
+        return redirect("/login")
+    return send_from_directory(".", "index.html")
+
+
+@app.route("/login", methods=["GET"])
+def login_html():
+    return send_from_directory(".", "login.html")
+
+
+@app.route("/admin", methods=["GET"])
+@admin_required
+def admin_html():
+    return send_from_directory(".", "admin.html")
+
+
+# Route song files
+@app.route("/songs/<path:path>", methods=["GET"])
+def song_file(path):
+    return send_from_directory("songs", path)
+
+
+# Logo.png
+@app.route("/logo.png", methods=["GET"])
+def logo():
+    return send_from_directory("static", "logo.png")
+
+
+# logo.svg
+@app.route("/logo.svg", methods=["GET"])
+def logo_svg():
+    return send_from_directory("static", "logo.svg")
+
+
 def de_search_track(search_term):
 
     print("Searching for", search_term)
-    
+
     results = deezer.deezer_search(search_term, deezer.TYPE_TRACK)
 
     output = []
     for track in results:  # Assuming results is a list
-        print(track)
-        output.append({
-            "id": track["id"],
-            "title": track["title"],
-            "artist": track["artist"],
-            "thumb": track["img_url"],
-        })
+        output.append(
+            {
+                "id": track["id"],
+                "title": track["title"],
+                "artist": track["artist"],
+                "thumb": track["img_url"],
+            }
+        )
 
     # Prevent duplicates in trackName trackArtist
     seen = set()
-    output = [x for x in output if not (x["title"] + x["artist"] in seen or seen.add(x["title"] + x["artist"]))]
+    output = [
+        x
+        for x in output
+        if not (x["title"] + x["artist"] in seen or seen.add(x["title"] + x["artist"]))
+    ]
 
     return output
 
-@app.route('/search', methods=['GET'])
+
+@app.route("/search", methods=["GET"])
+@login_required
 def search():
-    search_term = request.args.get('q')
+    search_term = request.args.get("q")
     if not search_term:
         return jsonify({"error": "Missing search term"}), 400
-    
+
     results = de_search_track(search_term)
+
+    # Log the search
+    db = get_db()
+    db.execute(
+        "INSERT INTO usage_logs (user_id, track_id, action) VALUES (?, ?, ?)",
+        (session["user_id"], search_term, "search"),
+    )
+    db.commit()
+
     return jsonify(results)
+
 
 def de_add_track(track_id):
 
     os.makedirs("songs/{}".format(track_id), exist_ok=True)
 
     print("Processing Song", track_id)
+    socketio.emit(
+        "track_progress", {"track_id": track_id, "status": "starting", "progress": 0}
+    )
 
     # Download song from deezer if it doesnt exist yet
-    if not os.path.isfile("songs/{}/song.mp3".format(track_id)) or os.path.getsize("songs/{}/song.mp3".format(track_id)) > 0:
+    if (
+        not os.path.isfile("songs/{}/song.mp3".format(track_id))
+        or os.path.getsize("songs/{}/song.mp3".format(track_id)) == 0
+    ):
         print("Downloading Song")
-        track_info = deezer.get_song_infos_from_deezer_website(deezer.TYPE_TRACK, track_id)
-        print(track_info)
+        socketio.emit(
+            "track_progress",
+            {"track_id": track_id, "status": "downloading", "progress": 10},
+        )
+        track_info = deezer.get_song_infos_from_deezer_website(
+            deezer.TYPE_TRACK, track_id
+        )
         deezer.download_song(track_info, "songs/{}/song.mp3".format(track_id))
+        socketio.emit(
+            "track_progress",
+            {"track_id": track_id, "status": "downloaded", "progress": 30},
+        )
 
-    if not os.path.isfile("songs/{}/vocals.mp3".format(track_id)) or not os.path.isfile("songs/{}/no_vocals.mp3".format(track_id)):
+    if not os.path.isfile("songs/{}/vocals.mp3".format(track_id)) or not os.path.isfile(
+        "songs/{}/no_vocals.mp3".format(track_id)
+    ):
 
         print("Splitting Song")
+        socketio.emit(
+            "track_progress",
+            {"track_id": track_id, "status": "splitting", "progress": 40},
+        )
 
         output = replicate.run(
             "ryan5453/demucs:7a9db77ed93f8f4f7e233a94d8519a867fbaa9c6d16ea5b53c1394f1557f9c61",
@@ -80,10 +282,9 @@ def de_add_track(track_id):
                 "mp3_preset": 2,
                 "wav_format": "int24",
                 "mp3_bitrate": 320,
-                "output_format": "mp3"
-            }
+                "output_format": "mp3",
+            },
         )
-        print(output)
 
         # Save the vocals
         with open("songs/{}/vocals.mp3".format(track_id), "wb") as f:
@@ -93,9 +294,21 @@ def de_add_track(track_id):
         with open("songs/{}/no_vocals.mp3".format(track_id), "wb") as f:
             f.write(requests.get(output["no_vocals"]).content)
 
+        socketio.emit(
+            "track_progress",
+            {"track_id": track_id, "status": "split_complete", "progress": 70},
+        )
+
     # exists and file is not empty
-    if not os.path.isfile("songs/{}/lyrics.json".format(track_id)) or os.path.getsize("songs/{}/vocals.mp3".format(track_id)) > 0:
+    if (
+        not os.path.isfile("songs/{}/lyrics.json".format(track_id))
+        or os.path.getsize("songs/{}/lyrics.json".format(track_id)) == 0
+    ):
         print("Extracting Lyrics")
+        socketio.emit(
+            "track_progress",
+            {"track_id": track_id, "status": "extracting_lyrics", "progress": 80},
+        )
 
         output = replicate.run(
             "victor-upmeet/whisperx:84d2ad2d6194fe98a17d2b60bef1c7f910c46b2f6fd38996ca457afd9c8abfcb",
@@ -110,28 +323,101 @@ def de_add_track(track_id):
                 "align_output": True,
                 "language_detection_min_prob": 0,
                 "language_detection_max_tries": 5,
-                "huggingface_access_token": os.getenv("HF_READ_TOKEN")
-            }
+                "huggingface_access_token": os.getenv("HF_READ_TOKEN"),
+            },
         )
-        print(output)
 
         # Save the lyrics
         with open("songs/{}/lyrics.json".format(track_id), "w") as f:
             f.write(json.dumps(output))
-        #=> {"segments":[{"end":30.811,"text":" The little tales they...","start":0.0},{"end":60.0,"text":" The little tales they...","start":30.811},...
+        # => {"segments":[{"end":30.811,"text":" The little tales they...","start":0.0},{"end":60.0,"text":" The little tales they...","start":30.811},...
+
+        socketio.emit(
+            "track_progress",
+            {"track_id": track_id, "status": "lyrics_complete", "progress": 90},
+        )
 
     print("Done")
+    socketio.emit(
+        "track_progress", {"track_id": track_id, "status": "complete", "progress": 100}
+    )
 
     return True
 
-@app.route('/add', methods=['GET'])
+
+@app.route("/add", methods=["GET"])
+@login_required
 def add():
-    track_id = request.args.get('id')
+    track_id = request.args.get("id")
     if not track_id:
         return jsonify({"error": "Missing track ID"}), 400
-    
-    de_add_track(track_id)
+
+    # Start processing in background
+    def process_track():
+        try:
+            de_add_track(track_id)
+            socketio.emit("track_ready", {"track_id": track_id})
+        except Exception as e:
+            socketio.emit("track_error", {"track_id": track_id, "error": str(e)})
+
+    # Log the download
+    db = get_db()
+    db.execute(
+        "INSERT INTO usage_logs (user_id, track_id, action) VALUES (?, ?, ?)",
+        (session["user_id"], track_id, "download"),
+    )
+    db.commit()
+
+    # Start processing in a new thread
+    import threading
+
+    thread = threading.Thread(target=process_track)
+    thread.start()
+
     return jsonify({"success": True})
 
-if __name__ == '__main__':
-    app.run(debug=True)
+
+# WebSocket events for progress updates
+@socketio.on("connect")
+def handle_connect():
+    print("Client connected")
+
+
+@socketio.on("disconnect")
+def handle_disconnect():
+    print("Client disconnected")
+
+
+@app.route("/auth/check", methods=["GET"])
+def check_auth():
+    if "user_id" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    db = get_db()
+    user = db.execute(
+        "SELECT is_admin FROM users WHERE id = ?", (session["user_id"],)
+    ).fetchone()
+
+    return jsonify(
+        {"authenticated": True, "is_admin": user["is_admin"] if user else False}
+    )
+
+
+@app.route("/admin/usage", methods=["GET"])
+@admin_required
+def get_usage_logs():
+    db = get_db()
+    logs = db.execute(
+        """
+        SELECT u.username, l.track_id, l.action, l.created_at 
+        FROM usage_logs l 
+        JOIN users u ON l.user_id = u.id 
+        ORDER BY l.created_at DESC 
+        LIMIT 100
+    """
+    ).fetchall()
+    return jsonify([dict(log) for log in logs])
+
+
+if __name__ == "__main__":
+    socketio.run(app, debug=True)
