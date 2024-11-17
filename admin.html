@@ -121,6 +121,69 @@
         color: #007bff;
         border-bottom: 2px solid #007bff;
       }
+
+      .filters {
+        margin-bottom: 1rem;
+        display: flex;
+        gap: 1rem;
+      }
+
+      .filters input,
+      .filters select {
+        padding: 0.5rem;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+      }
+
+      .pagination {
+        margin-top: 1rem;
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .pagination button {
+        padding: 0.5rem 1rem;
+        border: none;
+        border-radius: 4px;
+        background: #007bff;
+        color: white;
+        cursor: pointer;
+      }
+
+      .pagination button:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+      }
+
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+      }
+
+      .stat-card {
+        background: #f8f9fa;
+        padding: 1rem;
+        border-radius: 8px;
+        text-align: center;
+        border: 1px solid #e9ecef;
+      }
+
+      .stat-card h3 {
+        margin: 0 0 0.5rem 0;
+        font-size: 1rem;
+        color: var(--text-light);
+      }
+
+      .stat-card p {
+        margin: 0;
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: var(--primary);
+      }
     </style>
   </head>
   <body>
@@ -157,17 +220,71 @@
 
       <div id="usageTab" class="card" style="display: none">
         <h2>Usage Logs</h2>
-        <table id="usageTable">
-          <thead>
-            <tr>
-              <th>User</th>
-              <th>Action</th>
-              <th>Track ID</th>
-              <th>Timestamp</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <h3>Total Users</h3>
+            <p id="totalUsers">-</p>
+          </div>
+          <div class="stat-card">
+            <h3>Total Downloads</h3>
+            <p id="totalDownloads">-</p>
+          </div>
+          <div class="stat-card">
+            <h3>Total Searches</h3>
+            <p id="totalSearches">-</p>
+          </div>
+          <div class="stat-card">
+            <h3>Random Plays</h3>
+            <p id="totalRandomPlays">-</p>
+          </div>
+          <div class="stat-card">
+            <h3>Most Active User</h3>
+            <p id="mostActiveUser">-</p>
+          </div>
+        </div>
+        <div class="filters">
+          <input
+            type="text"
+            id="usernameFilter"
+            placeholder="Filter by username"
+            onchange="loadUsageLogs(1)"
+          />
+          <select id="actionFilter" onchange="loadUsageLogs(1)">
+            <option value="">All actions</option>
+            <option value="download">Download</option>
+            <option value="search">Search</option>
+            <option value="random_play">Random Play</option>
+          </select>
+          <select id="perPage" onchange="loadUsageLogs(1)">
+            <option value="50">50 per page</option>
+            <option value="100">100 per page</option>
+            <option value="200">200 per page</option>
+          </select>
+        </div>
+
+        <div id="usageTable">
+          <table>
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Action</th>
+                <th>Track ID</th>
+                <th>Timestamp</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <div class="pagination">
+          <button onclick="loadUsageLogs(currentPage - 1)" id="prevPage">
+            Previous
+          </button>
+          <span id="pageInfo">Page 1 of 1</span>
+          <button onclick="loadUsageLogs(currentPage + 1)" id="nextPage">
+            Next
+          </button>
+        </div>
       </div>
     </div>
 
@@ -224,26 +341,50 @@
         }
       }
 
-      async function loadUsageLogs() {
+      let currentPage = 1
+
+      async function loadUsageLogs(page = 1) {
         try {
-          const response = await fetch('/admin/usage', {
+          const username = document.getElementById('usernameFilter').value
+          const action = document.getElementById('actionFilter').value
+          const perPage = document.getElementById('perPage').value
+
+          const params = new URLSearchParams({
+            page,
+            per_page: perPage,
+          })
+
+          if (username) params.append('username', username)
+          if (action) params.append('action', action)
+
+          const response = await fetch(`/admin/usage?${params}`, {
             credentials: 'include',
           })
-          const usageLogs = await response.json()
+          const data = await response.json()
+
+          currentPage = page
 
           const tbody = document.querySelector('#usageTable tbody')
-          tbody.innerHTML = usageLogs
+          tbody.innerHTML = data.logs
             .map(
               (log) => `
-                    <tr>
-                        <td>${log.username}</td>
-                        <td>${log.action}</td>
-                        <td>${log.track_id}</td>
-                        <td>${new Date(log.created_at).toLocaleString()}</td>
-                    </tr>
-                `
+                <tr>
+                    <td>${log.username}</td>
+                    <td>${log.action}</td>
+                    <td>${log.track_id}</td>
+                    <td>${new Date(log.created_at).toLocaleString()}</td>
+                </tr>
+            `
             )
             .join('')
+
+          // Update pagination controls
+          document.getElementById(
+            'pageInfo'
+          ).textContent = `Page ${page} of ${data.total_pages}`
+          document.getElementById('prevPage').disabled = page <= 1
+          document.getElementById('nextPage').disabled =
+            page >= data.total_pages
         } catch (error) {
           console.error('Error loading usage logs:', error)
         }
@@ -292,6 +433,30 @@
           loadUsers()
         } else if (tabName === 'usage') {
           loadUsageLogs()
+          loadStats()
+        }
+      }
+
+      async function loadStats() {
+        try {
+          const response = await fetch('/admin/stats', {
+            credentials: 'include',
+          })
+          const stats = await response.json()
+
+          document.getElementById('totalUsers').textContent = stats.total_users
+          document.getElementById('totalDownloads').textContent =
+            stats.total_downloads
+          document.getElementById('totalSearches').textContent =
+            stats.total_searches
+          document.getElementById('totalRandomPlays').textContent =
+            stats.total_random_plays
+          document.getElementById('mostActiveUser').textContent =
+            stats.most_active_user
+              ? `${stats.most_active_user.username} (${stats.most_active_user.count})`
+              : '-'
+        } catch (error) {
+          console.error('Error loading stats:', error)
         }
       }
 
