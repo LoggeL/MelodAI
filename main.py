@@ -428,4 +428,9 @@ def get_usage_logs():
 
 
 if __name__ == "__main__":
-    socketio.run(app, debug=True)
+    socketio.run(
+        app,
+        host=os.getenv("HOST", "0.0.0.0"),
+        port=os.getenv("PORT", 5000),
+        debug=os.getenv("DEBUG", True),
+    )
