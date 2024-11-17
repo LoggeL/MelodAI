@@ -10,6 +10,7 @@ import json
 import sqlite3
 from functools import wraps
 import time
+from datetime import timedelta
 
 # env
 from dotenv import load_dotenv
@@ -17,9 +18,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY", "dev")  # Change in production
+app.secret_key = os.urandom(24)
 CORS(app, supports_credentials=True)
 socketio = SocketIO(app, cors_allowed_origins="*")
+app.permanent_session_lifetime = timedelta(days=30)
 
 print("Starting Deezer")
 deezer.init_deezer_session()
@@ -107,6 +109,7 @@ def login():
     data = request.get_json()
     username = data.get("username")
     password = data.get("password")
+    remember_me = data.get("remember_me", False)
 
     db = get_db()
     user = db.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
@@ -115,6 +118,11 @@ def login():
         if not user["is_approved"]:
             return jsonify({"error": "Account pending approval"}), 403
         session["user_id"] = user["id"]
+        if remember_me:
+            session.permanent = True
+            app.permanent_session_lifetime = timedelta(days=30)
+        else:
+            session.permanent = False
         return jsonify({"message": "Login successful", "is_admin": user["is_admin"]})
 
     return jsonify({"error": "Invalid credentials"}), 401
