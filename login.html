@@ -114,7 +114,7 @@
 
       <div id="loginForm">
         <h1>Login</h1>
-        <form onsubmit="login(); return false;">
+        <form>
           <div class="form-group">
             <label for="loginUsername">Username</label>
             <input type="text" id="loginUsername" required />
@@ -137,27 +137,27 @@
 
       <div id="registerForm" style="display: none">
         <h1>Register</h1>
-        <form onsubmit="register(); return false;">
+        <form>
           <div class="form-group">
             <label for="registerUsername">Username</label>
             <input type="text" id="registerUsername" required />
           </div>
           <div class="form-group">
             <label for="registerPassword">Password</label>
-            <input 
-                type="password" 
-                id="registerPassword" 
-                required 
-                oninput="validatePasswords()"
+            <input
+              type="password"
+              id="registerPassword"
+              required
+              oninput="validatePasswords()"
             />
           </div>
           <div class="form-group">
             <label for="confirmPassword">Confirm Password</label>
-            <input 
-                type="password" 
-                id="confirmPassword" 
-                required 
-                oninput="validatePasswords()"
+            <input
+              type="password"
+              id="confirmPassword"
+              required
+              oninput="validatePasswords()"
             />
           </div>
           <button type="submit" id="registerButton" disabled>Register</button>
@@ -259,21 +259,21 @@
         const confirmPassword = document.getElementById('confirmPassword').value
         const errorElement = document.getElementById('registerError')
         const registerButton = document.getElementById('registerButton')
-        
+
         if (password === '' || confirmPassword === '') {
-            errorElement.textContent = ''
-            registerButton.disabled = true
-            return
+          errorElement.textContent = ''
+          registerButton.disabled = true
+          return
         }
-        
+
         if (password === confirmPassword) {
-            errorElement.textContent = '✓ Passwords match'
-            errorElement.style.color = '#198754' // Bootstrap success color
-            registerButton.disabled = false
+          errorElement.textContent = '✓ Passwords match'
+          errorElement.style.color = '#198754' // Bootstrap success color
+          registerButton.disabled = false
         } else {
-            errorElement.textContent = '✗ Passwords do not match'
-            errorElement.style.color = '#dc3545' // Bootstrap danger color
-            registerButton.disabled = true
+          errorElement.textContent = '✗ Passwords do not match'
+          errorElement.style.color = '#dc3545' // Bootstrap danger color
+          registerButton.disabled = true
         }
       }
     </script>
