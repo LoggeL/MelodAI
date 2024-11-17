@@ -248,6 +248,30 @@ def de_add_track(track_id):
         "track_progress", {"track_id": track_id, "status": "starting", "progress": 0}
     )
 
+    # Check if metadata exists
+    if (
+        not os.path.isfile("songs/{}/metadata.json".format(track_id))
+        or os.path.getsize("songs/{}/metadata.json".format(track_id)) == 0
+    ):
+        print("Fetching Metadata")
+        track_info = deezer.get_song_infos_from_deezer_website(
+            deezer.TYPE_TRACK, track_id
+        )
+        metadata = {
+            "title": track_info["SNG_TITLE"],
+            "artist": track_info["ART_NAME"],
+            "duration": track_info["DURATION"],
+            "cover": track_info["ART_PICTURE"],
+            "album": track_info["ALB_TITLE"],
+        }
+        with open("songs/{}/metadata.json".format(track_id), "w") as f:
+            json.dump(metadata, f)
+
+        socketio.emit(
+            "track_progress",
+            {"track_id": track_id, "status": "metadata_complete", "progress": 10},
+        )
+
     # Download song from deezer if it doesnt exist yet
     if (
         not os.path.isfile("songs/{}/song.mp3".format(track_id))
@@ -305,7 +329,7 @@ def de_add_track(track_id):
 
         socketio.emit(
             "track_progress",
-            {"track_id": track_id, "status": "split_complete", "progress": 70},
+            {"track_id": track_id, "status": "split_complete", "progress": 50},
         )
 
     # exists and file is not empty
