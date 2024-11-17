@@ -126,7 +126,7 @@
   <body>
     <div class="container">
       <div class="header">
-        <h1>Admin Dashboard</h1>
+        <h1>MelodAI Admin Dashboard</h1>
         <div class="btn-container">
           <button class="home-btn" onclick="window.location.href = '/'">
             Home
@@ -174,7 +174,7 @@
     <script>
       async function checkAuth() {
         try {
-          const response = await fetch('http://127.0.0.1:5000/admin/users', {
+          const response = await fetch('/admin/users', {
             credentials: 'include',
           })
           if (!response.ok) {
@@ -187,7 +187,7 @@
 
       async function loadUsers() {
         try {
-          const response = await fetch('http://127.0.0.1:5000/admin/users', {
+          const response = await fetch('/admin/users', {
             credentials: 'include',
           })
           const users = await response.json()
@@ -226,7 +226,7 @@
 
       async function loadUsageLogs() {
         try {
-          const response = await fetch('http://127.0.0.1:5000/admin/usage', {
+          const response = await fetch('/admin/usage', {
             credentials: 'include',
           })
           const usageLogs = await response.json()
@@ -251,13 +251,10 @@
 
       async function approveUser(userId) {
         try {
-          const response = await fetch(
-            `http://127.0.0.1:5000/admin/users/${userId}/approve`,
-            {
-              method: 'POST',
-              credentials: 'include',
-            }
-          )
+          const response = await fetch(`/admin/users/${userId}/approve`, {
+            method: 'POST',
+            credentials: 'include',
+          })
           if (response.ok) {
             loadUsers()
           }
@@ -268,7 +265,7 @@
 
       async function logout() {
         try {
-          await fetch('http://127.0.0.1:5000/auth/logout', {
+          await fetch('/auth/logout', {
             method: 'POST',
             credentials: 'include',
           })
