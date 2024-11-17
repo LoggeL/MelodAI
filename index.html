@@ -40,16 +40,18 @@
 
       body {
         font-family: system-ui, -apple-system, sans-serif;
-        max-width: 1500px;
         margin: 0;
         padding: 20px;
         background: var(--background);
         color: var(--text);
-        display: grid;
-        grid-template-columns: 400px 1fr;
+        display: flex;
         gap: 20px;
         height: 100vh;
         overflow: hidden;
+      }
+
+      body.collapsed {
+        gap: 0;
       }
 
       .side-container {
@@ -63,6 +65,14 @@
         height: calc(100vh - 80px);
         display: flex;
         flex-direction: column;
+        max-width: 400px;
+        transition: max-width 0.3s, opacity 0.3s, padding 0.3s;
+      }
+
+      body.collapsed .side-container {
+        max-width: 0;
+        opacity: 0;
+        padding: 0;
       }
 
       .search-container {
@@ -163,17 +173,6 @@
         border-radius: 4px;
       }
 
-      .lyric-container {
-        display: flex;
-        flex-direction: column;
-        height: calc(100vh - 40px);
-        overflow: hidden;
-        background: var(--surface);
-        border-radius: 8px;
-        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1),
-          0 2px 4px -2px rgb(0 0 0 / 0.1);
-      }
-
       .controls {
         background: var(--surface);
         padding: 20px;
@@ -224,6 +223,7 @@
         background: var(--surface);
         border-radius: 8px;
         min-height: 0;
+        height: calc(100vh - 80px);
       }
 
       .lyrics-line {
@@ -306,28 +306,34 @@
         margin-bottom: 10px;
       }
 
-      /* Add this theme toggle button style */
-      .theme-toggle {
+      .button-container {
+        display: flex;
+        gap: 10px;
         position: fixed;
         top: 1rem;
         right: 1rem;
-        padding: 0.5rem;
-        border-radius: 50%;
-        width: 40px;
-        height: 40px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+      }
+
+      /* Add this theme toggle button style */
+      .theme-toggle {
         background: var(--surface);
         border: 1px solid var(--border);
+        border-radius: 4px;
         color: var(--text);
-        cursor: pointer;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        z-index: 1000;
-        transition: all 0.2s;
       }
 
       .theme-toggle:hover {
+        background: var(--hover);
+      }
+
+      .menu-toggle {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        color: var(--text);
+      }
+
+      .menu-toggle:hover {
         background: var(--hover);
       }
 
@@ -404,39 +410,79 @@
         background: var(--primary);
         transition: width 0.3s ease;
       }
+
+      .lyrics-header {
+        padding: 20px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .lyrics-artist {
+        color: var(--text-light);
+        font-size: 0.9rem;
+        margin-bottom: 4px;
+      }
+
+      .lyrics-title {
+        margin: 0;
+        color: var(--text);
+        font-size: 1.5rem;
+      }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
   </head>
 
   <body>
-    <button
-      class="theme-toggle"
-      onclick="toggleTheme()"
-      aria-label="Toggle theme"
-    >
-      <svg
-        id="theme-icon"
-        width="20"
-        height="20"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
+    <div class="button-container">
+      <button
+        class="theme-toggle"
+        onclick="toggleTheme()"
+        aria-label="Toggle theme"
       >
-        <!-- Sun icon path -->
-        <path
-          class="sun"
-          d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42M12 17.5a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11z"
-        />
-        <!-- Moon icon path -->
-        <path
-          class="moon"
-          d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"
-        />
-      </svg>
-    </button>
+        <svg
+          id="theme-icon"
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <!-- Sun icon path -->
+          <path
+            class="sun"
+            d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42M12 17.5a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11z"
+          />
+          <!-- Moon icon path -->
+          <path
+            class="moon"
+            d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"
+          />
+        </svg>
+      </button>
+      <button
+        class="menu-toggle"
+        onclick="toggleMenu()"
+        aria-label="Toggle menu"
+      >
+        <!-- Burger menu icon -->
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <line x1="3" x2="21" y1="12" y2="12"></line>
+          <line x1="3" x2="21" y1="6" y2="6"></line>
+          <line x1="3" x2="21" y1="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
     <div class="side-container">
       <!-- Search -->
       <div class="search-container">
@@ -490,8 +536,13 @@
       <div id="songQueue"></div>
     </div>
 
-    <div class="lyric-container">
-      <div class="lyrics-container" id="lyricsContainer"></div>
+    <div class="lyrics-container" id="lyricsContainer">
+      <div class="lyrics-header">
+        <div id="lyricsArtist" class="lyrics-artist">
+          Select a song to begin
+        </div>
+        <h2 id="lyricsTitle" class="lyrics-title"></h2>
+      </div>
     </div>
 
     <script>
@@ -594,33 +645,60 @@
           if (!this.lyrics) return
 
           const container = document.getElementById('lyricsContainer')
-          container.innerHTML = this.lyrics
-            .map((segment, segmentIndex) => {
-              const words = segment.words
-                .map(
-                  (word, wordIndex) =>
-                    `<span class="word"
-                                      id="word-${segmentIndex}-${wordIndex}"
-                                      data-start="${word.start}"
-                                      data-end="${word.end}"
-                                    >
-                                    ${word.word}
-                                </span>`
-                )
-                .join(' ')
 
-              // Get unique speakers
-              const speakers = new Set(
-                segment.words.map((word) => word.speaker)
-              )
+          container.innerHTML = ''
 
-              return `<div class="lyrics-line ${[...speakers]
-                .map((speaker) => `speaker-${speaker}`)
-                .join(' ')}" id="line-${segmentIndex}">
-                            ${words}
-                        </div>`
+          const song = this.songQueue[this.currentSongIndex]
+
+          const header = document.createElement('div')
+          const title = document.createElement('h2')
+          const artist = document.createElement('div')
+          const lyrics = document.createElement('div')
+
+          header.classList.add('lyrics-header')
+          title.classList.add('lyrics-title')
+          artist.classList.add('lyrics-artist')
+          lyrics.classList.add('lyrics-lyrics')
+
+          artist.textContent = song.artist
+          title.textContent = song.title
+
+          header.appendChild(artist)
+          header.appendChild(title)
+          container.appendChild(header)
+
+          this.lyrics.forEach((segment, segmentIndex) => {
+            const lineDiv = document.createElement('div')
+            lineDiv.classList.add('lyrics-line')
+            lineDiv.id = `line-${segmentIndex}`
+
+            // Get unique speakers and add speaker classes
+            const speakers = new Set(segment.words.map((word) => word.speaker))
+            speakers.forEach((speaker) => {
+              if (speaker) lineDiv.classList.add(`speaker-${speaker}`)
             })
-            .join('')
+
+            segment.words.forEach((word, wordIndex) => {
+              const wordSpan = document.createElement('span')
+              wordSpan.classList.add('word')
+              wordSpan.id = `word-${segmentIndex}-${wordIndex}`
+              wordSpan.dataset.start = word.start
+              wordSpan.dataset.end = word.end
+              wordSpan.textContent = word.word
+
+              // Add space after each word except the last one
+              if (wordIndex < segment.words.length - 1) {
+                lineDiv.appendChild(wordSpan)
+                lineDiv.appendChild(document.createTextNode(' '))
+              } else {
+                lineDiv.appendChild(wordSpan)
+              }
+            })
+
+            console.log(lineDiv)
+
+            container.appendChild(lineDiv)
+          })
         }
 
         jumpToTime(time) {
@@ -695,11 +773,10 @@
           this.currentSongIndex = index
           const song = this.songQueue[index]
 
-          // Update UI
+          // Update UI elements
           document.getElementById(
             'nowPlaying'
-          ).textContent = `Now Playing: ${song.title} - ${song.artist}`
-          this.updateQueueHighlight()
+          ).textContent = `Now Playing: ${song.title}`
 
           // Reset player state
           this.playing = false
@@ -979,6 +1056,10 @@
         const currentTheme = getTheme()
         const newTheme = currentTheme === 'light' ? 'dark' : 'light'
         setTheme(newTheme)
+      }
+
+      function toggleMenu() {
+        document.body.classList.toggle('collapsed')
       }
 
       // Initialize theme
