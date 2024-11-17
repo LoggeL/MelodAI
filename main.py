@@ -1,3 +1,4 @@
+import random
 import deezer
 from flask import Flask, redirect, request, jsonify, send_from_directory, session
 from flask_cors import CORS
@@ -425,6 +426,56 @@ def get_usage_logs():
     """
     ).fetchall()
     return jsonify([dict(log) for log in logs])
+
+
+@app.route("/random", methods=["GET"])
+@login_required
+def get_random_song():
+    try:
+        # Get all song folders
+        song_dirs = [
+            d for d in os.listdir("songs") if os.path.isdir(os.path.join("songs", d))
+        ]
+
+        if not song_dirs:
+            return jsonify({"error": "No songs available"}), 404
+
+        # Pick a random song ID
+        track_id = random.choice(song_dirs)
+
+        # Try to get metadata
+        try:
+            with open(f"songs/{track_id}/metadata.json", "r") as f:
+                metadata = json.load(f)
+        except FileNotFoundError:
+            # If no metadata exists, fetch it from Deezer
+            track_info = deezer.get_song_infos_from_deezer_website(
+                deezer.TYPE_TRACK, track_id
+            )
+            # 'SNG_ID, PRODUCT_TRACK_ID, UPLOAD_ID, SNG_TITLE, ART_ID, PROVIDER_ID, ART_NAME, ARTIST_IS_DUMMY, ARTISTS, ALB_ID, ALB_TITLE, TYPE, MD5_ORIGIN, VIDEO, DURATION, ALB_PICTURE, ART_PICTURE, RANK_SNG, FILESIZE_AAC_64, FILESIZE_AC4_IMS, FILESIZE_DD_JOC, FILESIZE_MP3_64, FILESIZE_MP3_128, FILESIZE_MP3_256, FILESIZE_MP3_320, FILESIZE_MP4_RA1, FILESIZE_MP4_RA2, FILESIZE_MP4_RA3, FILESIZE_MHM1_RA1, FILESIZE_MHM1_RA2, FILESIZE_MHM1_RA3, FILESIZE_FLAC, FILESIZE, GAIN, MEDIA_VERSION, DISK_NUMBER, TRACK_NUMBER, TRACK_TOKEN, TRACK_TOKEN_EXPIRE, VERSION, MEDIA, EXPLICIT_LYRICS, RIGHTS, ISRC, HIERARCHICAL_TITLE, SNG_CONTRIBUTORS, LYRICS_ID, EXPLICIT_TRACK_CONTENT, COPYRIGHT, PHYSICAL_RELEASE_DATE, S_MOD, S_PREMIUM, DATE_START_PREMIUM, DATE_START, STATUS, USER_ID, URL_REWRITING, SNG_STATUS, AVAILABLE_COUNTRIES, UPDATE_DATE, __TYPE__, DIGITAL_RELEASE_DATE'
+            metadata = {
+                "title": track_info["SNG_TITLE"],
+                "artist": track_info["ART_NAME"],
+                "duration": track_info["DURATION"],
+                "cover": track_info["ART_PICTURE"],
+                "album": track_info["ALB_TITLE"],
+            }
+            # Save metadata for future use
+            with open(f"songs/{track_id}/metadata.json", "w") as f:
+                json.dump(metadata, f)
+
+        # Log the random selection
+        db = get_db()
+        db.execute(
+            "INSERT INTO usage_logs (user_id, track_id, action) VALUES (?, ?, ?)",
+            (session["user_id"], track_id, "random_play"),
+        )
+        db.commit()
+
+        return jsonify({"track_id": track_id, "metadata": metadata})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":
