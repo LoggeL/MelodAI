@@ -43,8 +43,21 @@ def init_db():
         db.commit()
 
 
+def migrate_db():
+    with app.app_context():
+        db = get_db()
+        try:
+            # Check if last_online column exists
+            db.execute("SELECT last_online FROM users LIMIT 1")
+        except sqlite3.OperationalError:
+            print("Adding last_online column to users table")
+            db.execute("ALTER TABLE users ADD COLUMN last_online TIMESTAMP")
+            db.commit()
+
+
 if not os.path.isfile("database.db"):
     init_db()
+migrate_db()
 
 
 def login_required(f):
@@ -140,7 +153,13 @@ def logout():
 def list_users():
     db = get_db()
     users = db.execute(
-        "SELECT id, username, is_approved, is_admin, created_at FROM users"
+        """
+        SELECT id, username, is_approved, is_admin, created_at, 
+               last_online,
+               (SELECT COUNT(*) FROM usage_logs WHERE user_id = users.id) as activity_count
+        FROM users
+        ORDER BY last_online DESC
+    """
     ).fetchall()
     return jsonify([dict(user) for user in users])
 
@@ -570,6 +589,18 @@ def get_usage_stats():
         stats["most_active_user"] = dict(stats["most_active_user"])
 
     return jsonify(stats)
+
+
+# Add this function to update last_online
+@app.before_request
+def update_last_online():
+    if "user_id" in session:
+        db = get_db()
+        db.execute(
+            "UPDATE users SET last_online = CURRENT_TIMESTAMP WHERE id = ?",
+            (session["user_id"],),
+        )
+        db.commit()
 
 
 if __name__ == "__main__":
