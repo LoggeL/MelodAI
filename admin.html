@@ -170,19 +170,27 @@
         border-radius: 8px;
         text-align: center;
         border: 1px solid #e9ecef;
+        min-width: 0;
+        overflow: hidden;
       }
 
       .stat-card h3 {
         margin: 0 0 0.5rem 0;
         font-size: 1rem;
-        color: var(--text-light);
+        color: #6c757d;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
 
       .stat-card p {
         margin: 0;
-        font-size: 1.5rem;
+        font-size: 1.25rem;
         font-weight: bold;
-        color: var(--primary);
+        color: #007bff;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
     </style>
   </head>
