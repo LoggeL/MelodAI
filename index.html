@@ -1054,6 +1054,7 @@
       // Initialize the player when the page loads
       let karaokePlayer
       window.addEventListener('DOMContentLoaded', () => {
+        addAuthHandling()
         karaokePlayer = new KaraokePlayer()
         document
           .querySelector('.progress-bar')

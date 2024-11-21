@@ -316,19 +316,6 @@
     </div>
 
     <script>
-      async function checkAuth() {
-        try {
-          const response = await fetch('/admin/users', {
-            credentials: 'include',
-          })
-          if (!response.ok) {
-            window.location.href = '/login.html'
-          }
-        } catch (error) {
-          window.location.href = '/login.html'
-        }
-      }
-
       function formatTimeAgo(dateString) {
         const date = new Date(dateString)
         const now = new Date()
@@ -556,9 +543,11 @@
         }
       }
 
-      // Initialize
-      checkAuth()
-      loadUsers()
+      // Add this to your initialization code
+      document.addEventListener('DOMContentLoaded', () => {
+        // Initialize
+        loadUsers()
+      })
     </script>
   </body>
 </html>

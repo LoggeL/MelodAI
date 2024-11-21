@@ -57,7 +57,8 @@ def migrate_db():
 
         try:
             # Add auth_tokens table if it doesn't exist
-            db.execute("""
+            db.execute(
+                """
                 CREATE TABLE IF NOT EXISTS auth_tokens (
                     token TEXT PRIMARY KEY,
                     user_id INTEGER NOT NULL,
@@ -65,7 +66,8 @@ def migrate_db():
                     expires_at TIMESTAMP NOT NULL,
                     FOREIGN KEY (user_id) REFERENCES users (id)
                 )
-            """)
+            """
+            )
             db.commit()
         except sqlite3.OperationalError as e:
             print(f"Migration error: {e}")
@@ -73,7 +75,8 @@ def migrate_db():
 
 if not os.path.isfile("database.db"):
     init_db()
-migrate_db()
+else:
+    migrate_db()
 
 
 def login_required(f):
@@ -81,7 +84,7 @@ def login_required(f):
     def decorated_function(*args, **kwargs):
         if "user_id" not in session:
             # Check for token in cookie
-            token = request.cookies.get('auth_token')
+            token = request.cookies.get("auth_token")
             if token:
                 db = get_db()
                 token_data = db.execute(
@@ -89,32 +92,58 @@ def login_required(f):
                     SELECT user_id, expires_at 
                     FROM auth_tokens 
                     WHERE token = ?
-                    """, 
-                    (token,)
+                    """,
+                    (token,),
                 ).fetchone()
-                
-                if token_data and datetime.strptime(token_data["expires_at"], "%Y-%m-%d %H:%M:%S.%f") > datetime.now():
+
+                print(token_data)
+
+                if (
+                    token_data
+                    and datetime.strptime(
+                        token_data["expires_at"], "%Y-%m-%d %H:%M:%S.%f"
+                    )
+                    > datetime.now()
+                ):
                     session["user_id"] = token_data["user_id"]
                     return f(*args, **kwargs)
-                    
-            return jsonify({"error": "Unauthorized"}), 401
+
+            # Redirect to login
+            return redirect("/login?next=" + request.path)
         return f(*args, **kwargs)
+
     return decorated_function
 
 
 def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if "user_id" not in session:
-            return jsonify({"error": "Unauthorized"}), 401
+        token = request.cookies.get("auth_token")
+
+        if not token:
+            return redirect("/login?next=" + request.path)
 
         db = get_db()
+        token_data = db.execute(
+            """
+            SELECT user_id FROM auth_tokens WHERE token = ?
+            """,
+            (token,),
+        ).fetchone()
+
+        if not token_data:
+            return redirect("/login?next=" + request.path)
+
         user = db.execute(
-            "SELECT is_admin FROM users WHERE id = ?", (session["user_id"],)
+            """
+            SELECT is_admin FROM users WHERE id = ?
+            """,
+            (token_data["user_id"],),
         ).fetchone()
 
         if not user or not user["is_admin"]:
             return jsonify({"error": "Admin access required"}), 403
+
         return f(*args, **kwargs)
 
     return decorated_function
@@ -163,35 +192,35 @@ def login():
     if user and check_password_hash(user["password_hash"], password):
         if not user["is_approved"]:
             return jsonify({"error": "Account pending approval"}), 403
-            
+
         session["user_id"] = user["id"]
-        response = jsonify({
-            "message": "Login successful",
-            "is_admin": user["is_admin"]
-        })
-        
+        response = jsonify(
+            {
+                "message": "Login successful",
+                "is_admin": user["is_admin"],
+            }
+        )
+
         if remember_me:
             token = generate_auth_token()
             expires = datetime.now() + timedelta(days=30)
-            
-            # Store token in database
+
             db.execute(
                 "INSERT INTO auth_tokens (token, user_id, expires_at) VALUES (?, ?, ?)",
-                (token, user["id"], expires)
+                (token, user["id"], expires),
             )
             db.commit()
-            
-            # Set secure HTTP-only cookie
+
             response.set_cookie(
-                'auth_token',
+                "auth_token",
                 token,
                 httponly=True,
-                secure=True,  # Enable in production with HTTPS
-                samesite='Strict',
+                secure=True,
+                samesite="Strict",
                 expires=expires,
-                max_age=30 * 24 * 60 * 60  # 30 days in seconds
+                max_age=30 * 24 * 60 * 60,
             )
-        
+
         return response
 
     return jsonify({"error": "Invalid credentials"}), 401
@@ -201,14 +230,14 @@ def login():
 def logout():
     if "user_id" in session:
         # Remove token from database and clear cookie
-        token = request.cookies.get('auth_token')
+        token = request.cookies.get("auth_token")
         if token:
             db = get_db()
             db.execute("DELETE FROM auth_tokens WHERE token = ?", (token,))
             db.commit()
-    
+
     response = jsonify({"message": "Logged out"})
-    response.delete_cookie('auth_token')
+    response.delete_cookie("auth_token")
     session.clear()
     return response
 

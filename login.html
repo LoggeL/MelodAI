@@ -208,11 +208,7 @@
           const data = await response.json()
 
           if (response.ok) {
-            if (data.is_admin) {
-              window.location.href = '/admin'
-            } else {
-              window.location.href = '/'
-            }
+            window.location.href = window.location.href.split('=')[1] || '/'
           } else {
             document.getElementById('loginError').textContent = data.error
           }
@@ -288,6 +284,40 @@
           console.error('Error logging out:', error)
         }
       }
+
+      // Add this function to handle unauthorized responses
+      function handleUnauthorized(response) {
+        if (response.status === 401) {
+          response.json().then((data) => {
+            if (data.redirect) {
+              window.location.href = data.redirect
+            }
+          })
+          return true
+        }
+        return false
+      }
+
+      // Add this to your fetch wrapper
+      function addAuthHandling() {
+        const originalFetch = window.fetch
+        window.fetch = async function () {
+          try {
+            const response = await originalFetch.apply(this, arguments)
+            if (handleUnauthorized(response)) {
+              return new Promise(() => {}) // Prevent further processing
+            }
+            return response
+          } catch (error) {
+            throw error
+          }
+        }
+      }
+
+      // Call this when the page loads
+      document.addEventListener('DOMContentLoaded', () => {
+        addAuthHandling()
+      })
     </script>
   </body>
 </html>
