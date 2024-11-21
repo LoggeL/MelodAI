@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MelodAI</title>
     <link rel="icon" href="/logo.svg" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+    />
 
     <style>
       :root {
@@ -224,6 +228,61 @@
         border-radius: 8px;
         min-height: 0;
         height: calc(100vh - 80px);
+        position: relative;
+        min-height: 200px;
+      }
+
+      .lyrics-skeleton {
+        padding: 1rem;
+      }
+
+      .skeleton-line {
+        height: 24px;
+        background: linear-gradient(
+          90deg,
+          var(--hover) 25%,
+          var(--surface) 50%,
+          var(--hover) 75%
+        );
+        background-size: 200% 100%;
+        animation: shimmer 1.5s infinite;
+        border-radius: 4px;
+        margin: 8px 0;
+      }
+
+      .skeleton-line:nth-child(4n) {
+        width: 100%;
+      }
+
+      .skeleton-line:nth-child(4n + 2) {
+        width: 85%;
+      }
+      .skeleton-line:nth-child(4n + 3) {
+        width: 70%;
+      }
+      .skeleton-line:nth-child(4n + 4) {
+        width: 90%;
+      }
+
+      @keyframes shimmer {
+        0% {
+          background-position: 200% 0;
+        }
+        100% {
+          background-position: -200% 0;
+        }
+      }
+
+      .lyrics {
+        text-align: center;
+        font-size: 1.5rem;
+        line-height: 1.6;
+        margin: 2rem 0;
+        min-height: 200px;
+      }
+
+      .lyrics.loading {
+        display: none;
       }
 
       .lyrics-line {
@@ -281,11 +340,6 @@
         border-radius: 4px;
       }
 
-      .button-group {
-        display: flex;
-        gap: 10px;
-      }
-
       button {
         padding: 8px 16px;
         border: none;
@@ -312,6 +366,7 @@
         position: fixed;
         top: 1rem;
         right: 1rem;
+        z-index: 1000;
       }
 
       /* Add this theme toggle button style */
@@ -427,6 +482,54 @@
         color: var(--text);
         font-size: 1.5rem;
       }
+
+      .player-controls {
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+        align-items: center;
+        margin: 1rem 0;
+      }
+
+      .control-btn {
+        background: none;
+        border: none;
+        color: var(--text);
+        font-size: 1.5rem;
+        cursor: pointer;
+        padding: 0.5rem;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+      }
+
+      .control-btn:hover {
+        background: var(--hover);
+      }
+
+      .control-btn.active {
+        color: var(--primary);
+      }
+
+      .control-btn.muted {
+        color: var(--danger);
+      }
+
+      .play-btn {
+        font-size: 1.75rem;
+        min-width: 48px;
+        height: 48px;
+        background: var(--primary);
+        color: white;
+      }
+
+      .play-btn:hover {
+        background: var(--primary-dark);
+      }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
   </head>
@@ -504,12 +607,27 @@
         <div class="progress-time">
           <span id="currentTime">0:00</span> / <span id="totalTime">0:00</span>
         </div>
-        <div class="button-group">
-          <button id="previousButton">Previous</button>
-          <button id="playButton">Play</button>
-          <button id="nextButton">Next</button>
-          <button id="randomButton">Random</button>
+        <div class="player-controls">
+          <button class="control-btn" id="previousSong">
+            <i class="fas fa-backward-step"></i>
+          </button>
+          <button class="control-btn play-btn" id="playButton">
+            <i class="fas fa-play"></i>
+          </button>
+          <button class="control-btn" id="nextSong">
+            <i class="fas fa-forward-step"></i>
+          </button>
+          <button class="control-btn" id="randomSong">
+            <i class="fas fa-random"></i>
+          </button>
+          <button class="control-btn" id="toggleLyrics">
+            <i class="fas fa-closed-captioning"></i>
+          </button>
+          <button class="control-btn" id="toggleFullscreen">
+            <i class="fas fa-expand"></i>
+          </button>
         </div>
+
         <div class="volume-controls">
           <label>Vocals:</label>
           <input
@@ -539,10 +657,11 @@
 
     <div class="lyrics-container" id="lyricsContainer">
       <div class="lyrics-header">
-        <div id="lyricsArtist" class="lyrics-artist">
-          Select a song to begin
-        </div>
-        <h2 id="lyricsTitle" class="lyrics-title"></h2>
+        <div class="lyrics-title"></div>
+        <div class="lyrics-artist"></div>
+      </div>
+      <div class="lyrics">
+        <h2>Select a song to start</h2>
       </div>
     </div>
 
@@ -599,6 +718,24 @@
 
         async loadLyrics(lyricsUrl) {
           try {
+            // Clear lyrics
+            this.lyrics = null
+            document.getElementById('lyricsContainer').innerHTML = `
+            <div class="lyrics-header">
+              <div class="lyrics-title">
+                <div class="skeleton-line"></div>
+              </div>
+              <div class="lyrics-artist">
+                <div class="skeleton-line"></div>
+              </div>
+            </div>
+            <div class="lyrics-skeleton">
+              ${Array.from({ length: 30 })
+                .map(() => '<div class="skeleton-line"></div>')
+                .join('')}
+            </div>
+            `
+
             const response = await fetch(lyricsUrl)
             const data = await response.json()
 
@@ -636,7 +773,8 @@
             })
 
             this.lyrics = segments
-            this.renderLyrics()
+            setTimeout(() => this.renderLyrics(), 1000)
+            // this.renderLyrics()
           } catch (error) {
             console.error('Error loading lyrics:', error)
           }
@@ -781,7 +919,9 @@
           this.playing = false
           this.vocalsAudio.src = song.vocalsUrl
           this.musicAudio.src = song.musicUrl
-          document.getElementById('playButton').textContent = 'Play'
+          document
+            .querySelector('#playButton i')
+            .classList.replace('fa-pause', 'fa-play')
 
           // Update total time
           this.vocalsAudio.onloadedmetadata = () => {
@@ -889,13 +1029,13 @@
             .getElementById('playButton')
             .addEventListener('click', () => this.togglePlay())
           document
-            .getElementById('previousButton')
+            .getElementById('previousSong')
             .addEventListener('click', () => this.previousSong())
           document
-            .getElementById('nextButton')
+            .getElementById('nextSong')
             .addEventListener('click', () => this.nextSong())
           document
-            .getElementById('randomButton')
+            .getElementById('randomSong')
             .addEventListener('click', () => this.randomSong())
 
           document
@@ -926,12 +1066,16 @@
           if (this.playing) {
             this.vocalsAudio.pause()
             this.playing = false
-            document.getElementById('playButton').textContent = 'Play'
+            document
+              .querySelector('#playButton i')
+              .classList.replace('fa-pause', 'fa-play')
           } else {
             this.vocalsAudio.play()
             this.playing = true
-            document.getElementById('playButton').textContent = 'Pause'
             this.startLyricsSync()
+            document
+              .querySelector('#playButton i')
+              .classList.replace('fa-play', 'fa-pause')
           }
         }
 
@@ -1049,12 +1193,24 @@
             console.error('Error:', error)
           }
         }
+
+        toggleFullscreen() {
+          const btn = document.querySelector(
+            '[onclick="karaokePlayer.toggleFullscreen()"]'
+          )
+          if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen()
+            btn.querySelector('i').classList.replace('fa-expand', 'fa-compress')
+          } else {
+            document.exitFullscreen()
+            btn.querySelector('i').classList.replace('fa-compress', 'fa-expand')
+          }
+        }
       }
 
       // Initialize the player when the page loads
       let karaokePlayer
       window.addEventListener('DOMContentLoaded', () => {
-        addAuthHandling()
         karaokePlayer = new KaraokePlayer()
         document
           .querySelector('.progress-bar')

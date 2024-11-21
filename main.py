@@ -630,7 +630,7 @@ def get_random_song():
                 "title": track_info["SNG_TITLE"],
                 "artist": track_info["ART_NAME"],
                 "duration": track_info["DURATION"],
-                "cover": track_info["ART_PICTURE"],
+                "cover": track_info["ALB_PICTURE"],
                 "album": track_info["ALB_TITLE"],
             }
             # Save metadata for future use
