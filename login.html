@@ -276,6 +276,18 @@
           registerButton.disabled = true
         }
       }
+
+      async function logout() {
+        try {
+          await fetch('/auth/logout', {
+            method: 'POST',
+            credentials: 'include',
+          })
+          window.location.href = '/login.html'
+        } catch (error) {
+          console.error('Error logging out:', error)
+        }
+      }
     </script>
   </body>
 </html>

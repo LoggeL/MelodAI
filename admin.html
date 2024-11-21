@@ -203,11 +203,11 @@
       }
 
       .sort-asc::after {
-        content: " ↑";
+        content: ' ↑';
       }
 
       .sort-desc::after {
-        content: " ↓";
+        content: ' ↓';
       }
     </style>
   </head>
@@ -330,94 +330,110 @@
       }
 
       function formatTimeAgo(dateString) {
-        const date = new Date(dateString);
-        const now = new Date();
-        const diffInSeconds = Math.floor((now - date) / 1000);
+        const date = new Date(dateString)
+        const now = new Date()
+        const diffInSeconds = Math.floor((now - date) / 1000)
 
-        if (diffInSeconds < 60) return 'Just now';
-        if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
-        if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
-        if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d ago`;
-        return date.toLocaleDateString();
+        if (diffInSeconds < 60) return 'Just now'
+        if (diffInSeconds < 3600)
+          return `${Math.floor(diffInSeconds / 60)}m ago`
+        if (diffInSeconds < 86400)
+          return `${Math.floor(diffInSeconds / 3600)}h ago`
+        if (diffInSeconds < 604800)
+          return `${Math.floor(diffInSeconds / 86400)}d ago`
+        return date.toLocaleDateString()
       }
 
       let currentSort = {
         column: null,
-        direction: 'asc'
-      };
+        direction: 'asc',
+      }
 
       function sortTable(tableId, column) {
-        const table = document.getElementById(tableId);
-        const headers = table.getElementsByTagName('th');
-        
+        const table = document.getElementById(tableId)
+        const headers = table.getElementsByTagName('th')
+
         // Update sort direction
         if (currentSort.column === column) {
-          currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+          currentSort.direction =
+            currentSort.direction === 'asc' ? 'desc' : 'asc'
         } else {
-          currentSort.column = column;
-          currentSort.direction = 'asc';
+          currentSort.column = column
+          currentSort.direction = 'asc'
         }
-        
+
         // Update header classes
-        Array.from(headers).forEach(header => {
-          header.classList.remove('sort-asc', 'sort-desc');
-        });
-        headers[column].classList.add(`sort-${currentSort.direction}`);
-        
+        Array.from(headers).forEach((header) => {
+          header.classList.remove('sort-asc', 'sort-desc')
+        })
+        headers[column].classList.add(`sort-${currentSort.direction}`)
+
         // Sort the rows
-        const tbody = table.getElementsByTagName('tbody')[0];
-        const rows = Array.from(tbody.getElementsByTagName('tr'));
-        
+        const tbody = table.getElementsByTagName('tbody')[0]
+        const rows = Array.from(tbody.getElementsByTagName('tr'))
+
         rows.sort((a, b) => {
-          let aValue = a.cells[column].textContent;
-          let bValue = b.cells[column].textContent;
-          
+          let aValue = a.cells[column].textContent
+          let bValue = b.cells[column].textContent
+
           // Handle different column types
-          if (column === 1 || column === 3) { // dates
-            aValue = new Date(aValue);
-            bValue = new Date(bValue);
-          } else if (column === 4) { // numbers
-            aValue = parseInt(aValue);
-            bValue = parseInt(bValue);
+          if (column === 1 || column === 3) {
+            // dates
+            aValue = new Date(aValue)
+            bValue = new Date(bValue)
+          } else if (column === 4) {
+            // numbers
+            aValue = parseInt(aValue)
+            bValue = parseInt(bValue)
           }
-          
-          if (aValue < bValue) return currentSort.direction === 'asc' ? -1 : 1;
-          if (aValue > bValue) return currentSort.direction === 'asc' ? 1 : -1;
-          return 0;
-        });
-        
+
+          if (aValue < bValue) return currentSort.direction === 'asc' ? -1 : 1
+          if (aValue > bValue) return currentSort.direction === 'asc' ? 1 : -1
+          return 0
+        })
+
         // Reorder the table
-        rows.forEach(row => tbody.appendChild(row));
+        rows.forEach((row) => tbody.appendChild(row))
       }
 
       async function loadUsers() {
         try {
           const response = await fetch('/admin/users', {
-            credentials: 'include'
-          });
-          const users = await response.json();
+            credentials: 'include',
+          })
+          const users = await response.json()
 
-          const tbody = document.querySelector('#usersTable tbody');
-          tbody.innerHTML = users.map(user => `
+          const tbody = document.querySelector('#usersTable tbody')
+          tbody.innerHTML = users
+            .map(
+              (user) => `
             <tr>
               <td>${user.username}</td>
               <td>${new Date(user.created_at).toLocaleString()}</td>
               <td>
-                <span class="status ${user.is_approved ? 'status-approved' : 'status-pending'}">
+                <span class="status ${
+                  user.is_approved ? 'status-approved' : 'status-pending'
+                }">
                   ${user.is_approved ? 'Approved' : 'Pending'}
                 </span>
               </td>
-              <td>${user.last_online ? formatTimeAgo(user.last_online) : 'Never'}</td>
+              <td>${
+                user.last_online ? formatTimeAgo(user.last_online) : 'Never'
+              }</td>
               <td>${user.activity_count}</td>
               <td>
-                ${!user.is_approved ? 
-                  `<button class="approve-btn" onclick="approveUser(${user.id})">Approve</button>` 
-                  : ''}
+                ${
+                  !user.is_approved
+                    ? `<button class="approve-btn" onclick="approveUser(${user.id})">Approve</button>`
+                    : ''
+                }
               </td>
             </tr>
-          `).join('');
+          `
+            )
+            .join('')
         } catch (error) {
-          console.error('Error loading users:', error);
+          console.error('Error loading users:', error)
         }
       }
 

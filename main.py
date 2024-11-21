@@ -11,7 +11,8 @@ import json
 import sqlite3
 from functools import wraps
 import time
-from datetime import timedelta
+from datetime import datetime, timedelta
+import secrets
 
 # env
 from dotenv import load_dotenv
@@ -54,6 +55,21 @@ def migrate_db():
             db.execute("ALTER TABLE users ADD COLUMN last_online TIMESTAMP")
             db.commit()
 
+        try:
+            # Add auth_tokens table if it doesn't exist
+            db.execute("""
+                CREATE TABLE IF NOT EXISTS auth_tokens (
+                    token TEXT PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TIMESTAMP NOT NULL,
+                    FOREIGN KEY (user_id) REFERENCES users (id)
+                )
+            """)
+            db.commit()
+        except sqlite3.OperationalError as e:
+            print(f"Migration error: {e}")
+
 
 if not os.path.isfile("database.db"):
     init_db()
@@ -64,9 +80,25 @@ def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if "user_id" not in session:
+            # Check for token in cookie
+            token = request.cookies.get('auth_token')
+            if token:
+                db = get_db()
+                token_data = db.execute(
+                    """
+                    SELECT user_id, expires_at 
+                    FROM auth_tokens 
+                    WHERE token = ?
+                    """, 
+                    (token,)
+                ).fetchone()
+                
+                if token_data and datetime.strptime(token_data["expires_at"], "%Y-%m-%d %H:%M:%S.%f") > datetime.now():
+                    session["user_id"] = token_data["user_id"]
+                    return f(*args, **kwargs)
+                    
             return jsonify({"error": "Unauthorized"}), 401
         return f(*args, **kwargs)
-
     return decorated_function
 
 
@@ -131,21 +163,54 @@ def login():
     if user and check_password_hash(user["password_hash"], password):
         if not user["is_approved"]:
             return jsonify({"error": "Account pending approval"}), 403
+            
         session["user_id"] = user["id"]
+        response = jsonify({
+            "message": "Login successful",
+            "is_admin": user["is_admin"]
+        })
+        
         if remember_me:
-            session.permanent = True
-            app.permanent_session_lifetime = timedelta(days=30)
-        else:
-            session.permanent = False
-        return jsonify({"message": "Login successful", "is_admin": user["is_admin"]})
+            token = generate_auth_token()
+            expires = datetime.now() + timedelta(days=30)
+            
+            # Store token in database
+            db.execute(
+                "INSERT INTO auth_tokens (token, user_id, expires_at) VALUES (?, ?, ?)",
+                (token, user["id"], expires)
+            )
+            db.commit()
+            
+            # Set secure HTTP-only cookie
+            response.set_cookie(
+                'auth_token',
+                token,
+                httponly=True,
+                secure=True,  # Enable in production with HTTPS
+                samesite='Strict',
+                expires=expires,
+                max_age=30 * 24 * 60 * 60  # 30 days in seconds
+            )
+        
+        return response
 
     return jsonify({"error": "Invalid credentials"}), 401
 
 
 @app.route("/auth/logout", methods=["POST"])
 def logout():
+    if "user_id" in session:
+        # Remove token from database and clear cookie
+        token = request.cookies.get('auth_token')
+        if token:
+            db = get_db()
+            db.execute("DELETE FROM auth_tokens WHERE token = ?", (token,))
+            db.commit()
+    
+    response = jsonify({"message": "Logged out"})
+    response.delete_cookie('auth_token')
     session.clear()
-    return jsonify({"message": "Logged out"})
+    return response
 
 
 @app.route("/admin/users", methods=["GET"])
@@ -601,6 +666,11 @@ def update_last_online():
             (session["user_id"],),
         )
         db.commit()
+
+
+# Add this function to generate tokens
+def generate_auth_token():
+    return secrets.token_urlsafe(32)
 
 
 if __name__ == "__main__":
