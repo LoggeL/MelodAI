@@ -11,3 +11,6 @@ venv
 
 # Database
 *.db
+
+# whatever this is
+melodai.egg-info
