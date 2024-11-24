@@ -12,4 +12,5 @@ dependencies = [
     "replicate>=1.0.3",
     "requests>=2.32.3",
     "flask-socketio>=5.4.1",
+    "groq>=0.12.0",
 ]
