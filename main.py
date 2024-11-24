@@ -13,6 +13,7 @@ from functools import wraps
 import time
 from datetime import datetime, timedelta
 import secrets
+from chunk_lyrics import chunk_lyrics
 
 # env
 from dotenv import load_dotenv
@@ -448,13 +449,13 @@ def de_add_track(track_id):
 
     # exists and file is not empty
     if (
-        not os.path.isfile("songs/{}/lyrics.json".format(track_id))
-        or os.path.getsize("songs/{}/lyrics.json".format(track_id)) == 0
+        not os.path.isfile("songs/{}/lyrics_raw.json".format(track_id))
+        or os.path.getsize("songs/{}/lyrics_raw.json".format(track_id)) == 0
     ):
         print("Extracting Lyrics")
         socketio.emit(
             "track_progress",
-            {"track_id": track_id, "status": "extracting_lyrics", "progress": 80},
+            {"track_id": track_id, "status": "extracting_lyrics", "progress": 70},
         )
 
         output = replicate.run(
@@ -475,13 +476,25 @@ def de_add_track(track_id):
         )
 
         # Save the lyrics
-        with open("songs/{}/lyrics.json".format(track_id), "w") as f:
+        with open("songs/{}/lyrics_raw.json".format(track_id), "w") as f:
             f.write(json.dumps(output))
         # => {"segments":[{"end":30.811,"text":" The little tales they...","start":0.0},{"end":60.0,"text":" The little tales they...","start":30.811},...
 
         socketio.emit(
             "track_progress",
-            {"track_id": track_id, "status": "lyrics_complete", "progress": 90},
+            {"track_id": track_id, "status": "lyrics_extracted", "progress": 80},
+        )
+
+    # Chunk lyrics
+    if (
+        not os.path.isfile("songs/{}/lyrics.json".format(track_id))
+        or os.path.getsize("songs/{}/lyrics.json".format(track_id)) == 0
+    ):
+        chunk_lyrics(track_id)
+
+        socketio.emit(
+            "track_progress",
+            {"track_id": track_id, "status": "lyrics_chunked", "progress": 90},
         )
 
     print("Done")
@@ -601,43 +614,33 @@ def get_usage_logs():
     )
 
 
-@app.route("/random", methods=["GET"])
+@app.route("/random", methods=["POST"])
 @login_required
-def get_random_song():
+def random_song():
     try:
-        # Get all song folders
-        song_dirs = [
-            d for d in os.listdir("songs") if os.path.isdir(os.path.join("songs", d))
-        ]
+        data = request.get_json()
+        exclude_ids = data.get("exclude_ids", [])
 
-        if not song_dirs:
-            return jsonify({"error": "No songs available"}), 404
+        # Get all processed songs (that have a metadata.json file)
+        processed_songs = []
+        songs_dir = "songs"
+        for track_id in os.listdir(songs_dir):
+            if os.path.isfile(os.path.join(songs_dir, track_id, "metadata.json")):
+                # Skip if the track is in the exclude list
+                if track_id not in exclude_ids:
+                    processed_songs.append(track_id)
 
-        # Pick a random song ID
-        track_id = random.choice(song_dirs)
+        if not processed_songs:
+            return jsonify({"error": "No available songs"}), 404
 
-        # Try to get metadata
-        try:
-            with open(f"songs/{track_id}/metadata.json", "r") as f:
-                metadata = json.load(f)
-        except FileNotFoundError:
-            # If no metadata exists, fetch it from Deezer
-            track_info = deezer.get_song_infos_from_deezer_website(
-                deezer.TYPE_TRACK, track_id
-            )
-            # 'SNG_ID, PRODUCT_TRACK_ID, UPLOAD_ID, SNG_TITLE, ART_ID, PROVIDER_ID, ART_NAME, ARTIST_IS_DUMMY, ARTISTS, ALB_ID, ALB_TITLE, TYPE, MD5_ORIGIN, VIDEO, DURATION, ALB_PICTURE, ART_PICTURE, RANK_SNG, FILESIZE_AAC_64, FILESIZE_AC4_IMS, FILESIZE_DD_JOC, FILESIZE_MP3_64, FILESIZE_MP3_128, FILESIZE_MP3_256, FILESIZE_MP3_320, FILESIZE_MP4_RA1, FILESIZE_MP4_RA2, FILESIZE_MP4_RA3, FILESIZE_MHM1_RA1, FILESIZE_MHM1_RA2, FILESIZE_MHM1_RA3, FILESIZE_FLAC, FILESIZE, GAIN, MEDIA_VERSION, DISK_NUMBER, TRACK_NUMBER, TRACK_TOKEN, TRACK_TOKEN_EXPIRE, VERSION, MEDIA, EXPLICIT_LYRICS, RIGHTS, ISRC, HIERARCHICAL_TITLE, SNG_CONTRIBUTORS, LYRICS_ID, EXPLICIT_TRACK_CONTENT, COPYRIGHT, PHYSICAL_RELEASE_DATE, S_MOD, S_PREMIUM, DATE_START_PREMIUM, DATE_START, STATUS, USER_ID, URL_REWRITING, SNG_STATUS, AVAILABLE_COUNTRIES, UPDATE_DATE, __TYPE__, DIGITAL_RELEASE_DATE'
-            metadata = {
-                "title": track_info["SNG_TITLE"],
-                "artist": track_info["ART_NAME"],
-                "duration": track_info["DURATION"],
-                "cover": track_info["ALB_PICTURE"],
-                "album": track_info["ALB_TITLE"],
-            }
-            # Save metadata for future use
-            with open(f"songs/{track_id}/metadata.json", "w") as f:
-                json.dump(metadata, f)
+        # Pick a random song from the available ones
+        track_id = random.choice(processed_songs)
 
-        # Log the random selection
+        # Get the metadata
+        with open(f"songs/{track_id}/metadata.json", "r") as f:
+            metadata = json.load(f)
+
+        # Log the random play
         db = get_db()
         db.execute(
             "INSERT INTO usage_logs (user_id, track_id, action) VALUES (?, ?, ?)",

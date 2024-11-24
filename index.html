@@ -978,7 +978,8 @@
             downloading: 'Downloading...',
             downloaded: 'Downloaded',
             splitting: 'Splitting audio...',
-            split_complete: 'Split complete',
+            lyrics_extracted: 'Lyrics extracted...',
+            lyrics_chunked: 'Lyrics chunked...',
             extracting_lyrics: 'Extracting lyrics...',
             lyrics_complete: 'Lyrics extracted',
             error: 'Error processing track',
@@ -1174,37 +1175,38 @@
 
         async randomSong() {
           try {
+            // Get all track IDs currently in the queue
+            const queueIds = this.songQueue.map((song) => song.id)
+
             const response = await fetch('/random', {
+              method: 'POST', // Changed to POST to send data
               credentials: 'include',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                exclude_ids: queueIds,
+              }),
             })
             const data = await response.json()
 
             if (response.ok) {
-              // Add the random song to queue if it's not already there
-              if (!this.songQueue.some((song) => song.id === data.track_id)) {
-                this.songQueue.push({
-                  id: data.track_id,
-                  title: data.metadata.title,
-                  artist: data.metadata.artist,
-                  thumbnail: `https://e-cdns-images.dzcdn.net/images/cover/${data.metadata.cover}/250x250-000000-80-0-0.jpg`,
-                  vocalsUrl: `songs/${data.track_id}/vocals.mp3`,
-                  musicUrl: `songs/${data.track_id}/no_vocals.mp3`,
-                  lyricsUrl: `songs/${data.track_id}/lyrics.json`,
-                  ready: true,
-                  progress: 100,
-                  status: '',
-                })
+              this.songQueue.push({
+                id: data.track_id,
+                title: data.metadata.title,
+                artist: data.metadata.artist,
+                thumbnail: `https://e-cdns-images.dzcdn.net/images/cover/${data.metadata.cover}/250x250-000000-80-0-0.jpg`,
+                vocalsUrl: `songs/${data.track_id}/vocals.mp3`,
+                musicUrl: `songs/${data.track_id}/no_vocals.mp3`,
+                lyricsUrl: `songs/${data.track_id}/lyrics.json`,
+                ready: true,
+                progress: 100,
+                status: '',
+              })
 
-                this.renderQueue()
-                // Load and play the random song immediately
-                this.loadSong(this.songQueue.length - 1)
-              } else {
-                // If song is already in queue, find and play it
-                const songIndex = this.songQueue.findIndex(
-                  (song) => song.id === data.track_id
-                )
-                this.loadSong(songIndex)
-              }
+              this.renderQueue()
+              // Load and play the random song immediately
+              this.loadSong(this.songQueue.length - 1)
             } else {
               console.error('Error getting random song:', data.error)
             }
