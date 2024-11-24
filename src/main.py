@@ -291,7 +291,7 @@ def admin_html():
 @login_required
 @app.route("/songs/<path:path>", methods=["GET"])
 def song_file(path):
-    return send_from_directory("songs", path)
+    return send_from_directory("src/songs", path)
 
 
 # Logo.png
@@ -356,7 +356,7 @@ def search():
 
 def de_add_track(track_id):
 
-    os.makedirs("songs/{}".format(track_id), exist_ok=True)
+    os.makedirs("src/songs/{}".format(track_id), exist_ok=True)
 
     print("Processing Song", track_id)
     socketio.emit(
@@ -365,8 +365,8 @@ def de_add_track(track_id):
 
     # Check if metadata exists
     if (
-        not os.path.isfile("songs/{}/metadata.json".format(track_id))
-        or os.path.getsize("songs/{}/metadata.json".format(track_id)) == 0
+        not os.path.isfile("src/songs/{}/metadata.json".format(track_id))
+        or os.path.getsize("src/songs/{}/metadata.json".format(track_id)) == 0
     ):
         print("Fetching Metadata")
         track_info = deezer.get_song_infos_from_deezer_website(
@@ -379,7 +379,7 @@ def de_add_track(track_id):
             "cover": track_info["ART_PICTURE"],
             "album": track_info["ALB_TITLE"],
         }
-        with open("songs/{}/metadata.json".format(track_id), "w") as f:
+        with open("src/songs/{}/metadata.json".format(track_id), "w") as f:
             json.dump(metadata, f)
 
         socketio.emit(
@@ -389,8 +389,8 @@ def de_add_track(track_id):
 
     # Download song from deezer if it doesnt exist yet
     if (
-        not os.path.isfile("songs/{}/song.mp3".format(track_id))
-        or os.path.getsize("songs/{}/song.mp3".format(track_id)) == 0
+        not os.path.isfile("src/songs/{}/song.mp3".format(track_id))
+        or os.path.getsize("src/songs/{}/song.mp3".format(track_id)) == 0
     ):
         print("Downloading Song")
         socketio.emit(
@@ -400,15 +400,15 @@ def de_add_track(track_id):
         track_info = deezer.get_song_infos_from_deezer_website(
             deezer.TYPE_TRACK, track_id
         )
-        deezer.download_song(track_info, "songs/{}/song.mp3".format(track_id))
+        deezer.download_song(track_info, "src/songs/{}/song.mp3".format(track_id))
         socketio.emit(
             "track_progress",
             {"track_id": track_id, "status": "downloaded", "progress": 20},
         )
 
-    if not os.path.isfile("songs/{}/vocals.mp3".format(track_id)) or not os.path.isfile(
-        "songs/{}/no_vocals.mp3".format(track_id)
-    ):
+    if not os.path.isfile(
+        "src/songs/{}/vocals.mp3".format(track_id)
+    ) or not os.path.isfile("src/songs/{}/no_vocals.mp3".format(track_id)):
 
         print("Splitting Song")
         socketio.emit(
@@ -420,7 +420,7 @@ def de_add_track(track_id):
             "ryan5453/demucs:7a9db77ed93f8f4f7e233a94d8519a867fbaa9c6d16ea5b53c1394f1557f9c61",
             input={
                 "jobs": 0,
-                "audio": open("songs/{}/song.mp3".format(track_id), "rb"),
+                "audio": open("src/songs/{}/song.mp3".format(track_id), "rb"),
                 "stem": "vocals",
                 "model": "htdemucs",
                 "split": True,
@@ -435,11 +435,11 @@ def de_add_track(track_id):
         )
 
         # Save the vocals
-        with open("songs/{}/vocals.mp3".format(track_id), "wb") as f:
+        with open("src/songs/{}/vocals.mp3".format(track_id), "wb") as f:
             f.write(requests.get(output["vocals"]).content)
 
         # Save the instrumental
-        with open("songs/{}/no_vocals.mp3".format(track_id), "wb") as f:
+        with open("src/songs/{}/no_vocals.mp3".format(track_id), "wb") as f:
             f.write(requests.get(output["no_vocals"]).content)
 
         socketio.emit(
@@ -449,8 +449,8 @@ def de_add_track(track_id):
 
     # exists and file is not empty
     if (
-        not os.path.isfile("songs/{}/lyrics_raw.json".format(track_id))
-        or os.path.getsize("songs/{}/lyrics_raw.json".format(track_id)) == 0
+        not os.path.isfile("src/songs/{}/lyrics_raw.json".format(track_id))
+        or os.path.getsize("src/songs/{}/lyrics_raw.json".format(track_id)) == 0
     ):
         print("Extracting Lyrics")
         socketio.emit(
@@ -463,7 +463,7 @@ def de_add_track(track_id):
             input={
                 "debug": False,
                 "vad_onset": 0.5,
-                "audio_file": open("songs/{}/vocals.mp3".format(track_id), "rb"),
+                "audio_file": open("src/songs/{}/vocals.mp3".format(track_id), "rb"),
                 "batch_size": 64,
                 "vad_offset": 0.363,
                 "diarization": True,
@@ -476,7 +476,7 @@ def de_add_track(track_id):
         )
 
         # Save the lyrics
-        with open("songs/{}/lyrics_raw.json".format(track_id), "w") as f:
+        with open("src/songs/{}/lyrics_raw.json".format(track_id), "w") as f:
             f.write(json.dumps(output))
         # => {"segments":[{"end":30.811,"text":" The little tales they...","start":0.0},{"end":60.0,"text":" The little tales they...","start":30.811},...
 
@@ -487,8 +487,8 @@ def de_add_track(track_id):
 
     # Chunk lyrics
     if (
-        not os.path.isfile("songs/{}/lyrics.json".format(track_id))
-        or os.path.getsize("songs/{}/lyrics.json".format(track_id)) == 0
+        not os.path.isfile("src/songs/{}/lyrics.json".format(track_id))
+        or os.path.getsize("src/songs/{}/lyrics.json".format(track_id)) == 0
     ):
         try:
             chunk_lyrics(track_id)
@@ -496,9 +496,9 @@ def de_add_track(track_id):
             print("Error chunking lyrics", e)
 
             # copy lyrics_raw to lyrics.json
-            with open("songs/{}/lyrics_raw.json".format(track_id), "r") as f:
+            with open("src/songs/{}/lyrics_raw.json".format(track_id), "r") as f:
                 data = json.load(f)
-            with open("songs/{}/lyrics.json".format(track_id), "w") as f:
+            with open("src/songs/{}/lyrics.json".format(track_id), "w") as f:
                 json.dump(data, f)
 
             socketio.emit(
@@ -638,7 +638,7 @@ def random_song():
 
         # Get all processed songs (that have a metadata.json file)
         processed_songs = []
-        songs_dir = "songs"
+        songs_dir = "src/songs"
         for track_id in os.listdir(songs_dir):
             if os.path.isfile(os.path.join(songs_dir, track_id, "metadata.json")):
                 # Skip if the track is in the exclude list
@@ -652,7 +652,7 @@ def random_song():
         track_id = random.choice(processed_songs)
 
         # Get the metadata
-        with open(f"songs/{track_id}/metadata.json", "r") as f:
+        with open(f"src/songs/{track_id}/metadata.json", "r") as f:
             metadata = json.load(f)
 
         # Log the random play
