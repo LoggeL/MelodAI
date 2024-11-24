@@ -161,6 +161,11 @@
         position: relative;
       }
 
+      .queue-item.error {
+        background: var(--danger);
+        cursor: not-allowed;
+      }
+
       .queue-item:hover {
         background: var(--hover);
       }
@@ -620,9 +625,6 @@
           <button class="control-btn" id="randomSong">
             <i class="fas fa-random"></i>
           </button>
-          <button class="control-btn" id="toggleLyrics">
-            <i class="fas fa-closed-captioning"></i>
-          </button>
           <button class="control-btn" id="toggleFullscreen">
             <i class="fas fa-expand"></i>
           </button>
@@ -910,6 +912,8 @@
           this.currentSongIndex = index
           const song = this.songQueue[index]
 
+          this.updateQueueHighlight()
+
           // Update UI elements
           document.getElementById(
             'nowPlaying'
@@ -945,7 +949,9 @@
             .map(
               (song, index) => `
                   <div id="queue-${song.id}"
-                       class="queue-item">
+                       class="queue-item ${
+                         index === this.currentSongIndex ? 'active' : ''
+                       }"
                       <img src="${song.thumbnail}" alt="${song.title}">
                       <div>
                           <div>${song.title}</div>
@@ -961,6 +967,7 @@
               `
             )
             .join('')
+          this.updateQueue()
         }
 
         getStatus(song) {
@@ -1001,6 +1008,12 @@
                 queueItem.onclick = () => this.loadSong(index)
               }
 
+              if (song.error) {
+                queueItem.classList.add('error')
+              } else {
+                queueItem.classList.remove('error')
+              }
+
               // Update status and progress
               const statusDiv = queueItem.querySelector('.queue-status')
               if (statusDiv) {
@@ -1018,10 +1031,13 @@
         }
 
         updateQueueHighlight() {
+          console.log('updateQueueHighlight', this.currentSongIndex)
+          if (this.currentSongIndex === -1) return
           const items = document.querySelectorAll('.queue-item')
-          items.forEach((item, index) => {
-            item.classList.toggle('active', index === this.currentSongIndex)
+          items.forEach((item) => {
+            item.classList.remove('active')
           })
+          items[this.currentSongIndex].classList.add('active')
         }
 
         setupControls() {
@@ -1037,6 +1053,9 @@
           document
             .getElementById('randomSong')
             .addEventListener('click', () => this.randomSong())
+          document
+            .getElementById('toggleFullscreen')
+            .addEventListener('click', () => this.toggleFullscreen())
 
           document
             .getElementById('vocalsVolume')
@@ -1195,15 +1214,13 @@
         }
 
         toggleFullscreen() {
-          const btn = document.querySelector(
-            '[onclick="karaokePlayer.toggleFullscreen()"]'
-          )
+          const i = document.querySelector('#toggleFullscreen i')
           if (!document.fullscreenElement) {
             document.documentElement.requestFullscreen()
-            btn.querySelector('i').classList.replace('fa-expand', 'fa-compress')
+            i.classList.replace('fa-expand', 'fa-compress')
           } else {
             document.exitFullscreen()
-            btn.querySelector('i').classList.replace('fa-compress', 'fa-expand')
+            i.classList.replace('fa-compress', 'fa-expand')
           }
         }
       }
