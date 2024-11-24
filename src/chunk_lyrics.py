@@ -12,7 +12,7 @@ client = Groq(api_key=os.environ["GROQ_API_KEY"])
 
 def chunk_lyrics(lyrics_id):
     # songs/{id}/lyrics.json
-    lyrics_path = f"songs/{lyrics_id}/lyrics_raw.json"
+    lyrics_path = f"src/songs/{lyrics_id}/lyrics_raw.json"
     with open(lyrics_path, "r") as f:
         lyrics = json.load(f)
 
@@ -39,10 +39,12 @@ def chunk_lyrics(lyrics_id):
     formatted_lyrics_str = completion.choices[0].message.content
 
     # store txt versions of both
-    with open(f"songs/{lyrics_id}/lyrics_formatted.txt", "w", encoding="utf-8") as f:
+    with open(
+        f"src/songs/{lyrics_id}/lyrics_formatted.txt", "w", encoding="utf-8"
+    ) as f:
         f.write(formatted_lyrics_str)
 
-    with open(f"songs/{lyrics_id}/lyrics.txt", "w", encoding="utf-8") as f:
+    with open(f"src/songs/{lyrics_id}/lyrics.txt", "w", encoding="utf-8") as f:
         f.write(lyrics_text)
 
     #     "segments": [
@@ -121,7 +123,7 @@ def chunk_lyrics(lyrics_id):
     formatted_lyrics = lyrics
 
     # write to json
-    with open(f"songs/{lyrics_id}/lyrics.json", "w", encoding="utf-8") as f:
+    with open(f"src/songs/{lyrics_id}/lyrics.json", "w", encoding="utf-8") as f:
         json.dump(formatted_lyrics, f)
 
 
