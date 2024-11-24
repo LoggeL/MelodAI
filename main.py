@@ -403,7 +403,7 @@ def de_add_track(track_id):
         deezer.download_song(track_info, "songs/{}/song.mp3".format(track_id))
         socketio.emit(
             "track_progress",
-            {"track_id": track_id, "status": "downloaded", "progress": 30},
+            {"track_id": track_id, "status": "downloaded", "progress": 20},
         )
 
     if not os.path.isfile("songs/{}/vocals.mp3".format(track_id)) or not os.path.isfile(
@@ -413,7 +413,7 @@ def de_add_track(track_id):
         print("Splitting Song")
         socketio.emit(
             "track_progress",
-            {"track_id": track_id, "status": "splitting", "progress": 40},
+            {"track_id": track_id, "status": "splitting", "progress": 30},
         )
 
         output = replicate.run(
@@ -490,7 +490,21 @@ def de_add_track(track_id):
         not os.path.isfile("songs/{}/lyrics.json".format(track_id))
         or os.path.getsize("songs/{}/lyrics.json".format(track_id)) == 0
     ):
-        chunk_lyrics(track_id)
+        try:
+            chunk_lyrics(track_id)
+        except Exception as e:
+            print("Error chunking lyrics", e)
+
+            # copy lyrics_raw to lyrics.json
+            with open("songs/{}/lyrics_raw.json".format(track_id), "r") as f:
+                data = json.load(f)
+            with open("songs/{}/lyrics.json".format(track_id), "w") as f:
+                json.dump(data, f)
+
+            socketio.emit(
+                "track_progress",
+                {"track_id": track_id, "status": "error", "progress": 90},
+            )
 
         socketio.emit(
             "track_progress",
@@ -518,6 +532,7 @@ def add():
             de_add_track(track_id)
             socketio.emit("track_ready", {"track_id": track_id})
         except Exception as e:
+            print("Error processing track", e)
             socketio.emit("track_error", {"track_id": track_id, "error": str(e)})
 
     # Log the download

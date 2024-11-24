@@ -39,10 +39,10 @@ def chunk_lyrics(lyrics_id):
     formatted_lyrics_str = completion.choices[0].message.content
 
     # store txt versions of both
-    with open(f"songs/{lyrics_id}/lyrics_formatted.txt", "w") as f:
+    with open(f"songs/{lyrics_id}/lyrics_formatted.txt", "w", encoding="utf-8") as f:
         f.write(formatted_lyrics_str)
 
-    with open(f"songs/{lyrics_id}/lyrics.txt", "w") as f:
+    with open(f"songs/{lyrics_id}/lyrics.txt", "w", encoding="utf-8") as f:
         f.write(lyrics_text)
 
     #     "segments": [
@@ -105,8 +105,15 @@ def chunk_lyrics(lyrics_id):
         # count speaker occurrences
         speaker_counts = {}
         for word in new_segment["words"]:
-            speaker_counts[word["speaker"]] = speaker_counts.get(word["speaker"], 0) + 1
-        new_segment["speaker"] = max(speaker_counts, key=speaker_counts.get)
+            if "speaker" in word:
+                speaker_counts[word["speaker"]] = (
+                    speaker_counts.get(word["speaker"], 0) + 1
+                )
+        # if non have been found set SPEAKER_00
+        if len(speaker_counts) == 0:
+            new_segment["speaker"] = "SPEAKER_00"
+        else:
+            new_segment["speaker"] = max(speaker_counts, key=speaker_counts.get)
 
         formatted_segments.append(new_segment)
 
@@ -114,10 +121,10 @@ def chunk_lyrics(lyrics_id):
     formatted_lyrics = lyrics
 
     # write to json
-    with open(f"songs/{lyrics_id}/lyrics_formatted.json", "w") as f:
+    with open(f"songs/{lyrics_id}/lyrics.json", "w", encoding="utf-8") as f:
         json.dump(formatted_lyrics, f)
 
 
 # Test
 if __name__ == "__main__":
-    chunk_lyrics("3068802271")
+    chunk_lyrics("2984775641")
