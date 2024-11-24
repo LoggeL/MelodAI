@@ -32,7 +32,7 @@ deezer.test_deezer_login()
 
 
 def get_db():
-    db = sqlite3.connect("database.db")
+    db = sqlite3.connect("src/database.db")
     db.row_factory = sqlite3.Row
     return db
 
@@ -74,7 +74,7 @@ def migrate_db():
             print(f"Migration error: {e}")
 
 
-if not os.path.isfile("database.db"):
+if not os.path.isfile("src/database.db"):
     init_db()
 else:
     migrate_db()
@@ -291,7 +291,8 @@ def admin_html():
 @login_required
 @app.route("/songs/<path:path>", methods=["GET"])
 def song_file(path):
-    return send_from_directory("src/songs", path)
+    print("Sending song file", path)
+    return send_from_directory("./songs", path)
 
 
 # Logo.png
@@ -491,6 +492,7 @@ def de_add_track(track_id):
         or os.path.getsize("src/songs/{}/lyrics.json".format(track_id)) == 0
     ):
         try:
+            print("Chunking Lyrics")
             chunk_lyrics(track_id)
         except Exception as e:
             print("Error chunking lyrics", e)
