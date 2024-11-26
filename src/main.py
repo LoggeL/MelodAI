@@ -13,7 +13,7 @@ from functools import wraps
 import time
 from datetime import datetime, timedelta
 import secrets
-from chunk_lyrics import chunk_lyrics
+from helpers import chunk_lyrics, merge_lyrics
 
 # env
 from dotenv import load_dotenv
@@ -456,7 +456,7 @@ def de_add_track(track_id):
         print("Extracting Lyrics")
         socketio.emit(
             "track_progress",
-            {"track_id": track_id, "status": "extracting_lyrics", "progress": 70},
+            {"track_id": track_id, "status": "extracting_lyrics", "progress": 60},
         )
 
         output = replicate.run(
@@ -483,7 +483,34 @@ def de_add_track(track_id):
 
         socketio.emit(
             "track_progress",
-            {"track_id": track_id, "status": "lyrics_extracted", "progress": 80},
+            {"track_id": track_id, "status": "lyrics_extracted", "progress": 70},
+        )
+
+    # Merge lyrics
+    if (
+        not os.path.isfile("src/songs/{}/lyrics_merged.json".format(track_id))
+        or os.path.getsize("src/songs/{}/lyrics_merged.json".format(track_id)) == 0
+    ):
+        try:
+            print("Merging Lyrics")
+            merge_lyrics(track_id)
+        except Exception as e:
+            print("Error chunking lyrics", e)
+
+            # copy lyrics_raw to lyrics.json
+            with open("src/songs/{}/lyrics_raw.json".format(track_id), "r") as f:
+                data = json.load(f)
+            with open("src/songs/{}/lyrics.json".format(track_id), "w") as f:
+                json.dump(data, f)
+
+            socketio.emit(
+                "track_progress",
+                {"track_id": track_id, "status": "error", "progress": 80},
+            )
+
+        socketio.emit(
+            "track_progress",
+            {"track_id": track_id, "status": "lyrics_chunked", "progress": 80},
         )
 
     # Chunk lyrics

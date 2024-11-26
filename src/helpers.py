@@ -12,7 +12,7 @@ client = Groq(api_key=os.environ["GROQ_API_KEY"])
 
 def chunk_lyrics(lyrics_id):
     # songs/{id}/lyrics.json
-    lyrics_path = f"src/songs/{lyrics_id}/lyrics_raw.json"
+    lyrics_path = f"src/songs/{lyrics_id}/lyrics_merged.json"
     with open(lyrics_path, "r") as f:
         lyrics = json.load(f)
 
@@ -127,6 +127,72 @@ def chunk_lyrics(lyrics_id):
         json.dump(formatted_lyrics, f)
 
 
+def merge_lyrics(lyrics_id):
+    # songs/{id}/lyrics.json
+    lyrics_path = f"src/songs/{lyrics_id}/lyrics_raw.json"
+    with open(lyrics_path, "r") as f:
+        lyrics = json.load(f)
+
+    old_segments = lyrics["segments"]
+    new_segments = []
+
+    for segment in old_segments:
+        # sometimes the words are on a char based level but the text is correct. I want to merge the chars back to words.
+        words = segment["text"].split(" ")
+        if len(words) < len(segment["words"]):
+            word_index = 0
+            new_words = []
+            for word in words:
+                word_collector = []
+                collected_text = ""
+                while len(collected_text) < len(word):
+                    word_collector.append(segment["words"][word_index])
+                    collected_text += segment["words"][word_index]["word"]
+                    word_index += 1
+
+                new_word = {"word": collected_text}
+
+                # merge to a single word
+                # count speaker occurrences
+                speaker_counts = {}
+                for word in word_collector:
+                    if "speaker" in word:
+                        speaker_counts[word["speaker"]] = (
+                            speaker_counts.get(word["speaker"], 0) + 1
+                        )
+                # if non have been found set SPEAKER_00
+                if len(speaker_counts) == 0:
+                    new_word["speaker"] = "SPEAKER_00"
+                else:
+                    new_word["speaker"] = max(speaker_counts, key=speaker_counts.get)
+
+                # start, end and speaker for new_segment based on its words
+                for word in word_collector:
+                    if "start" in word:
+                        new_word["start"] = min(
+                            new_word.get("start", float("inf")), word["start"]
+                        )
+                    if "end" in word:
+                        new_word["end"] = max(
+                            new_word.get("end", float("-inf")), word["end"]
+                        )
+
+                new_words.append(new_word)
+
+            segment["words"] = new_words
+            new_segments.append(segment)
+
+        else:
+            new_segments.append(segment)
+
+    lyrics["segments"] = new_segments
+
+    # write to json
+    with open(f"src/songs/{lyrics_id}/lyrics_merged.json", "w", encoding="utf-8") as f:
+        json.dump(lyrics, f)
+
+
 # Test
 if __name__ == "__main__":
-    chunk_lyrics("2984775641")
+    # chunk_lyrics("2984775641")
+    merge_lyrics("2867606132")
