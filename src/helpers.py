@@ -11,6 +11,17 @@ client = Groq(api_key=os.environ["GROQ_API_KEY"])
 
 
 def chunk_lyrics(lyrics_id):
+    """Chunks lyrics into meaningful lines using a large language model.
+
+    This function takes a lyrics ID, loads the corresponding lyrics from a JSON
+    file, sends the lyrics to a large language model for chunking, and then
+    saves the formatted lyrics and original lyrics to text files. It also
+    updates the original JSON file with the formatted lyrics, including start
+    and end times for each segment.
+
+    Args:
+        lyrics_id: The ID of the song lyrics to process.
+    """
     # songs/{id}/lyrics.json
     lyrics_path = f"src/songs/{lyrics_id}/lyrics_merged.json"
     with open(lyrics_path, "r") as f:
@@ -128,6 +139,17 @@ def chunk_lyrics(lyrics_id):
 
 
 def merge_lyrics(lyrics_id):
+    """Merges character-level lyrics into word-level lyrics.
+
+    This function takes a lyrics ID, loads the corresponding raw lyrics from a
+    JSON file, and merges character-level segments into word-level segments.
+    It handles cases where the lyrics are segmented by character instead of
+    word, ensuring that the output JSON file contains properly formatted
+    word-level lyrics.
+
+    Args:
+        lyrics_id: The ID of the song lyrics to process.
+    """
     # songs/{id}/lyrics.json
     lyrics_path = f"src/songs/{lyrics_id}/lyrics_raw.json"
     with open(lyrics_path, "r") as f:
@@ -135,6 +157,42 @@ def merge_lyrics(lyrics_id):
 
     old_segments = lyrics["segments"]
     new_segments = []
+
+    def interpolate_timestamp(word_index, words, key):
+        """Interpolates a missing timestamp using linear interpolation.
+
+        Args:
+            word_index: The index of the word with the missing timestamp.
+            words: The list of words in the segment.
+            key: The key of the timestamp to interpolate ('start' or 'end').
+
+        Returns:
+            The interpolated timestamp, or None if interpolation is not possible.
+        """
+
+        # Find previous and next valid timestamps in the word list
+        prev_index = word_index - 1
+        while prev_index >= 0 and key not in words[prev_index]:
+            prev_index -= 1
+
+        next_index = word_index + 1
+        while next_index < len(words) and key not in words[next_index]:
+            next_index += 1
+
+        # If no valid timestamps are found for interpolation, return None
+        if prev_index < 0 and next_index >= len(words):
+            return None
+        # If previous timestamp is missing, use the next timestamp
+        if prev_index < 0:  
+            return words[next_index][key]
+        # If next timestamp is missing, use the previous timestamp
+        if next_index >= len(words): 
+            return words[prev_index][key]
+        # Perform linear interpolation using previous and next timestamps
+        prev_time = words[prev_index][key]
+        next_time = words[next_index][key]
+        fraction = (word_index - prev_index) / (next_index - prev_index)
+        return prev_time + (next_time - prev_time) * fraction
 
     for segment in old_segments:
         # sometimes the words are on a char based level but the text is correct. I want to merge the chars back to words.
@@ -176,6 +234,14 @@ def merge_lyrics(lyrics_id):
                         new_word["end"] = max(
                             new_word.get("end", float("-inf")), word["end"]
                         )
+
+                # Interpolate missing timestamps
+                if "start" not in new_word:
+                    new_word["start"] = interpolate_timestamp(word_index, segment["words"], "start")
+
+                if "end" not in new_word:
+                    new_word["end"] = interpolate_timestamp(word_index, segment["words"], "end")
+
 
                 new_words.append(new_word)
 
