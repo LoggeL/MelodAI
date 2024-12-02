@@ -14,6 +14,9 @@ import time
 from datetime import datetime, timedelta
 import secrets
 from helpers import chunk_lyrics, merge_lyrics
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 # env
 from dotenv import load_dotenv
@@ -55,6 +58,33 @@ def migrate_db():
             print("Adding last_online column to users table")
             db.execute("ALTER TABLE users ADD COLUMN last_online TIMESTAMP")
             db.commit()
+
+        try:
+            # Check if email column exists
+            db.execute("SELECT email FROM users LIMIT 1")
+        except sqlite3.OperationalError:
+            print("Adding email column to users table")
+            db.execute("ALTER TABLE users ADD COLUMN email TEXT")
+            db.commit()
+
+        try:
+            # Add password_resets table if it doesn't exist
+            db.execute(
+                """
+                CREATE TABLE IF NOT EXISTS password_resets (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    token TEXT NOT NULL,
+                    expires_at TIMESTAMP NOT NULL,
+                    used BOOLEAN DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users (id)
+                )
+            """
+            )
+            db.commit()
+        except sqlite3.OperationalError as e:
+            print(f"Migration error: {e}")
 
         try:
             # Add auth_tokens table if it doesn't exist
@@ -747,6 +777,103 @@ def update_last_online():
 # Add this function to generate tokens
 def generate_auth_token():
     return secrets.token_urlsafe(32)
+
+
+def send_reset_email(email, reset_token):
+    sender_email = os.getenv("SMTP_USER")
+    sender_password = os.getenv("SMTP_PASSWORD")
+
+    msg = MIMEMultipart()
+    msg["From"] = sender_email
+    msg["To"] = email
+    msg["Subject"] = "Password Reset Request"
+
+    body = f"""
+    You requested a password reset for your MelodAI account.
+    Click the following link to reset your password:
+    
+    {os.getenv('BASE_URL')}/reset-password?token={reset_token}
+    
+    If you didn't request this, please ignore this email.
+    """
+
+    msg.attach(MIMEText(body, "plain"))
+
+    with smtplib.SMTP(os.getenv("SMTP_HOST"), int(os.getenv("SMTP_PORT"))) as server:
+        server.starttls()
+        server.login(sender_email, sender_password)
+        server.send_message(msg)
+
+
+@app.route("/auth/forgot-password", methods=["POST"])
+def forgot_password():
+    data = request.get_json()
+    username = data.get("username")
+
+    db = get_db()
+    user = db.execute(
+        "SELECT id, email FROM users WHERE username = ?", (username,)
+    ).fetchone()
+
+    if not user or not user["email"]:
+        # Don't reveal if user exists
+        return jsonify({"message": "If an account exists, a reset link will be sent"})
+
+    # Generate reset token
+    reset_token = secrets.token_urlsafe(32)
+    expires = datetime.now() + timedelta(hours=1)
+
+    # Store reset token
+    db.execute(
+        """INSERT INTO password_resets 
+           (user_id, token, expires_at) 
+           VALUES (?, ?, ?)""",
+        (user["id"], reset_token, expires),
+    )
+    db.commit()
+
+    # Send email
+    try:
+        send_reset_email(user["email"], reset_token)
+    except Exception as e:
+        print(f"Error sending reset email: {e}")
+        return jsonify({"error": "Error sending reset email"}), 500
+
+    return jsonify({"message": "If an account exists, a reset link will be sent"})
+
+
+@app.route("/auth/reset-password", methods=["POST"])
+def reset_password():
+    data = request.get_json()
+    token = data.get("token")
+    new_password = data.get("password")
+
+    if not token or not new_password:
+        return jsonify({"error": "Missing required fields"}), 400
+
+    db = get_db()
+    reset = db.execute(
+        """SELECT user_id, expires_at FROM password_resets 
+           WHERE token = ? AND used = 0""",
+        (token,),
+    ).fetchone()
+
+    if (
+        not reset
+        or datetime.strptime(reset["expires_at"], "%Y-%m-%d %H:%M:%S.%f")
+        < datetime.now()
+    ):
+        return jsonify({"error": "Invalid or expired reset token"}), 400
+
+    # Update password and mark token as used
+    db.execute(
+        "UPDATE users SET password_hash = ? WHERE id = ?",
+        (generate_password_hash(new_password), reset["user_id"]),
+    )
+    db.execute("UPDATE password_resets SET used = 1 WHERE token = ?", (token,))
+    db.commit()
+
+    return jsonify({"message": "Password reset successful"})
 
 
 if __name__ == "__main__":
