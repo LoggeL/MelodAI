@@ -17,6 +17,7 @@ from helpers import chunk_lyrics, merge_lyrics
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from pathlib import Path
 
 # env
 from dotenv import load_dotenv
@@ -404,11 +405,11 @@ def de_add_track(track_id):
             deezer.TYPE_TRACK, track_id
         )
         metadata = {
-            "title": track_info["SNG_TITLE"],
-            "artist": track_info["ART_NAME"],
-            "duration": track_info["DURATION"],
-            "cover": track_info["ART_PICTURE"],
-            "album": track_info["ALB_TITLE"],
+            "title": track_info["SNG_TITLE"],  # type: ignore
+            "artist": track_info["ART_NAME"],  # type: ignore
+            "duration": track_info["DURATION"],  # type: ignore
+            "cover": track_info["ALB_PICTURE"],  # type: ignore
+            "album": track_info["ALB_TITLE"],  # type: ignore
         }
         with open("src/songs/{}/metadata.json".format(track_id), "w") as f:
             json.dump(metadata, f)
@@ -467,11 +468,11 @@ def de_add_track(track_id):
 
         # Save the vocals
         with open("src/songs/{}/vocals.mp3".format(track_id), "wb") as f:
-            f.write(requests.get(output["vocals"]).content)
+            f.write(requests.get(output["vocals"]).content)  # type: ignore
 
         # Save the instrumental
         with open("src/songs/{}/no_vocals.mp3".format(track_id), "wb") as f:
-            f.write(requests.get(output["no_vocals"]).content)
+            f.write(requests.get(output["no_vocals"]).content)  # type: ignore
 
         socketio.emit(
             "track_progress",
@@ -511,10 +512,10 @@ def de_add_track(track_id):
             f.write(json.dumps(output))
         # => {"segments":[{"end":30.811,"text":" The little tales they...","start":0.0},{"end":60.0,"text":" The little tales they...","start":30.811},...
 
-        socketio.emit(
-            "track_progress",
-            {"track_id": track_id, "status": "lyrics_extracted", "progress": 70},
-        )
+    socketio.emit(
+        "track_progress",
+        {"track_id": track_id, "status": "merging_lyrics", "progress": 70},
+    )
 
     # Merge lyrics
     if (
@@ -525,7 +526,7 @@ def de_add_track(track_id):
             print("Merging Lyrics")
             merge_lyrics(track_id)
         except Exception as e:
-            print("Error chunking lyrics", e)
+            print("Error Merging lyrics", e)
 
             # copy lyrics_raw to lyrics.json
             with open("src/songs/{}/lyrics_raw.json".format(track_id), "r") as f:
@@ -538,10 +539,10 @@ def de_add_track(track_id):
                 {"track_id": track_id, "status": "error", "progress": 80},
             )
 
-        socketio.emit(
-            "track_progress",
-            {"track_id": track_id, "status": "lyrics_chunked", "progress": 80},
-        )
+    socketio.emit(
+        "track_progress",
+        {"track_id": track_id, "status": "chunking_lyrics", "progress": 80},
+    )
 
     # Chunk lyrics
     if (
@@ -784,8 +785,8 @@ def send_reset_email(email, reset_token):
     sender_password = os.getenv("SMTP_PASSWORD")
 
     msg = MIMEMultipart()
-    msg["From"] = sender_email
-    msg["To"] = email
+    msg["From"] = str(sender_email)
+    msg["To"] = str(email)
     msg["Subject"] = "Password Reset Request"
 
     body = f"""
@@ -798,10 +799,14 @@ def send_reset_email(email, reset_token):
     """
 
     msg.attach(MIMEText(body, "plain"))
+    smtp_host = os.getenv("SMTP_HOST")
+    smtp_port = os.getenv("SMTP_PORT")
+    if smtp_host is None or smtp_port is None:
+        raise ValueError("SMTP_HOST or SMTP_PORT is not set")
 
-    with smtplib.SMTP(os.getenv("SMTP_HOST"), int(os.getenv("SMTP_PORT"))) as server:
+    with smtplib.SMTP(smtp_host, int(smtp_port)) as server:
         server.starttls()
-        server.login(sender_email, sender_password)
+        server.login(str(sender_email), str(sender_password))
         server.send_message(msg)
 
 
@@ -876,11 +881,31 @@ def reset_password():
     return jsonify({"message": "Password reset successful"})
 
 
+@app.route("/track/<track_id>", methods=["GET"])
+def get_track_metadata(track_id):
+    # try to get metadata from local
+    metadata_path = Path(f"src/songs/{track_id}/metadata.json")
+    if metadata_path.exists():
+        with open(metadata_path) as f:
+            metadata = json.load(f)
+        return jsonify(metadata)
+
+    track_info = deezer.get_song_infos_from_deezer_website(deezer.TYPE_TRACK, track_id)
+    metadata = {
+        "title": track_info["SNG_TITLE"],  # type: ignore
+        "artist": track_info["ART_NAME"],  # type: ignore
+        "duration": track_info["DURATION"],  # type: ignore
+        "cover": track_info["ALB_PICTURE"],  # type: ignore
+        "album": track_info["ALB_TITLE"],  # type: ignore
+    }
+    return jsonify(metadata)
+
+
 if __name__ == "__main__":
     socketio.run(
         app,
         host=os.getenv("HOST", "0.0.0.0"),
-        port=os.getenv("PORT", 5000),
-        debug=os.getenv("DEBUG", True),
+        port=int(os.getenv("PORT", 5000)),
+        debug=bool(os.getenv("DEBUG", True)),
         allow_unsafe_werkzeug=True,
     )

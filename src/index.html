@@ -979,9 +979,9 @@
             downloaded: 'Downloaded',
             splitting: 'Splitting audio...',
             lyrics_extracted: 'Lyrics extracted...',
-            lyrics_chunked: 'Lyrics chunked...',
-            extracting_lyrics: 'Extracting lyrics...',
-            lyrics_complete: 'Lyrics extracted',
+            chunking_lyrics: 'Chunking lyrics...',
+            merging_lyrics: 'Merging lyrics...',
+            lyrics_complete: 'Lyrics complete',
             error: 'Error processing track',
           }
 
@@ -1129,7 +1129,7 @@
               dropdown.innerHTML = data
                 .map(
                   (song) => `
-                    <div class="search-result" onclick="karaokePlayer.addToQueue({id: ${song.id}, title: '${song.title}', artist: '${song.artist}', thumb: '${song.thumb}', ready: false})">
+                    <div class="search-result" onclick="karaokePlayer.addToQueue(${song.id})">
                         <img src="${song.thumb}" alt="${song.title}">
                         <div>
                             <div><strong>${song.title}</strong></div>
@@ -1144,19 +1144,22 @@
             })
         }
 
-        addToQueue(song) {
-          if (this.songQueue.some((item) => item.id === song.id)) {
+        async addToQueue(id) {
+          if (this.songQueue.some((item) => item.id === id)) {
             return alert('Song is already in the queue')
           }
 
+          const song = await fetch(`/track/${id}`)
+          const songData = await song.json()
+
           this.songQueue.push({
-            id: song.id,
-            title: song.title,
-            artist: song.artist,
-            thumbnail: song.thumb,
-            vocalsUrl: 'songs/' + song.id + '/vocals.mp3',
-            musicUrl: 'songs/' + song.id + '/no_vocals.mp3',
-            lyricsUrl: 'songs/' + song.id + '/lyrics.json',
+            id: id,
+            title: songData.title,
+            artist: songData.artist,
+            thumbnail: `https://cdn-images.dzcdn.net/images/cover/${songData.cover}/56x56-000000-80-0-0.jpg`,
+            vocalsUrl: 'songs/' + id + '/vocals.mp3',
+            musicUrl: 'songs/' + id + '/no_vocals.mp3',
+            lyricsUrl: 'songs/' + id + '/lyrics.json',
             ready: false,
             progress: 0,
             status: 'downloading',
@@ -1166,7 +1169,7 @@
           document.getElementById('searchDropdown').classList.remove('active')
           document.querySelector('.search-input').value = ''
 
-          fetch('/add?id=' + song.id)
+          fetch('/add?id=' + id)
             .then((response) => response.json())
             .catch((error) => {
               console.error('Error adding track:', error)
