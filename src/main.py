@@ -128,8 +128,7 @@ def login_required(f):
                     (token,),
                 ).fetchone()
 
-                print(token_data)
-
+                # Verify token is valid and not expired
                 if (
                     token_data
                     and datetime.strptime(
@@ -140,10 +139,8 @@ def login_required(f):
                     session["user_id"] = token_data["user_id"]
                     return f(*args, **kwargs)
 
-            # Redirect to login
             return redirect("/login?next=" + request.path)
         return f(*args, **kwargs)
-
     return decorated_function
 
 
