@@ -512,6 +512,15 @@
         transition: all 0.2s ease;
       }
 
+      .control-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .control-btn:disabled:hover {
+        background: none;
+      }
+
       .control-btn:hover {
         background: var(--hover);
       }
@@ -534,6 +543,64 @@
 
       .play-btn:hover {
         background: var(--primary-dark);
+      }
+
+      .download-dropdown {
+        position: absolute;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        display: none;
+        z-index: 1000;
+      }
+
+      .download-dropdown.active {
+        display: block;
+      }
+
+      .download-option {
+        padding: 10px 15px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .download-option:hover {
+        background: var(--hover);
+      }
+
+      /* Dark mode adjustments */
+      [data-theme='dark'] .download-dropdown {
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+      }
+
+      /* Toast notification styles */
+      .toast {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--surface);
+        color: var(--text);
+        padding: 12px 24px;
+        border-radius: 4px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        z-index: 1000;
+        opacity: 0;
+        transition: opacity 0.3s;
+      }
+
+      .toast.active {
+        opacity: 1;
+      }
+
+      .toast i {
+        color: var(--success);
       }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
@@ -628,6 +695,12 @@
           <button class="control-btn" id="toggleFullscreen">
             <i class="fas fa-expand"></i>
           </button>
+          <button class="control-btn" id="downloadButton" title="Download" disabled>
+            <i class="fas fa-download"></i>
+          </button>
+          <button class="control-btn" id="shareButton" title="Share" disabled>
+            <i class="fas fa-share-alt"></i>
+          </button>
         </div>
 
         <div class="volume-controls">
@@ -667,6 +740,18 @@
       </div>
     </div>
 
+    <div class="download-dropdown" id="downloadDropdown">
+      <div class="download-option" id="downloadVocals">
+        <i class="fas fa-microphone"></i> Download Vocals
+      </div>
+      <div class="download-option" id="downloadMusic">
+        <i class="fas fa-music"></i> Download Music
+      </div>
+      <div class="download-option" id="downloadFull">
+        <i class="fas fa-compact-disc"></i> Download Full Song
+      </div>
+    </div>
+
     <script>
       class KaraokePlayer {
         constructor() {
@@ -676,6 +761,10 @@
           this.playing = false
           this.currentWordIndex = 0
           this.currentSongIndex = -1
+
+          // Ensure buttons are disabled initially
+          document.getElementById('downloadButton').disabled = true
+          document.getElementById('shareButton').disabled = true
 
           this.socket = io('')
           this.setupSocketListeners()
@@ -915,6 +1004,10 @@
           this.currentSongIndex = index
           const song = this.songQueue[index]
 
+          // Enable download and share buttons
+          document.getElementById('downloadButton').disabled = false
+          document.getElementById('shareButton').disabled = false
+
           // Update URL hash with current song ID
           window.location.hash = `song=${song.id}`
 
@@ -1084,6 +1177,31 @@
             this.musicAudio.pause()
           )
           this.vocalsAudio.addEventListener('ended', () => this.nextSong())
+
+          // Setup download button
+          const downloadButton = document.getElementById('downloadButton')
+          const downloadDropdown = document.getElementById('downloadDropdown')
+          
+          downloadButton.addEventListener('click', (e) => {
+            e.stopPropagation()
+            const rect = downloadButton.getBoundingClientRect()
+            downloadDropdown.style.top = `${rect.bottom + 5}px`
+            downloadDropdown.style.left = `${rect.left}px`
+            downloadDropdown.classList.toggle('active')
+          })
+          
+          // Close dropdown when clicking outside
+          document.addEventListener('click', () => {
+            downloadDropdown.classList.remove('active')
+          })
+          
+          // Setup download options
+          document.getElementById('downloadVocals').addEventListener('click', () => this.downloadTrack('vocals'))
+          document.getElementById('downloadMusic').addEventListener('click', () => this.downloadTrack('music'))
+          document.getElementById('downloadFull').addEventListener('click', () => this.downloadTrack('full'))
+          
+          // Setup share button
+          document.getElementById('shareButton').addEventListener('click', () => this.shareSong())
         }
 
         togglePlay() {
@@ -1233,6 +1351,83 @@
             document.exitFullscreen()
             i.classList.replace('fa-compress', 'fa-expand')
           }
+        }
+
+        async downloadTrack(type) {
+          if (this.currentSongIndex === -1) return
+          
+          const song = this.songQueue[this.currentSongIndex]
+          let filename, url;
+          
+          switch(type) {
+            case 'vocals':
+              filename = `${song.artist} - ${song.title} (vocals).mp3`
+              url = song.vocalsUrl
+              break
+            case 'music':
+              filename = `${song.artist} - ${song.title} (instrumental).mp3`
+              url = song.musicUrl
+              break
+            case 'full':
+              filename = `${song.artist} - ${song.title}.mp3`
+              url = `songs/${song.id}/full.mp3`
+              break
+          }
+          
+          try {
+            const response = await fetch(url)
+            const blob = await response.blob()
+            const downloadUrl = window.URL.createObjectURL(blob)
+            
+            const a = document.createElement('a')
+            a.href = downloadUrl
+            a.download = filename
+            document.body.appendChild(a)
+            a.click()
+            document.body.removeChild(a)
+            window.URL.revokeObjectURL(downloadUrl)
+            
+            this.showToast('Download started', 'fa-check')
+          } catch (error) {
+            console.error('Download failed:', error)
+            this.showToast('Download failed', 'fa-times')
+          }
+        }
+
+        shareSong() {
+          if (this.currentSongIndex === -1) return
+          
+          const song = this.songQueue[this.currentSongIndex]
+          const url = `${window.location.origin}/#song=${song.id}`
+          
+          navigator.clipboard.writeText(url).then(() => {
+            this.showToast('Link copied to clipboard', 'fa-check')
+          }).catch(error => {
+            console.error('Failed to copy link:', error)
+            this.showToast('Failed to copy link', 'fa-times')
+          })
+        }
+
+        showToast(message, icon) {
+          const toast = document.createElement('div')
+          toast.className = 'toast'
+          toast.innerHTML = `
+            <i class="fas ${icon}"></i>
+            ${message}
+          `
+          document.body.appendChild(toast)
+          
+          // Trigger reflow to enable transition
+          toast.offsetHeight
+          
+          toast.classList.add('active')
+          
+          setTimeout(() => {
+            toast.classList.remove('active')
+            setTimeout(() => {
+              document.body.removeChild(toast)
+            }, 300)
+          }, 3000)
         }
       }
 
