@@ -22,13 +22,7 @@ def login_required(f):
                 ).fetchone()
 
                 # Verify token is valid and not expired
-                if (
-                    token_data
-                    and datetime.strptime(
-                        token_data["expires_at"], "%Y-%m-%d %H:%M:%S.%f"
-                    )
-                    > datetime.now()
-                ):
+                if token_data and token_data["expires_at"] > datetime.now():
                     session["user_id"] = token_data["user_id"]
                     return f(*args, **kwargs)
 
