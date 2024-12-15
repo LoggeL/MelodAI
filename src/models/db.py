@@ -84,6 +84,51 @@ def migrate_db():
         except sqlite3.OperationalError as e:
             print(f"Migration error: {e}")
 
+        try:
+            # Add invite_keys table if it doesn't exist
+            db.execute(
+                """
+                CREATE TABLE IF NOT EXISTS invite_keys (
+                    key TEXT PRIMARY KEY,
+                    created_by INTEGER NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    used_by INTEGER,
+                    used_at TIMESTAMP,
+                    FOREIGN KEY (created_by) REFERENCES users (id),
+                    FOREIGN KEY (used_by) REFERENCES users (id)
+                )
+            """
+            )
+            db.commit()
+        except sqlite3.OperationalError as e:
+            print(f"Migration error: {e}")
+
+
+def create_invite_key(created_by, key):
+    """Create a new invite key."""
+    db = get_db()
+    db.execute(
+        "INSERT INTO invite_keys (key, created_by) VALUES (?, ?)",
+        (key, created_by),
+    )
+    db.commit()
+
+
+def get_invite_key(key):
+    """Get invite key details."""
+    db = get_db()
+    return db.execute("SELECT * FROM invite_keys WHERE key = ?", (key,)).fetchone()
+
+
+def use_invite_key(key, user_id):
+    """Mark an invite key as used."""
+    db = get_db()
+    db.execute(
+        "UPDATE invite_keys SET used_by = ?, used_at = CURRENT_TIMESTAMP WHERE key = ?",
+        (user_id, key),
+    )
+    db.commit()
+
 
 def update_last_online(user_id):
     """Update user's last online timestamp."""

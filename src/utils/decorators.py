@@ -67,6 +67,9 @@ def admin_required(f):
         if not user or not user["is_admin"]:
             return jsonify({"error": "Admin access required"}), 403
 
+        # add user_id to session
+        session["user_id"] = token_data["user_id"]
+
         return f(*args, **kwargs)
 
     return decorated_function
