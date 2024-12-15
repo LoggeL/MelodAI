@@ -54,6 +54,28 @@
         overflow: hidden;
       }
 
+      /* Mobile improvements */
+      @media (max-width: 768px) {
+        body {
+          padding: 10px;
+          gap: 10px;
+        }
+
+        .side-container {
+          height: calc(100vh - 40px) !important;
+          max-height: calc(100vh - 40px) !important;
+          padding: 10px !important;
+        }
+
+        .lyrics-container {
+          height: calc(100vh - 20px) !important;
+        }
+
+        .only-on-small {
+          display: block;
+        }
+      }
+
       body.collapsed {
         gap: 0;
       }
@@ -227,12 +249,12 @@
 
       .lyrics-container {
         flex: 1;
-        padding: 20px;
+        padding: 0 20px;
         overflow-y: auto;
         background: var(--surface);
         border-radius: 8px;
         min-height: 0;
-        height: calc(100vh - 80px);
+        height: calc(100vh - 40px);
         position: relative;
         min-height: 200px;
       }
@@ -294,11 +316,13 @@
         margin: 20px 0;
         padding: 10px;
         border-radius: 8px;
-        transition: background-color 0.3s;
+        transition: all 0.5s ease;
+        opacity: 0;
       }
 
       .lyrics-line.active {
         background: color-mix(in srgb, var(--primary), white 90%);
+        opacity: 1;
       }
 
       .word {
@@ -381,27 +405,30 @@
       .profile-button {
         width: 40px;
         height: 40px;
+        border: none;
         border-radius: 50%;
-        border: 2px solid var(--primary);
-        background: var(--surface);
+        background: var(--hover);
         cursor: pointer;
         padding: 0;
         display: flex;
         align-items: center;
         justify-content: center;
         overflow: hidden;
+        color: var(--text);
+        transition: background-color 0.2s;
       }
 
-      .profile-button img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
+      .profile-button:hover {
+        background: var(--border);
+        color: var(--surface);
+      }
+
+      .profile-button i {
+        font-size: 1.2rem;
       }
 
       .profile-button .profile-initial {
-        color: var(--primary);
-        font-size: 1.2rem;
-        font-weight: bold;
+        display: none;
       }
 
       .profile-dropdown {
@@ -533,11 +560,52 @@
       }
 
       .lyrics-header {
-        padding-bottom: 20px;
+        padding: 20px;
         border-bottom: 1px solid var(--border);
         display: flex;
         align-items: center;
         gap: 1rem;
+        position: sticky;
+        top: 0;
+        background: var(--surface);
+        z-index: 10;
+      }
+
+      .lyrics-title-container {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+      }
+
+      .lyrics-profile {
+        margin-left: auto;
+        position: relative;
+      }
+
+      .lyrics-profile .profile-button {
+        width: 36px;
+        height: 36px;
+      }
+
+      .profile-dropdown {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        margin-top: 0.5rem;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        display: none;
+        min-width: 200px;
+        z-index: 1000;
+      }
+
+      .lyrics-cover {
+        width: 64px;
+        height: 64px;
+        object-fit: cover;
       }
 
       .lyrics-artist {
@@ -550,23 +618,6 @@
         margin: 0;
         color: var(--text);
         font-size: 1.5rem;
-      }
-
-      .lyrics-title-container {
-        flex: 1;
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-      }
-
-      .lyrics-cover {
-        width: 64px;
-        height: 64px;
-        object-fit: cover;
-      }
-
-      .lyrics-info {
-        flex: 1;
       }
 
       .player-controls {
@@ -683,49 +734,65 @@
       .toast i {
         color: var(--success);
       }
+
+      /* Scrollbar styling */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      ::-webkit-scrollbar-thumb {
+        background: color-mix(in srgb, var(--text) 20%, transparent);
+        border-radius: 4px;
+        transition: background 0.2s;
+      }
+
+      ::-webkit-scrollbar-thumb:hover {
+        background: color-mix(in srgb, var(--text) 30%, transparent);
+      }
+
+      /* Firefox scrollbar styling */
+      * {
+        scrollbar-width: thin;
+        scrollbar-color: color-mix(in srgb, var(--text) 20%, transparent)
+          transparent;
+      }
+
+      /* Hide scrollbar when not hovering */
+      .lyrics-container {
+        scrollbar-gutter: stable;
+      }
+
+      .lyrics-container:not(:hover)::-webkit-scrollbar-thumb {
+        background: transparent;
+      }
+
+      /* Dark mode scrollbar adjustments */
+      [data-theme='dark'] ::-webkit-scrollbar-thumb {
+        background: color-mix(in srgb, var(--text) 15%, transparent);
+      }
+
+      [data-theme='dark'] ::-webkit-scrollbar-thumb:hover {
+        background: color-mix(in srgb, var(--text) 25%, transparent);
+      }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
   </head>
 
   <body>
-    <div class="button-container">
-      <div class="profile-container">
-        <button class="profile-button" id="profileButton">
-          <span class="profile-initial">?</span>
-        </button>
-        <div class="profile-dropdown" id="profileDropdown">
-          <div class="profile-dropdown-item" id="profileName">
-            <i class="fas fa-user"></i>
-            <span>Loading...</span>
-          </div>
-          <hr />
-          <div
-            class="profile-dropdown-item"
-            id="darkModeButton"
-            onclick="toggleTheme()"
-          >
-            <i class="fas fa-moon"></i>
-            Dark Mode
-          </div>
-          <div
-            class="profile-dropdown-item"
-            id="adminButton"
-            style="display: none"
-            onclick="window.location.href='/admin'"
-          >
-            <i class="fas fa-shield-alt"></i>
-            Admin Panel
-          </div>
-          <hr />
-          <div class="profile-dropdown-item" onclick="logout()">
-            <i class="fas fa-sign-out-alt"></i>
-            Logout
-          </div>
-        </div>
-      </div>
-    </div>
     <div class="side-container">
       <!-- Search -->
+      <button
+        class="control-btn only-on-small"
+        onclick="toggleMenu()"
+        aria-label="Toggle menu"
+      >
+        <i class="fas fa-bars"></i>
+      </button>
       <div class="search-container">
         <div class="logo-container">
           <img src="/logo.svg" alt="logo" class="logo" />
@@ -816,6 +883,40 @@
             <div class="lyrics-title"></div>
             <div class="lyrics-artist"></div>
           </div>
+          <div class="lyrics-profile">
+            <button class="profile-button" id="profileButton">
+              <i class="fas fa-user"></i>
+            </button>
+            <div class="profile-dropdown" id="profileDropdown">
+              <div class="profile-dropdown-item" id="profileName">
+                <i class="fas fa-user"></i>
+                <span>Loading...</span>
+              </div>
+              <hr />
+              <div
+                class="profile-dropdown-item"
+                id="darkModeButton"
+                onclick="toggleTheme()"
+              >
+                <i class="fas fa-moon"></i>
+                Dark Mode
+              </div>
+              <div
+                class="profile-dropdown-item"
+                id="adminButton"
+                style="display: none"
+                onclick="window.location.href='/admin'"
+              >
+                <i class="fas fa-shield-alt"></i>
+                Admin Panel
+              </div>
+              <hr />
+              <div class="profile-dropdown-item" onclick="logout()">
+                <i class="fas fa-sign-out-alt"></i>
+                Logout
+              </div>
+            </div>
+          </div>
         </div>
       </div>
       <div class="lyrics-content">
@@ -904,6 +1005,9 @@
             `
 
             const response = await fetch(lyricsUrl)
+            if (!response.ok) {
+              throw new Error('Failed to load lyrics')
+            }
             const data = await response.json()
 
             // Iterate through the segments / words and split if the speaker changes
@@ -1032,16 +1136,47 @@
               'currentTime'
             ).textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`
 
-            // Update active line
+            // Get the next lyrics block as active
+            // Update active line and fading
+            let currentIndex = 0
+            for (let i = 0; i < this.lyrics.length; i++) {
+              const lyricsLine = this.lyrics[i]
+              if (lyricsLine.start > currentTime) {
+                currentIndex = i
+                break
+              }
+            }
+
             this.lyrics.forEach((segment, segmentIndex) => {
               const lineElement = document.getElementById(
                 `line-${segmentIndex}`
               )
+              const timeDiff = segment.start - currentTime
+              const indexDiff =
+                Math.max(0, 5 - Math.abs(segmentIndex - currentIndex)) / 5
+
               if (currentTime >= segment.start && currentTime <= segment.end) {
                 lineElement.classList.add('active')
-                // Scroll to active line
+                // Scroll to active line with smooth behavior
+                lineElement.scrollIntoView({
+                  behavior: 'smooth',
+                  block: 'center',
+                })
+                lineElement.style.opacity = 1
+              } else if (timeDiff > 0) {
+                const opacity = Math.max(
+                  Math.max(0, (20 - timeDiff) / 20),
+                  indexDiff
+                )
+                lineElement.style.opacity = opacity
               } else {
-                lineElement.classList.remove('active')
+                // Past lyrics
+                const pastDiff = Math.abs(segment.end - currentTime)
+                const opacity = Math.max(
+                  Math.max(0, (20 - pastDiff) / 20),
+                  indexDiff
+                )
+                lineElement.style.opacity = opacity
               }
 
               // Update active words within the line
@@ -1051,8 +1186,6 @@
                 )
                 if (currentTime >= word.start && currentTime <= word.end) {
                   wordElement.classList.add('active')
-                  // Scroll to active word
-                  wordElement.scrollIntoView({ block: 'center' })
                 } else {
                   wordElement.classList.remove('active')
                 }
@@ -1146,6 +1279,7 @@
             downloading: 'Downloading...',
             downloaded: 'Downloaded',
             splitting: 'Splitting audio...',
+            extracting_lyrics: 'Extracted lyrics...',
             lyrics_extracted: 'Lyrics extracted...',
             chunking_lyrics: 'Chunking lyrics...',
             merging_lyrics: 'Merging lyrics...',
@@ -1540,8 +1674,11 @@
           .then((response) => response.json())
           .then((data) => {
             // Update profile button
-            const profileInitial = document.querySelector('.profile-initial')
-            profileInitial.textContent = data.name.substring(0, 2).toUpperCase()
+            const profileInitials =
+              document.querySelectorAll('.profile-initial')
+            profileInitials.forEach((initial) => {
+              initial.textContent = data.name.substring(0, 2).toUpperCase()
+            })
 
             // Update profile name
             document
