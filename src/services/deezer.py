@@ -531,6 +531,15 @@ def test_deezer_login():
         return False
 
 
+async def get_track(self, track_id: str):
+    """Get track details from Deezer"""
+    url = f"{self.api_base}/track/{track_id}"
+    async with self.session.get(url) as response:
+        if response.status == 200:
+            return await response.json()
+        return None
+
+
 if __name__ == '__main__':
     if len(sys.argv) > 1 and sys.argv[1] == "check-login":
         test_deezer_login()

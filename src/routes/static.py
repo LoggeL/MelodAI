@@ -1,0 +1,44 @@
+from flask import Blueprint, send_from_directory, session, redirect
+from ..utils.decorators import login_required, admin_required
+from .auth import validate_auth_token
+
+static_bp = Blueprint("static", __name__)
+
+
+@static_bp.route("/", methods=["GET"])
+def index():
+    # Check both session and auth token
+    if "user_id" not in session and not validate_auth_token():
+        return redirect("/login")
+
+    return send_from_directory("static", "index.html")
+
+
+@static_bp.route("/login", methods=["GET"])
+def login_html():
+    if "user_id" in session or validate_auth_token():
+        return redirect("/")
+    return send_from_directory("static", "login.html")
+
+
+@static_bp.route("/admin", methods=["GET"])
+@admin_required
+def admin_html():
+    return send_from_directory("static", "admin.html")
+
+
+@static_bp.route("/songs/<path:path>", methods=["GET"])
+@login_required
+def song_file(path):
+    print("Sending song file", path)
+    return send_from_directory("songs", path)
+
+
+@static_bp.route("/logo.png", methods=["GET"])
+def logo():
+    return send_from_directory("static", "logo.png")
+
+
+@static_bp.route("/logo.svg", methods=["GET"])
+def logo_svg():
+    return send_from_directory("static", "logo.svg")
