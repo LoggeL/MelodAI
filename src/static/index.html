@@ -374,6 +374,78 @@
         z-index: 1000;
       }
 
+      .profile-container {
+        position: relative;
+      }
+
+      .profile-button {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        border: 2px solid var(--primary);
+        background: var(--surface);
+        cursor: pointer;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+      }
+
+      .profile-button img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      .profile-button .profile-initial {
+        color: var(--primary);
+        font-size: 1.2rem;
+        font-weight: bold;
+      }
+
+      .profile-dropdown {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        margin-top: 0.5rem;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        display: none;
+        min-width: 200px;
+      }
+
+      .profile-dropdown.active {
+        display: block;
+      }
+
+      .profile-dropdown-item {
+        padding: 0.75rem 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        cursor: pointer;
+        color: var(--text);
+        text-decoration: none;
+      }
+
+      .profile-dropdown-item:hover {
+        background: var(--hover);
+      }
+
+      .profile-dropdown-item i {
+        width: 20px;
+        text-align: center;
+      }
+
+      .profile-dropdown hr {
+        border: none;
+        border-top: 1px solid var(--border);
+        margin: 0.5rem 0;
+      }
+
       /* Add this theme toggle button style */
       .theme-toggle {
         background: var(--surface);
@@ -383,17 +455,6 @@
       }
 
       .theme-toggle:hover {
-        background: var(--hover);
-      }
-
-      .menu-toggle {
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 4px;
-        color: var(--text);
-      }
-
-      .menu-toggle:hover {
         background: var(--hover);
       }
 
@@ -472,8 +533,11 @@
       }
 
       .lyrics-header {
-        padding: 20px;
+        padding-bottom: 20px;
         border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        gap: 1rem;
       }
 
       .lyrics-artist {
@@ -486,6 +550,23 @@
         margin: 0;
         color: var(--text);
         font-size: 1.5rem;
+      }
+
+      .lyrics-title-container {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+      }
+
+      .lyrics-cover {
+        width: 64px;
+        height: 64px;
+        object-fit: cover;
+      }
+
+      .lyrics-info {
+        flex: 1;
       }
 
       .player-controls {
@@ -608,55 +689,40 @@
 
   <body>
     <div class="button-container">
-      <button
-        class="theme-toggle"
-        onclick="toggleTheme()"
-        aria-label="Toggle theme"
-      >
-        <svg
-          id="theme-icon"
-          width="20"
-          height="20"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <!-- Sun icon path -->
-          <path
-            class="sun"
-            d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42M12 17.5a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11z"
-          />
-          <!-- Moon icon path -->
-          <path
-            class="moon"
-            d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"
-          />
-        </svg>
-      </button>
-      <button
-        class="menu-toggle"
-        onclick="toggleMenu()"
-        aria-label="Toggle menu"
-      >
-        <!-- Burger menu icon -->
-        <svg
-          width="20"
-          height="20"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <line x1="3" x2="21" y1="12" y2="12"></line>
-          <line x1="3" x2="21" y1="6" y2="6"></line>
-          <line x1="3" x2="21" y1="18" y2="18"></line>
-        </svg>
-      </button>
+      <div class="profile-container">
+        <button class="profile-button" id="profileButton">
+          <span class="profile-initial">?</span>
+        </button>
+        <div class="profile-dropdown" id="profileDropdown">
+          <div class="profile-dropdown-item" id="profileName">
+            <i class="fas fa-user"></i>
+            <span>Loading...</span>
+          </div>
+          <hr />
+          <div
+            class="profile-dropdown-item"
+            id="darkModeButton"
+            onclick="toggleTheme()"
+          >
+            <i class="fas fa-moon"></i>
+            Dark Mode
+          </div>
+          <div
+            class="profile-dropdown-item"
+            id="adminButton"
+            style="display: none"
+            onclick="window.location.href='/admin'"
+          >
+            <i class="fas fa-shield-alt"></i>
+            Admin Panel
+          </div>
+          <hr />
+          <div class="profile-dropdown-item" onclick="logout()">
+            <i class="fas fa-sign-out-alt"></i>
+            Logout
+          </div>
+        </div>
+      </div>
     </div>
     <div class="side-container">
       <!-- Search -->
@@ -695,7 +761,12 @@
           <button class="control-btn" id="toggleFullscreen">
             <i class="fas fa-expand"></i>
           </button>
-          <button class="control-btn" id="downloadButton" title="Download" disabled>
+          <button
+            class="control-btn"
+            id="downloadButton"
+            title="Download"
+            disabled
+          >
             <i class="fas fa-download"></i>
           </button>
           <button class="control-btn" id="shareButton" title="Share" disabled>
@@ -732,10 +803,22 @@
 
     <div class="lyrics-container" id="lyricsContainer">
       <div class="lyrics-header">
-        <div class="lyrics-title"></div>
-        <div class="lyrics-artist"></div>
+        <button
+          class="control-btn"
+          onclick="toggleMenu()"
+          aria-label="Toggle menu"
+        >
+          <i class="fas fa-bars"></i>
+        </button>
+        <div class="lyrics-title-container">
+          <img class="lyrics-cover" src="/logo.svg" alt="Album cover" />
+          <div class="lyrics-info">
+            <div class="lyrics-title"></div>
+            <div class="lyrics-artist"></div>
+          </div>
+        </div>
       </div>
-      <div class="lyrics">
+      <div class="lyrics-content">
         <h2>Select a song to start</h2>
       </div>
     </div>
@@ -811,15 +894,8 @@
           try {
             // Clear lyrics
             this.lyrics = null
-            document.getElementById('lyricsContainer').innerHTML = `
-            <div class="lyrics-header">
-              <div class="lyrics-title">
-                <div class="skeleton-line"></div>
-              </div>
-              <div class="lyrics-artist">
-                <div class="skeleton-line"></div>
-              </div>
-            </div>
+            document.querySelector('.lyrics-cover').src = '/logo.svg'
+            document.querySelector('.lyrics-content').innerHTML = `
             <div class="lyrics-skeleton">
               ${Array.from({ length: 30 })
                 .map(() => '<div class="skeleton-line"></div>')
@@ -874,28 +950,21 @@
         renderLyrics() {
           if (!this.lyrics) return
 
-          const container = document.getElementById('lyricsContainer')
+          const lyrics = document.querySelector('.lyrics-content')
 
-          container.innerHTML = ''
+          lyrics.innerHTML = ''
 
           const song = this.songQueue[this.currentSongIndex]
 
-          const header = document.createElement('div')
-          const title = document.createElement('h2')
-          const artist = document.createElement('div')
-          const lyrics = document.createElement('div')
+          // Update cover art
+          const cover = document.querySelector('.lyrics-cover')
+          cover.src = song.thumbnail
 
-          header.classList.add('lyrics-header')
-          title.classList.add('lyrics-title')
-          artist.classList.add('lyrics-artist')
-          lyrics.classList.add('lyrics-lyrics')
+          const artist = document.querySelector('.lyrics-artist')
+          const title = document.querySelector('.lyrics-title')
 
           artist.textContent = song.artist
           title.textContent = song.title
-
-          header.appendChild(artist)
-          header.appendChild(title)
-          container.appendChild(header)
 
           this.lyrics.forEach((segment, segmentIndex) => {
             const lineDiv = document.createElement('div')
@@ -925,7 +994,7 @@
               }
             })
 
-            container.appendChild(lineDiv)
+            lyrics.appendChild(lineDiv)
           })
 
           // Click the play button
@@ -1181,7 +1250,7 @@
           // Setup download button
           const downloadButton = document.getElementById('downloadButton')
           const downloadDropdown = document.getElementById('downloadDropdown')
-          
+
           downloadButton.addEventListener('click', (e) => {
             e.stopPropagation()
             const rect = downloadButton.getBoundingClientRect()
@@ -1189,19 +1258,27 @@
             downloadDropdown.style.left = `${rect.left}px`
             downloadDropdown.classList.toggle('active')
           })
-          
+
           // Close dropdown when clicking outside
           document.addEventListener('click', () => {
             downloadDropdown.classList.remove('active')
           })
-          
+
           // Setup download options
-          document.getElementById('downloadVocals').addEventListener('click', () => this.downloadTrack('vocals'))
-          document.getElementById('downloadMusic').addEventListener('click', () => this.downloadTrack('music'))
-          document.getElementById('downloadFull').addEventListener('click', () => this.downloadTrack('full'))
-          
+          document
+            .getElementById('downloadVocals')
+            .addEventListener('click', () => this.downloadTrack('vocals'))
+          document
+            .getElementById('downloadMusic')
+            .addEventListener('click', () => this.downloadTrack('music'))
+          document
+            .getElementById('downloadFull')
+            .addEventListener('click', () => this.downloadTrack('full'))
+
           // Setup share button
-          document.getElementById('shareButton').addEventListener('click', () => this.shareSong())
+          document
+            .getElementById('shareButton')
+            .addEventListener('click', () => this.shareSong())
         }
 
         togglePlay() {
@@ -1355,11 +1432,11 @@
 
         async downloadTrack(type) {
           if (this.currentSongIndex === -1) return
-          
+
           const song = this.songQueue[this.currentSongIndex]
-          let filename, url;
-          
-          switch(type) {
+          let filename, url
+
+          switch (type) {
             case 'vocals':
               filename = `${song.artist} - ${song.title} (vocals).mp3`
               url = song.vocalsUrl
@@ -1373,12 +1450,12 @@
               url = `songs/${song.id}/full.mp3`
               break
           }
-          
+
           try {
             const response = await fetch(url)
             const blob = await response.blob()
             const downloadUrl = window.URL.createObjectURL(blob)
-            
+
             const a = document.createElement('a')
             a.href = downloadUrl
             a.download = filename
@@ -1386,7 +1463,7 @@
             a.click()
             document.body.removeChild(a)
             window.URL.revokeObjectURL(downloadUrl)
-            
+
             this.showToast('Download started', 'fa-check')
           } catch (error) {
             console.error('Download failed:', error)
@@ -1396,16 +1473,19 @@
 
         shareSong() {
           if (this.currentSongIndex === -1) return
-          
+
           const song = this.songQueue[this.currentSongIndex]
           const url = `${window.location.origin}/#song=${song.id}`
-          
-          navigator.clipboard.writeText(url).then(() => {
-            this.showToast('Link copied to clipboard', 'fa-check')
-          }).catch(error => {
-            console.error('Failed to copy link:', error)
-            this.showToast('Failed to copy link', 'fa-times')
-          })
+
+          navigator.clipboard
+            .writeText(url)
+            .then(() => {
+              this.showToast('Link copied to clipboard', 'fa-check')
+            })
+            .catch((error) => {
+              console.error('Failed to copy link:', error)
+              this.showToast('Failed to copy link', 'fa-times')
+            })
         }
 
         showToast(message, icon) {
@@ -1416,12 +1496,12 @@
             ${message}
           `
           document.body.appendChild(toast)
-          
+
           // Trigger reflow to enable transition
           toast.offsetHeight
-          
+
           toast.classList.add('active')
-          
+
           setTimeout(() => {
             toast.classList.remove('active')
             setTimeout(() => {
@@ -1441,6 +1521,39 @@
         document
           .querySelector('.search-input')
           .addEventListener('keyup', karaokePlayer.handleSearch)
+
+        // Setup profile dropdown
+        const profileButton = document.getElementById('profileButton')
+        const profileDropdown = document.getElementById('profileDropdown')
+
+        profileButton.addEventListener('click', (e) => {
+          e.stopPropagation()
+          profileDropdown.classList.toggle('active')
+        })
+
+        document.addEventListener('click', () => {
+          profileDropdown.classList.remove('active')
+        })
+
+        // Fetch user profile
+        fetch('/auth/profile')
+          .then((response) => response.json())
+          .then((data) => {
+            // Update profile button
+            const profileInitial = document.querySelector('.profile-initial')
+            profileInitial.textContent = data.name.substring(0, 2).toUpperCase()
+
+            // Update profile name
+            document
+              .getElementById('profileName')
+              .querySelector('span').textContent = data.name
+
+            // Show admin button if user is admin
+            if (data.is_admin) {
+              document.getElementById('adminButton').style.display = 'flex'
+            }
+          })
+          .catch((error) => console.error('Error fetching profile:', error))
 
         // Check for song ID in URL hash
         const hash = window.location.hash
@@ -1488,25 +1601,16 @@
       function setTheme(theme) {
         localStorage.setItem('theme', theme)
         document.documentElement.setAttribute('data-theme', theme)
-        updateThemeIcon(theme)
-      }
-
-      function updateThemeIcon(theme) {
-        const sunPath = document.querySelector('.sun')
-        const moonPath = document.querySelector('.moon')
-
-        if (theme === 'dark') {
-          sunPath.style.display = 'none'
-          moonPath.style.display = 'block'
-        } else {
-          sunPath.style.display = 'block'
-          moonPath.style.display = 'none'
-        }
       }
 
       function toggleTheme() {
         const currentTheme = getTheme()
         const newTheme = currentTheme === 'light' ? 'dark' : 'light'
+        const darkModeButton = document.getElementById('darkModeButton')
+        darkModeButton.innerHTML =
+          newTheme === 'light'
+            ? `<i class="fas fa-moon"></i>Dark Mode`
+            : `<i class="fas fa-sun"></i>Light Mode`
         setTheme(newTheme)
       }
 
@@ -1518,6 +1622,21 @@
       document.addEventListener('DOMContentLoaded', () => {
         setTheme(getTheme())
       })
+
+      function logout() {
+        fetch('/auth/logout', {
+          method: 'POST',
+          credentials: 'include',
+        })
+          .then((response) => {
+            if (response.ok) {
+              window.location.href = '/login'
+            } else {
+              console.error('Logout failed')
+            }
+          })
+          .catch((error) => console.error('Error during logout:', error))
+      }
     </script>
   </body>
 </html>
