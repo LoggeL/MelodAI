@@ -122,6 +122,7 @@ def login():
 
     return jsonify({"error": "Invalid credentials"}), 401
 
+
 @auth_bp.route("/auth/logout", methods=["POST"])
 def logout():
     if "user_id" in session:
@@ -228,15 +229,36 @@ def validate_auth_token():
     auth_token = request.cookies.get("auth_token")
     if not auth_token:
         return False
-    
+
     db = get_db()
     token = db.execute(
         "SELECT * FROM auth_tokens WHERE token = ? AND expires_at > ?",
-        (auth_token, datetime.now())
+        (auth_token, datetime.now()),
     ).fetchone()
-    
+
     if token:
         # Set the user_id in session if token is valid
         session["user_id"] = token["user_id"]
         return True
     return False
+
+
+@auth_bp.route("/auth/profile", methods=["GET"])
+def get_profile():
+    if "user_id" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    db = get_db()
+    user = db.execute(
+        """SELECT username, email, is_admin 
+           FROM users 
+           WHERE id = ?""",
+        (session["user_id"],),
+    ).fetchone()
+
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    return jsonify(
+        {"name": user["username"], "email": user["email"], "is_admin": user["is_admin"]}
+    )
