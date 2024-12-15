@@ -838,6 +838,9 @@
 
             container.appendChild(lineDiv)
           })
+
+          // Click the play button
+          document.getElementById('playButton').click()
         }
 
         jumpToTime(time) {
@@ -911,6 +914,9 @@
 
           this.currentSongIndex = index
           const song = this.songQueue[index]
+
+          // Update URL hash with current song ID
+          window.location.hash = `song=${song.id}`
 
           this.updateQueueHighlight()
 
@@ -1240,6 +1246,35 @@
         document
           .querySelector('.search-input')
           .addEventListener('keyup', karaokePlayer.handleSearch)
+
+        // Check for song ID in URL hash
+        const hash = window.location.hash
+        const songMatch = hash.match(/song=(\d+)/)
+        if (songMatch) {
+          const songId = songMatch[1]
+          // Fetch the song metadata and add it to the queue
+          fetch(`/track/${songId}`)
+            .then((response) => response.json())
+            .then((metadata) => {
+              karaokePlayer.songQueue.push({
+                id: songId,
+                title: metadata.title,
+                artist: metadata.artist,
+                thumbnail: `https://e-cdns-images.dzcdn.net/images/cover/${metadata.cover}/250x250-000000-80-0-0.jpg`,
+                vocalsUrl: `songs/${songId}/vocals.mp3`,
+                musicUrl: `songs/${songId}/no_vocals.mp3`,
+                lyricsUrl: `songs/${songId}/lyrics.json`,
+                ready: true,
+                progress: 100,
+                status: '',
+              })
+              karaokePlayer.renderQueue()
+              karaokePlayer.loadSong(0)
+            })
+            .catch((error) =>
+              console.error('Error loading song from URL:', error)
+            )
+        }
       })
 
       function debounce(func, wait) {

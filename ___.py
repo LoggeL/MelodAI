@@ -1,8 +1,8 @@
 import random
-import deezer
+import services.deezer as deezer
 from flask import Flask, redirect, request, jsonify, send_from_directory, session
 from flask_cors import CORS
-from flask_socketio import SocketIO, emit
+from flask_socketio import SocketIO
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
 import replicate
@@ -10,10 +10,9 @@ import requests
 import json
 import sqlite3
 from functools import wraps
-import time
 from datetime import datetime, timedelta
 import secrets
-from helpers import chunk_lyrics, merge_lyrics
+from utils.helpers import chunk_lyrics, merge_lyrics
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -141,6 +140,7 @@ def login_required(f):
 
             return redirect("/login?next=" + request.path)
         return f(*args, **kwargs)
+
     return decorated_function
 
 
