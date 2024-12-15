@@ -13,6 +13,8 @@ import json
 from pathlib import Path
 import threading
 from ..utils.extensions import socketio
+import replicate
+import requests
 
 track_bp = Blueprint("track", __name__)
 
@@ -41,6 +43,68 @@ def de_search_track(search_term):
     ]
 
     return output
+
+
+def split_track(track_id):
+    if not os.path.isfile(
+        "src/songs/{}/vocals.mp3".format(track_id)
+    ) or not os.path.isfile("src/songs/{}/no_vocals.mp3".format(track_id)):
+
+        print("Splitting Song")
+        socketio.emit(
+            "track_progress",
+            {"track_id": track_id, "status": "splitting", "progress": 30},
+        )
+
+        output = replicate.run(
+            "ryan5453/demucs:7a9db77ed93f8f4f7e233a94d8519a867fbaa9c6d16ea5b53c1394f1557f9c61",
+            input={
+                "jobs": 0,
+                "audio": open("src/songs/{}/song.mp3".format(track_id), "rb"),
+                "stem": "vocals",
+                "model": "htdemucs",
+                "split": True,
+                "shifts": 1,
+                "overlap": 0.25,
+                "clip_mode": "rescale",
+                "mp3_preset": 2,
+                "wav_format": "int24",
+                "mp3_bitrate": 320,
+                "output_format": "mp3",
+            },
+        )
+
+        # Save the vocals
+        with open("src/songs/{}/vocals.mp3".format(track_id), "wb") as f:
+            f.write(requests.get(output["vocals"]).content)  # type: ignore
+
+        # Save the instrumental
+        with open("src/songs/{}/no_vocals.mp3".format(track_id), "wb") as f:
+            f.write(requests.get(output["no_vocals"]).content)  # type: ignore
+
+        socketio.emit(
+            "track_progress",
+            {"track_id": track_id, "status": "split_complete", "progress": 50},
+        )
+
+
+def download_track(track_id):
+    # Download song
+    if (
+        not os.path.isfile(f"src/songs/{track_id}/song.mp3")
+        or os.path.getsize(f"src/songs/{track_id}/song.mp3") == 0
+    ):
+        print("Downloading Song")
+        socketio.emit(
+            "track_progress",
+            {"track_id": track_id, "status": "downloading", "progress": 10},
+        )
+        track_info = get_song_infos_from_deezer_website("track", track_id)
+        download_song(track_info, f"src/songs/{track_id}/song.mp3")
+        socketio.emit(
+            "track_progress",
+            {"track_id": track_id, "status": "downloaded", "progress": 20},
+        )
 
 
 def de_add_track(track_id):
@@ -75,22 +139,9 @@ def de_add_track(track_id):
                 {"track_id": track_id, "status": "metadata_complete", "progress": 10},
             )
 
-        # Download song
-        if (
-            not os.path.isfile(f"src/songs/{track_id}/song.mp3")
-            or os.path.getsize(f"src/songs/{track_id}/song.mp3") == 0
-        ):
-            print("Downloading Song")
-            socketio.emit(
-                "track_progress",
-                {"track_id": track_id, "status": "downloading", "progress": 10},
-            )
-            track_info = get_song_infos_from_deezer_website("track", track_id)
-            download_song(track_info, f"src/songs/{track_id}/song.mp3")
-            socketio.emit(
-                "track_progress",
-                {"track_id": track_id, "status": "downloaded", "progress": 20},
-            )
+        download_track(track_id)
+
+        split_track(track_id)
 
         process_lyrics(track_id)
 
