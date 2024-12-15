@@ -18,6 +18,16 @@ CREATE TABLE usage_logs (
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
+CREATE TABLE IF NOT EXISTS invite_keys (
+    key TEXT PRIMARY KEY,
+    created_by INTEGER NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    used_by INTEGER,
+    used_at TIMESTAMP,
+    FOREIGN KEY (created_by) REFERENCES users (id),
+    FOREIGN KEY (used_by) REFERENCES users (id)
+);
+
 CREATE TABLE IF NOT EXISTS password_resets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,

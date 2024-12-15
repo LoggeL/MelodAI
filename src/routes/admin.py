@@ -1,6 +1,8 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, session
+import secrets
 from ..models.db import get_db
 from ..utils.decorators import admin_required
+from ..models.db import create_invite_key
 
 admin_bp = Blueprint("admin", __name__)
 
@@ -28,6 +30,14 @@ def approve_user(user_id):
     db.execute("UPDATE users SET is_approved = TRUE WHERE id = ?", (user_id,))
     db.commit()
     return jsonify({"message": "User approved"})
+
+
+@admin_bp.route("/admin/invite-keys", methods=["POST"])
+@admin_required
+def create_invite_key_route():
+    key = secrets.token_urlsafe(16)  # Generate a secure random key
+    create_invite_key(session["user_id"], key)
+    return jsonify({"key": key})
 
 
 @admin_bp.route("/admin/usage", methods=["GET"])
@@ -113,3 +123,22 @@ def get_usage_stats():
         stats["most_active_user"] = dict(stats["most_active_user"])
 
     return jsonify(stats)
+
+
+@admin_bp.route("/admin/invite-keys", methods=["GET"])
+@admin_required
+def list_invite_keys():
+    db = get_db()
+    keys = db.execute("""
+        SELECT 
+            ik.key, 
+            ik.created_at,
+            creator.username as created_by,
+            user.username as used_by,
+            ik.used_at
+        FROM invite_keys ik
+        JOIN users creator ON ik.created_by = creator.id
+        LEFT JOIN users user ON ik.used_by = user.id
+        ORDER BY ik.created_at DESC
+    """).fetchall()
+    return jsonify([dict(key) for key in keys])

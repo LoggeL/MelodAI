@@ -6,7 +6,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import os
-from ..models.db import get_db
+from ..models.db import get_db, get_invite_key, use_invite_key
 import sqlite3
 
 auth_bp = Blueprint("auth", __name__)
@@ -51,6 +51,7 @@ def register():
     data = request.get_json()
     username = data.get("username")
     password = data.get("password")
+    invite_key = data.get("invite_key")
 
     if not username or not password:
         return jsonify({"error": "Missing credentials"}), 400
@@ -65,13 +66,38 @@ def register():
         is_admin = False
         is_approved = False
 
+    # Check if using an invite key
+    if invite_key:
+        invite = get_invite_key(invite_key)
+        if not invite or invite["used_by"]:
+            return jsonify({"error": "Invalid or used invite key"}), 400
+        is_approved = True
+
     try:
         db.execute(
             "INSERT INTO users (username, password_hash, is_admin, is_approved) VALUES (?, ?, ?, ?)",
             (username, generate_password_hash(password), is_admin, is_approved),
         )
         db.commit()
+
+        # Get the new user's ID
+        new_user_id = db.execute(
+            "SELECT id FROM users WHERE username = ?", (username,)
+        ).fetchone()["id"]
+
+        # Mark invite key as used if present
+        if invite_key:
+            use_invite_key(invite_key, new_user_id)
+            
+            # Automatically log in the user
+            session["user_id"] = new_user_id
+            return jsonify({
+                "message": "Registration successful. Logged in automatically.",
+                "auto_login": True
+            })
+
         return jsonify({"message": "Registration successful. Waiting for approval."})
+
     except sqlite3.IntegrityError:
         return jsonify({"error": "Username already exists"}), 400
 
@@ -262,3 +288,34 @@ def get_profile():
     return jsonify(
         {"name": user["username"], "email": user["email"], "is_admin": user["is_admin"]}
     )
+
+
+@auth_bp.route("/admin/invite-keys/<key>", methods=["DELETE"])
+def cancel_invite_key(key):
+    if "user_id" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    db = get_db()
+    
+    # Check if user is admin
+    user = db.execute(
+        "SELECT is_admin FROM users WHERE id = ?", (session["user_id"],)
+    ).fetchone()
+    
+    if not user or not user["is_admin"]:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    # Check if key exists and is unused
+    invite = db.execute(
+        "SELECT * FROM invite_keys WHERE key = ? AND used_by IS NULL", 
+        (key,)
+    ).fetchone()
+    
+    if not invite:
+        return jsonify({"error": "Invalid or already used invite key"}), 400
+
+    # Delete the key
+    db.execute("DELETE FROM invite_keys WHERE key = ?", (key,))
+    db.commit()
+
+    return jsonify({"message": "Invite key cancelled successfully"})

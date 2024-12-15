@@ -176,6 +176,18 @@
           opacity: 1;
         }
       }
+
+      .invite-key-group {
+        margin-bottom: 1rem;
+      }
+
+      .invite-key-group input {
+        width: 100%;
+        padding: 0.5rem;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 1rem;
+      }
     </style>
   </head>
   <body>
@@ -236,6 +248,10 @@
               required
               oninput="validatePasswords()"
             />
+          </div>
+          <div class="form-group invite-key-group">
+            <label for="inviteKey">Invite Key (Optional)</label>
+            <input type="text" id="inviteKey" />
           </div>
           <button type="submit" id="registerButton" disabled>Register</button>
           <div id="registerError" class="error"></div>
@@ -327,6 +343,7 @@
         const username = document.getElementById('registerUsername').value
         const password = document.getElementById('registerPassword').value
         const confirmPassword = document.getElementById('confirmPassword').value
+        const inviteKey = document.getElementById('inviteKey').value
 
         if (password !== confirmPassword) {
           document.getElementById('registerError').textContent =
@@ -338,14 +355,18 @@
           const response = await fetch('/auth/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password }),
+            body: JSON.stringify({ username, password, invite_key: inviteKey }),
           })
 
           const data = await response.json()
 
           if (response.ok) {
             document.getElementById('registerError').textContent = data.message
-            setTimeout(() => toggleForm('login'), 2000)
+            if (data.auto_login) {
+              window.location.href = '/'
+            } else {
+              setTimeout(() => toggleForm('login'), 2000)
+            }
           } else {
             document.getElementById('registerError').textContent = data.error
           }
