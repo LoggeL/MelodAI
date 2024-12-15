@@ -4,6 +4,9 @@ import json
 import os
 from ..utils.helpers import chunk_lyrics, merge_lyrics
 from ..utils.extensions import socketio
+import librosa
+import soundfile as sf
+from pathlib import Path
 
 
 def process_lyrics(track_id):
@@ -97,3 +100,34 @@ def process_lyrics(track_id):
                 "track_progress",
                 {"track_id": track_id, "status": "lyrics_chunked", "progress": 90},
             )
+
+
+def transcribe_lyrics(track_id):
+    """Transcribe lyrics from vocals using Whisper."""
+    vocals_path = f'src/songs/{track_id}/vocals.mp3'
+    lyrics_path = f'src/songs/{track_id}/lyrics.json'
+
+    # Check if lyrics already exist
+    if os.path.exists(lyrics_path):
+        with open(lyrics_path, 'r') as f:
+            return json.load(f)
+
+    # Load and process vocals file
+    try:
+        with open(vocals_path, 'rb') as vocals_file:
+            output = replicate.run(
+                "openai/whisper:91ee9c0c3df30478510ff8c8a3a545add1ad0259ad3a9f78fba57fbc05ee64f7",
+                input={"audio": vocals_file}
+            )
+    except Exception as e:
+        print(f"Error transcribing lyrics: {e}")
+        return {"error": "Failed to transcribe lyrics"}
+
+    # Save transcribed lyrics
+    lyrics_data = {"text": output["text"], "segments": output.get("segments", [])}
+    os.makedirs(os.path.dirname(lyrics_path), exist_ok=True)
+    
+    with open(lyrics_path, 'w') as f:
+        json.dump(lyrics_data, f)
+
+    return lyrics_data

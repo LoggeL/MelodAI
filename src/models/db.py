@@ -1,13 +1,18 @@
 # src/models/db.py
 
 import sqlite3
+import os
 from flask import g, current_app
 
+# Define database path relative to the application root
+DATABASE = os.path.join('src', 'database.db')
 
 def get_db():
     """Get database connection for the current request."""
     if "db" not in g:
-        g.db = sqlite3.connect("src/database.db")
+        g.db = sqlite3.connect(
+            DATABASE, detect_types=sqlite3.PARSE_DECLTYPES, timeout=20.0
+        )
         g.db.row_factory = sqlite3.Row
     return g.db
 
@@ -132,11 +137,21 @@ def use_invite_key(key, user_id):
 
 def update_last_online(user_id):
     """Update user's last online timestamp."""
-    db = get_db()
-    db.execute(
-        "UPDATE users SET last_online = CURRENT_TIMESTAMP WHERE id = ?", (user_id,)
-    )
-    db.commit()
+    if not user_id:
+        return
+
+    try:
+        db = get_db()
+        with db:
+            db.execute(
+                """UPDATE users 
+                   SET last_online = CURRENT_TIMESTAMP 
+                   WHERE id = ?""",
+                (user_id,),
+            )
+    except sqlite3.OperationalError as e:
+        print(f"Error updating last_online for user {user_id}: {e}")
+        return
 
 
 def get_user_by_username(username):
