@@ -115,7 +115,7 @@
       }
 
       .logo-container img {
-        width: 50%;
+        width: 37.5%;
       }
 
       .search-input {
@@ -317,13 +317,15 @@
       .lyrics-line {
         margin: 20px 0;
         padding: 10px;
+        padding-left: 16px;
         border-radius: 8px;
         transition: all 0.5s ease;
         opacity: 0;
+        background: color-mix(in srgb, var(--primary), var(--surface) 95%);
       }
 
       .lyrics-line.active {
-        background: color-mix(in srgb, var(--primary), white 90%);
+        background: color-mix(in srgb, var(--primary), var(--surface) 50%);
         opacity: 1;
       }
 
@@ -347,34 +349,27 @@
 
       /* Speaker colors */
       .speaker-SPEAKER_00 {
-        background-color: #22d3ee30;
+        border-left: 6px solid #22d3ee;
       }
 
       .speaker-SPEAKER_01 {
-        background-color: #f472b630;
+        border-left: 6px solid #f472b6;
       }
 
       .speaker-SPEAKER_02 {
-        background-color: #34d39930;
+        border-left: 6px solid #34d399;
       }
 
       .speaker-SPEAKER_03 {
-        background-color: #fbbf2430;
+        border-left: 6px solid #fbbf24;
       }
 
       .speaker-SPEAKER_04 {
-        background-color: #818cf830;
+        border-left: 6px solid #818cf8;
       }
 
       .speaker-SPEAKER_05 {
-        background-color: #fb718530;
-      }
-
-      .word {
-        display: inline-block;
-        margin-right: 5px;
-        padding: 2px 4px;
-        border-radius: 4px;
+        border-left: 6px solid #fb7185;
       }
 
       button {
@@ -534,22 +529,22 @@
 
       /* Dark mode speaker colors */
       [data-theme='dark'] .speaker-SPEAKER_00 {
-        background-color: #06b5d430;
+        border-left: 6px solid #06b5d4;
       }
       [data-theme='dark'] .speaker-SPEAKER_01 {
-        background-color: #ec489930;
+        border-left: 6px solid #ec4899;
       }
       [data-theme='dark'] .speaker-SPEAKER_02 {
-        background-color: #10b98130;
+        border-left: 6px solid #10b981;
       }
       [data-theme='dark'] .speaker-SPEAKER_03 {
-        background-color: #d9770630;
+        border-left: 6px solid #d97706;
       }
       [data-theme='dark'] .speaker-SPEAKER_04 {
-        background-color: #6366f130;
+        border-left: 6px solid #6366f1;
       }
       [data-theme='dark'] .speaker-SPEAKER_05 {
-        background-color: #e11d4830;
+        border-left: 6px solid #e11d48;
       }
 
       .queue-status {
@@ -892,7 +887,7 @@
             <i class="fas fa-forward-step"></i>
           </button>
           <button class="control-btn" id="randomSong">
-            <i class="fas fa-random"></i>
+            <i class="fas fa-dice"></i>
           </button>
           <button class="control-btn" id="toggleFullscreen">
             <i class="fas fa-expand"></i>
@@ -1014,6 +1009,16 @@
           this.playing = false
           this.currentWordIndex = 0
           this.currentSongIndex = -1
+          this.hasUserInteracted = false
+
+          // Add event listener for first interaction
+          document.addEventListener(
+            'click',
+            () => {
+              this.hasUserInteracted = true
+            },
+            { once: true }
+          )
 
           // Ensure buttons are disabled initially
           document.getElementById('downloadButton').disabled = true
@@ -1134,7 +1139,6 @@
           if (!this.lyrics) return
 
           const lyrics = document.querySelector('.lyrics-content')
-
           lyrics.innerHTML = ''
 
           const song = this.songQueue[this.currentSongIndex]
@@ -1151,7 +1155,7 @@
 
           this.lyrics.forEach((segment, segmentIndex) => {
             const lineDiv = document.createElement('div')
-            lineDiv.classList.add('lyrics-line')
+            lineDiv.classList.add('lyrics-line', 'speaker')
             lineDiv.id = `line-${segmentIndex}`
 
             // Get unique speakers and add speaker classes
@@ -1180,8 +1184,19 @@
             lyrics.appendChild(lineDiv)
           })
 
-          // Click the play button
-          document.getElementById('playButton').click()
+          // Only autoplay if user has interacted with the page
+          if (this.hasUserInteracted) {
+            document.getElementById('playButton').click()
+          }
+
+          // Scroll to the first line
+          const firstLine = document.querySelector('.lyrics-line')
+          if (firstLine) {
+            firstLine.scrollIntoView({
+              behavior: 'smooth',
+              block: 'center',
+            })
+          }
         }
 
         jumpToTime(time) {
@@ -1272,14 +1287,14 @@
                 lineElement.style.opacity = 1
               } else if (timeDiff > 0) {
                 const opacity = Math.max(
-                  Math.max(0, (20 - timeDiff) / 20),
+                  Math.max(0.1, (20 - timeDiff) / 20),
                   indexDiff
                 )
                 lineElement.style.opacity = opacity
               } else {
                 const pastDiff = Math.abs(segment.end - currentTime)
                 const opacity = Math.max(
-                  Math.max(0, (20 - pastDiff) / 20),
+                  Math.max(0.1, (20 - pastDiff) / 20),
                   indexDiff
                 )
                 lineElement.style.opacity = opacity
