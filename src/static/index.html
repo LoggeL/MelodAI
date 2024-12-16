@@ -877,14 +877,8 @@
           <span id="currentTime">0:00</span> / <span id="totalTime">0:00</span>
         </div>
         <div class="player-controls">
-          <button class="control-btn" id="previousSong">
-            <i class="fas fa-backward-step"></i>
-          </button>
           <button class="control-btn play-btn" id="playButton">
             <i class="fas fa-play"></i>
-          </button>
-          <button class="control-btn" id="nextSong">
-            <i class="fas fa-forward-step"></i>
           </button>
           <button class="control-btn" id="randomSong">
             <i class="fas fa-dice"></i>
@@ -1456,12 +1450,6 @@
           document
             .getElementById('playButton')
             .addEventListener('click', () => this.togglePlay())
-          document
-            .getElementById('previousSong')
-            .addEventListener('click', () => this.previousSong())
-          document
-            .getElementById('nextSong')
-            .addEventListener('click', () => this.nextSong())
           document
             .getElementById('randomSong')
             .addEventListener('click', () => this.randomSong())
