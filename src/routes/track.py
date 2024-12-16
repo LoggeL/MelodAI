@@ -56,23 +56,24 @@ def split_track(track_id):
             {"track_id": track_id, "status": "splitting", "progress": 30},
         )
 
-        output = replicate.run(
-            "ryan5453/demucs:7a9db77ed93f8f4f7e233a94d8519a867fbaa9c6d16ea5b53c1394f1557f9c61",
-            input={
-                "jobs": 0,
-                "audio": open("src/songs/{}/song.mp3".format(track_id), "rb"),
-                "stem": "vocals",
-                "model": "htdemucs",
-                "split": True,
-                "shifts": 1,
-                "overlap": 0.25,
-                "clip_mode": "rescale",
-                "mp3_preset": 2,
-                "wav_format": "int24",
-                "mp3_bitrate": 320,
-                "output_format": "mp3",
-            },
-        )
+        with open("src/songs/{}/song.mp3".format(track_id), "rb") as song_file:
+            output = replicate.run(
+                "ryan5453/demucs:7a9db77ed93f8f4f7e233a94d8519a867fbaa9c6d16ea5b53c1394f1557f9c61",
+                input={
+                    "jobs": 0,
+                    "audio": song_file,
+                    "stem": "vocals",
+                    "model": "htdemucs",
+                    "split": True,
+                    "shifts": 1,
+                    "overlap": 0.25,
+                    "clip_mode": "rescale",
+                    "mp3_preset": 2,
+                    "wav_format": "int24",
+                    "mp3_bitrate": 320,
+                    "output_format": "mp3",
+                },
+            )
 
         # Save the vocals
         with open("src/songs/{}/vocals.mp3".format(track_id), "wb") as f:
