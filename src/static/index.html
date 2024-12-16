@@ -840,6 +840,14 @@
         color: var(--text-light);
         font-weight: normal;
       }
+
+      .word.active {
+        background: color-mix(in srgb, var(--warning), white 70%);
+      }
+
+      [data-theme='dark'] .word.active {
+        background: color-mix(in srgb, var(--warning), var(--surface) 70%);
+      }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
   </head>
@@ -1213,7 +1221,6 @@
             ).textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`
 
             // Get the next lyrics block as active
-            // Update active line and fading
             let currentIndex = 0
             for (let i = 0; i < this.lyrics.length; i++) {
               const lyricsLine = this.lyrics[i]
@@ -1223,17 +1230,41 @@
               }
             }
 
+            // Reset all word highlights
+            document.querySelectorAll('.word.active').forEach((word) => {
+              word.classList.remove('active')
+            })
+
+            // Reset all line highlights
+            document.querySelectorAll('.lyrics-line.active').forEach((line) => {
+              line.classList.remove('active')
+            })
+
+            // Find and highlight the current word
+            this.lyrics.forEach((segment) => {
+              segment.words.forEach((word) => {
+                if (currentTime >= word.start && currentTime <= word.end) {
+                  const wordElement = document.querySelector(
+                    `[data-start="${word.start}"]`
+                  )
+                  if (wordElement) {
+                    wordElement.classList.add('active')
+                  }
+                }
+              })
+            })
+
             this.lyrics.forEach((segment, segmentIndex) => {
               const lineElement = document.getElementById(
                 `line-${segmentIndex}`
               )
+
               const timeDiff = segment.start - currentTime
               const indexDiff =
                 Math.max(0, 5 - Math.abs(segmentIndex - currentIndex)) / 5
 
               if (currentTime >= segment.start && currentTime <= segment.end) {
                 lineElement.classList.add('active')
-                // Scroll to active line with smooth behavior
                 lineElement.scrollIntoView({
                   behavior: 'smooth',
                   block: 'center',
@@ -1241,31 +1272,18 @@
                 lineElement.style.opacity = 1
               } else if (timeDiff > 0) {
                 const opacity = Math.max(
-                  Math.max(0.1, (20 - timeDiff) / 20),
+                  Math.max(0, (20 - timeDiff) / 20),
                   indexDiff
                 )
                 lineElement.style.opacity = opacity
               } else {
-                // Past lyrics
                 const pastDiff = Math.abs(segment.end - currentTime)
                 const opacity = Math.max(
-                  Math.max(0.1, (20 - pastDiff) / 20),
+                  Math.max(0, (20 - pastDiff) / 20),
                   indexDiff
                 )
                 lineElement.style.opacity = opacity
               }
-
-              // Update active words within the line
-              segment.words.forEach((word, wordIndex) => {
-                const wordElement = document.getElementById(
-                  `word-${segmentIndex}-${wordIndex}`
-                )
-                if (currentTime >= word.start && currentTime <= word.end) {
-                  wordElement.classList.add('active')
-                } else {
-                  wordElement.classList.remove('active')
-                }
-              })
             })
 
             requestAnimationFrame(checkTime)
