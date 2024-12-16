@@ -218,7 +218,9 @@ def random_song():
         processed_songs = []
         songs_dir = "src/songs"
         for track_id in os.listdir(songs_dir):
-            if os.path.isfile(os.path.join(songs_dir, track_id, "metadata.json")):
+            if os.path.isfile(
+                os.path.join(songs_dir, track_id, "metadata.json")
+            ) and os.path.isfile(os.path.join(songs_dir, track_id, "lyrics.json")):
                 if track_id not in exclude_ids:
                     processed_songs.append(track_id)
 
