@@ -434,19 +434,6 @@
         display: none;
       }
 
-      .profile-dropdown {
-        position: absolute;
-        top: 100%;
-        right: 0;
-        margin-top: 0.5rem;
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-        display: none;
-        min-width: 200px;
-      }
-
       .profile-dropdown.active {
         display: block;
       }
@@ -894,7 +881,7 @@
           >
             <i class="fas fa-download"></i>
           </button>
-          <button class="control-btn" id="shareButton" title="Share" disabled>
+          <button class="control-btn" id="shareSong" title="Share" disabled>
             <i class="fas fa-share-alt"></i>
           </button>
         </div>
@@ -1016,7 +1003,7 @@
 
           // Ensure buttons are disabled initially
           document.getElementById('downloadButton').disabled = true
-          document.getElementById('shareButton').disabled = true
+          document.getElementById('shareSong').disabled = true
 
           this.socket = io('')
           this.setupSocketListeners()
@@ -1311,7 +1298,7 @@
 
           // Enable download and share buttons
           document.getElementById('downloadButton').disabled = false
-          document.getElementById('shareButton').disabled = false
+          document.getElementById('shareSong').disabled = false
 
           // Update URL hash with current song ID
           window.location.hash = `song=${song.id}`
@@ -1508,7 +1495,7 @@
 
           // Setup share button
           document
-            .getElementById('shareButton')
+            .getElementById('shareSong')
             .addEventListener('click', () => this.shareSong())
         }
 
