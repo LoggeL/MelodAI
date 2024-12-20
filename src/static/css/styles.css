@@ -158,37 +158,90 @@ body.collapsed .side-container {
 }
 
 .queue-item {
-  padding: 10px;
-  margin: 5px 0;
-  background: var(--background);
-  border-radius: 4px;
-  cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 10px;
-  transition: background-color 0.2s;
+  padding: 10px;
+  border-radius: 8px;
+  margin: 5px 0;
+  background: var(--surface);
   position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.queue-item img {
+  width: 48px;
+  height: 48px;
+  border-radius: 4px;
+  margin-right: 12px;
+}
+
+.queue-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.queue-item-content > div {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.queue-item-controls {
+  display: flex;
+  gap: 8px;
+  margin-left: 8px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.queue-item:hover .queue-item-controls {
+  opacity: 1;
+}
+
+.queue-control-btn {
+  background: none;
+  border: none;
+  color: var(--text);
+  padding: 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+}
+
+.queue-control-btn:hover {
+  background: var(--hover);
+}
+
+.queue-control-btn.retry-btn {
+  color: var(--primary);
+}
+
+.queue-control-btn.remove-btn {
+  color: var(--error);
 }
 
 .queue-item.error {
-  background: var(--danger);
-  cursor: not-allowed;
+  border-left: 3px solid var(--error);
 }
 
-.queue-item:hover {
-  background: var(--hover);
+.queue-item.error .queue-status {
+  color: var(--error);
 }
 
 .queue-item.active {
   background: var(--primary);
-  color: white;
+  color: var(--surface);
 }
 
-.queue-item img {
-  width: 50px;
-  height: 50px;
-  object-fit: cover;
-  border-radius: 4px;
+.queue-item:hover {
+  background: var(--hover);
 }
 
 .controls {

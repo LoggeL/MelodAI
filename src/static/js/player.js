@@ -360,12 +360,24 @@ class KaraokePlayer {
                    index === this.currentSongIndex ? 'active' : ''
                  }">
                 <img src="${song.thumbnail}" alt="${song.title}">
-                <div>
+                <div class="queue-item-content">
                     <div>${song.title}</div>
                     <div style="font-size: 0.8em">${song.artist}</div>
-                    <div class="queue-status">${this.getStatus(
-                      song
-                    )}</div>
+                    <div class="queue-status">${this.getStatus(song)}</div>
+                </div>
+                <div class="queue-item-controls">
+                    ${song.error ? 
+                      `<button class="queue-control-btn retry-btn" title="Retry" onclick="karaokePlayer.retrySong(${index})">
+                        <i class="fas fa-redo"></i>
+                       </button>` 
+                      : ''
+                    }
+                    ${index !== this.currentSongIndex ? 
+                      `<button class="queue-control-btn remove-btn" title="Remove" onclick="karaokePlayer.removeSong(${index})">
+                        <i class="fas fa-times"></i>
+                       </button>`
+                      : ''
+                    }
                 </div>
                 <div class="progress-overlay" style="width: ${
                   song.progress || 0
@@ -821,6 +833,48 @@ class KaraokePlayer {
         document.body.removeChild(toast)
       }, 300)
     }, 3000)
+  }
+
+  async retrySong(index) {
+    const song = this.songQueue[index]
+    if (!song) return
+
+    // Reset song status
+    song.error = false
+    song.ready = false
+    song.status = 'processing'
+    song.progress = 0
+
+    this.renderQueue()
+
+    try {
+      // Request song processing from the server again
+      const response = await fetch(`/add?id=${song.id}`)
+      if (!response.ok) {
+        throw new Error('Failed to process song')
+      }
+      // Socket listeners will handle the progress updates
+    } catch (error) {
+      console.error('Error retrying song:', error)
+      song.error = true
+      song.status = 'Failed to process song'
+      this.renderQueue()
+    }
+  }
+
+  removeSong(index) {
+    // Don't allow removing the currently playing song
+    if (index === this.currentSongIndex) return
+
+    // Remove the song from the queue
+    this.songQueue.splice(index, 1)
+
+    // Update currentSongIndex if necessary
+    if (index < this.currentSongIndex) {
+      this.currentSongIndex--
+    }
+
+    this.renderQueue()
   }
 }
 
