@@ -14,6 +14,11 @@ def index():
     return send_from_directory("static", "index.html")
 
 
+@static_bp.route("/about", methods=["GET"])
+def about_html():
+    return send_from_directory("static", "about.html")
+
+
 @static_bp.route("/login", methods=["GET"])
 def login_html():
     if "user_id" in session or validate_auth_token():
