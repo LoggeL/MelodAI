@@ -14,6 +14,16 @@ def index():
     return send_from_directory("static", "index.html")
 
 
+@static_bp.route("/css/<path:filename>")
+def serve_css(filename):
+    return send_from_directory("static/css", filename)
+
+
+@static_bp.route("/js/<path:filename>")
+def serve_js(filename):
+    return send_from_directory("static/js", filename)
+
+
 @static_bp.route("/about", methods=["GET"])
 def about_html():
     return send_from_directory("static", "about.html")
