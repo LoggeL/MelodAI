@@ -513,6 +513,79 @@ class KaraokePlayer {
     document
       .getElementById('shareSong')
       .addEventListener('click', () => this.shareSong())
+
+    // Search functionality
+    const searchInput = document.querySelector('.search-input')
+    const searchDropdown = document.getElementById('searchDropdown')
+    let searchTimeout
+
+    searchInput.addEventListener('input', (e) => {
+      clearTimeout(searchTimeout)
+      const query = e.target.value.trim()
+      
+      if (query.length < 2) {
+        searchDropdown.classList.remove('active')
+        return
+      }
+
+      searchTimeout = setTimeout(async () => {
+        try {
+          const response = await fetch(`/search?q=${encodeURIComponent(query)}`)
+          if (!response.ok) {
+            throw new Error('Search failed')
+          }
+          const results = await response.json()
+          
+          searchDropdown.innerHTML = ''
+          results.forEach(result => {
+            const resultElement = document.createElement('div')
+            resultElement.classList.add('search-result')
+            resultElement.innerHTML = `
+              <img src="https://cdn-images.dzcdn.net/images/cover/${result.cover}/56x56-000000-80-0-0.jpg" alt="${result.title}">
+              <div class="search-result-info">
+                <div class="search-result-title">${result.title}</div>
+                <div class="search-result-artist">${result.artist}</div>
+              </div>
+            `
+            
+            resultElement.addEventListener('click', async () => {
+              // Prepare song object with necessary information
+              const song = {
+                id: result.id,
+                title: result.title,
+                artist: result.artist,
+                thumbnail: `https://cdn-images.dzcdn.net/images/cover/${result.cover}/56x56-000000-80-0-0.jpg`,
+                vocalsUrl: `songs/${result.id}/vocals.mp3`,
+                musicUrl: `songs/${result.id}/no_vocals.mp3`,
+                lyricsUrl: `songs/${result.id}/lyrics.json`
+              }
+              
+              // Add to queue with validation and processing
+              await this.addToQueue(song)
+              
+              // Clear search
+              searchInput.value = ''
+              searchDropdown.classList.remove('active')
+            })
+            
+            searchDropdown.appendChild(resultElement)
+          })
+          
+          searchDropdown.classList.add('active')
+        } catch (error) {
+          console.error('Search error:', error)
+          searchDropdown.innerHTML = '<div class="search-error">Search failed. Please try again.</div>'
+          searchDropdown.classList.add('active')
+        }
+      }, 300)
+    })
+
+    // Close search dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.search-container')) {
+        searchDropdown.classList.remove('active')
+      }
+    })
   }
 
   togglePlay() {
@@ -579,36 +652,45 @@ class KaraokePlayer {
       })
   }
 
-  async addToQueue(id) {
-    if (this.songQueue.some((item) => item.id === id)) {
-      return alert('Song is already in the queue')
+  async addToQueue(song) {
+    try {
+      // First check if the song is already being processed
+      const existingSong = this.songQueue.find(s => s.id === song.id)
+      if (existingSong) {
+        console.log('Song is already in queue')
+        return
+      }
+
+      // Add song to queue with initial processing status
+      const queueItem = {
+        ...song,
+        ready: false,
+        status: 'processing',
+        progress: 0,
+        error: false
+      }
+      this.songQueue.push(queueItem)
+      this.updateQueue()
+      this.renderQueue()
+
+
+      // Request song processing from the server
+      const response = await fetch(`/add?id=${song.id}`)
+      if (!response.ok) {
+        throw new Error('Failed to process song')
+      }
+
+      // The socket listeners will handle progress updates and completion
+    } catch (error) {
+      console.error('Error adding song to queue:', error)
+      // Update queue item to show error
+      const songIndex = this.songQueue.findIndex(s => s.id === song.id)
+      if (songIndex !== -1) {
+        this.songQueue[songIndex].error = true
+        this.songQueue[songIndex].status = 'Failed to process song'
+        this.updateQueue()
+      }
     }
-
-    const song = await fetch(`/track/${id}`)
-    const songData = await song.json()
-
-    this.songQueue.push({
-      id: id,
-      title: songData.title,
-      artist: songData.artist,
-      thumbnail: `https://cdn-images.dzcdn.net/images/cover/${songData.cover}/56x56-000000-80-0-0.jpg`,
-      vocalsUrl: 'songs/' + id + '/vocals.mp3',
-      musicUrl: 'songs/' + id + '/no_vocals.mp3',
-      lyricsUrl: 'songs/' + id + '/lyrics.json',
-      ready: false,
-      progress: 0,
-      status: 'downloading',
-    })
-
-    this.renderQueue()
-    document.getElementById('searchDropdown').classList.remove('active')
-    document.querySelector('.search-input').value = ''
-
-    fetch('/add?id=' + id)
-      .then((response) => response.json())
-      .catch((error) => {
-        console.error('Error adding track:', error)
-      })
   }
 
   async randomSong() {
@@ -629,7 +711,7 @@ class KaraokePlayer {
       const data = await response.json()
 
       if (response.ok) {
-        this.songQueue.push({
+        const song = {
           id: data.track_id,
           title: data.metadata.title,
           artist: data.metadata.artist,
@@ -640,11 +722,8 @@ class KaraokePlayer {
           ready: true,
           progress: 100,
           status: '',
-        })
-
-        this.renderQueue()
-        // Load and play the random song immediately
-        this.loadSong(this.songQueue.length - 1)
+        }
+        this.addToQueue(song)
       } else {
         console.error('Error getting random song:', data.error)
       }
@@ -801,20 +880,16 @@ window.addEventListener('DOMContentLoaded', () => {
     fetch(`/track/${songId}`)
       .then((response) => response.json())
       .then((metadata) => {
-        karaokePlayer.songQueue.push({
+        const song = {
           id: songId,
           title: metadata.title,
           artist: metadata.artist,
           thumbnail: `https://e-cdns-images.dzcdn.net/images/cover/${metadata.cover}/250x250-000000-80-0-0.jpg`,
           vocalsUrl: `songs/${songId}/vocals.mp3`,
-          musicUrl: `songs/${songId}/no_vocals.mp3`,
-          lyricsUrl: `songs/${songId}/lyrics.json`,
-          ready: true,
-          progress: 100,
-          status: '',
-        })
-        karaokePlayer.renderQueue()
-        karaokePlayer.loadSong(0)
+          musicUrl: `songs/${songId}/no_vocals.mp3`, 
+          lyricsUrl: `songs/${songId}/lyrics.json`
+        }
+        karaokePlayer.addToQueue(song)
       })
       .catch((error) =>
         console.error('Error loading song from URL:', error)
