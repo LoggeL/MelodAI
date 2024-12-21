@@ -556,7 +556,7 @@ class KaraokePlayer {
           
           searchDropdown.innerHTML = results.map(result => `
             <div class="search-result">
-              <img src="https://e-cdns-images.dzcdn.net/images/cover/${result.cover}/56x56-000000-80-0-0.jpg" alt="${result.title}">
+              <img src="${result.thumb}" alt="${result.title}">
               <div class="search-result-info">
                 <div class="search-result-title">${result.title}</div>
                 <div class="search-result-artist">${result.artist}</div>
@@ -573,7 +573,7 @@ class KaraokePlayer {
                 id: result.id,
                 title: result.title,
                 artist: result.artist,
-                thumbnail: `https://e-cdns-images.dzcdn.net/images/cover/${result.cover}/250x250-000000-80-0-0.jpg`,
+                thumbnail: result.thumb,
                 vocalsUrl: `songs/${result.id}/vocals.mp3`,
                 musicUrl: `songs/${result.id}/no_vocals.mp3`,
                 lyricsUrl: `songs/${result.id}/lyrics.json`,

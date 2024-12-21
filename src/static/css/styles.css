@@ -931,8 +931,6 @@ body.collapsed .main-container {
 #songQueue {
   flex: 1;
   overflow-y: auto;
-  margin: 0 -20px;
-  padding: 10px 20px;
 }
 
 /* Queue heading */
