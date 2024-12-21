@@ -32,11 +32,9 @@
 body {
   font-family: system-ui, -apple-system, sans-serif;
   margin: 0;
-  padding: 20px;
+  padding: 20px 20px 100px;
   background: var(--background);
   color: var(--text);
-  display: flex;
-  gap: 20px;
   height: 100vh;
   overflow: hidden;
 }
@@ -44,22 +42,15 @@ body {
 /* Mobile improvements */
 @media (max-width: 768px) {
   body {
-    padding: 10px;
-    gap: 10px;
+    padding: 10px 10px 44px;
   }
 
-  .side-container {
-    height: calc(100vh - 40px) !important;
-    max-height: calc(100vh - 40px) !important;
-    padding: 10px !important;
+  .main-container {
+    height: calc(100vh - 54px);
   }
 
-  .lyrics-container {
-    height: calc(100vh - 20px) !important;
-  }
-
-  .only-on-small {
-    display: block;
+  .player-bar-content {
+    padding: 0 10px;
   }
 }
 
@@ -69,40 +60,46 @@ body.collapsed {
 
 .side-container {
   background: var(--surface);
-  padding: 20px;
   border-radius: 8px;
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1),
-    0 2px 4px -2px rgb(0 0 0 / 0.1);
-  max-height: calc(100vh - 80px);
-  overflow-y: auto;
-  height: calc(100vh - 80px);
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+  width: 400px;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  max-width: 400px;
-  transition: max-width 0.3s, opacity 0.3s, padding 0.3s;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: left;
 }
 
 body.collapsed .side-container {
-  max-width: 0;
+  transform: translateX(-100%);
   opacity: 0;
+  width: 0;
   padding: 0;
 }
 
 .search-container {
   position: relative;
-  margin-bottom: 20px;
+  margin-bottom: 10px;
+  padding: 0 10px;
 }
 
 .logo-container {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+
+.logo-container .logo-content {
+  display: flex;
+  align-items: center;
   justify-content: center;
-  border-radius: 8px;
-  padding: 20px;
+  flex: 1;
 }
 
 .logo-container img {
-  width: 37.5%;
+  width: 120px;
 }
 
 .search-input {
@@ -160,9 +157,8 @@ body.collapsed .side-container {
 .queue-item {
   display: flex;
   align-items: center;
-  padding: 10px;
-  border-radius: 8px;
-  margin: 5px 0;
+  padding: 8px;
+  margin: 4px 0;
   background: var(--surface);
   position: relative;
   overflow: hidden;
@@ -171,8 +167,8 @@ body.collapsed .side-container {
 }
 
 .queue-item img {
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   border-radius: 4px;
   margin-right: 12px;
 }
@@ -251,26 +247,6 @@ body.collapsed .side-container {
   margin-bottom: 20px;
 }
 
-.progress {
-  height: 10px;
-  background: var(--primary);
-  border-radius: 4px;
-  width: 0;
-  transition: width 0.1s;
-}
-
-.progress-bar {
-  background: var(--background);
-  border-radius: 4px;
-  margin-top: 10px;
-  cursor: pointer;
-}
-
-.progress-time {
-  display: flex;
-  margin-bottom: 10px;
-}
-
 .thumbnail {
   width: 100%;
   max-height: 300px;
@@ -281,10 +257,10 @@ body.collapsed .side-container {
 
 .volume-controls {
   display: grid;
-  grid-template-columns: 100px 1fr;
-  gap: 10px;
+  grid-template-columns: 80px 1fr;
+  gap: 8px;
   align-items: center;
-  margin: 10px 0;
+  margin: 8px 0;
 }
 
 .lyrics-container {
@@ -293,8 +269,7 @@ body.collapsed .side-container {
   overflow-y: auto;
   background: var(--surface);
   border-radius: 8px;
-  min-height: 0;
-  height: calc(100vh - 40px);
+  height: 100%;
   position: relative;
   min-height: 200px;
   scroll-behavior: smooth;
@@ -689,14 +664,6 @@ button:hover {
   color: var(--danger);
 }
 
-.play-btn {
-  font-size: 1.75rem;
-  min-width: 48px;
-  height: 48px;
-  background: var(--primary);
-  color: white;
-}
-
 .play-btn:hover {
   background: var(--primary-dark);
 }
@@ -821,23 +788,6 @@ button:hover {
   opacity: 0.1;
 }
 
-/* Update the lyrics-container style */
-.lyrics-container {
-  flex: 1;
-  padding: 0;
-  overflow-y: auto;
-  background: var(--surface);
-  border-radius: 8px;
-  min-height: 0;
-  height: calc(100vh - 40px);
-  position: relative;
-  min-height: 200px;
-  /* Add smooth scrolling */
-  scroll-behavior: smooth;
-  /* Ensure proper scrollbar positioning */
-  scrollbar-gutter: stable;
-}
-
 /* Update the initial message styling */
 .lyrics-content h2 {
   /* Center the initial message vertically */
@@ -857,4 +807,168 @@ button:hover {
 
 [data-theme='dark'] .word.active {
   background: color-mix(in srgb, var(--warning), var(--surface) 70%);
+}
+
+.main-container {
+  display: flex;
+  gap: 20px;
+  height: calc(100vh - 84px);
+  overflow: hidden;
+  transition: gap 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+body.collapsed .main-container {
+  gap: 0;
+}
+
+/* Player bar styles */
+.player-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--surface);
+  z-index: 1000;
+  height: 44px;
+  display: flex;
+  align-items: center;
+}
+
+.player-bar-content {
+  height: 100%;
+  width: 100%;
+  position: relative;
+  background: var(--background);
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+/* Update progress bar styles */
+.progress-bar {
+  width: calc(100% - 60px); /* Leave space for play button */
+  height: 100%;
+  background: var(--background);
+  cursor: pointer;
+  position: relative;
+  border-radius: 4px;
+  outline: 1px solid var(--border);
+  box-sizing: border-box;
+}
+
+.progress {
+  height: 100%;
+  background: var(--primary);
+  width: 0;
+  transition: width 0.1s;
+  position: absolute;
+  left: 0;
+  top: 0;
+  border-radius: 4px;
+}
+
+/* Update time display inside progress bar */
+.progress-text {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text);
+  font-size: 0.8em;
+  font-variant-numeric: tabular-nums;
+  z-index: 2;
+  mix-blend-mode: difference;
+  color: white;
+  pointer-events: none; /* Prevent text from interfering with clicks */
+}
+
+/* Update play button position */
+.play-btn {
+  right: 0px;
+  width: 60px;
+  height: 44px;
+  position: absolute;
+  background: var(--primary);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  padding: 0;
+  font-size: 1.1em;
+  z-index: 2;
+}
+
+/* Mobile improvements */
+@media (max-width: 768px) {
+  body {
+    padding: 10px 10px 44px;
+  }
+
+  .main-container {
+    height: calc(100vh - 54px);
+  }
+}
+
+/* Side controls */
+.side-controls {
+  background: var(--surface);
+  padding: 10px 15px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+
+.control-buttons {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 12px;
+}
+
+/* Queue section */
+#songQueue {
+  flex: 1;
+  overflow-y: auto;
+  margin: 0 -20px;
+  padding: 10px 20px;
+}
+
+/* Queue heading */
+.side-container h2 {
+  font-size: 1.1em;
+  padding: 0 10px;
+}
+
+/* Style for the menu toggle button */
+.menu-toggle {
+  background: none;
+  border: none;
+  color: var(--text);
+  padding: 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: start;
+  justify-content: center;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+body.collapsed .menu-toggle {
+  transform: rotate(180deg);
+}
+
+.menu-toggle:hover {
+  background: var(--hover);
+}
+
+/* Add transition to lyrics container menu button */
+.lyrics-header .control-btn {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+body.collapsed .lyrics-header .control-btn {
+  transform: rotate(180deg);
 }

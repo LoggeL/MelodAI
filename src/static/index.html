@@ -13,98 +13,75 @@
   </head>
 
   <body>
-    <div class="side-container">
-      <!-- Search -->
-      <button
-        class="control-btn only-on-small"
-        onclick="toggleMenu()"
-        aria-label="Toggle menu"
-      >
-        <i class="fas fa-bars"></i>
-      </button>
-      <div class="search-container">
-        <div class="logo-container">
-          <img src="/logo.svg" alt="logo" class="logo" />
+    <div class="main-container">
+      <div class="side-container">
+        <!-- Search -->
+        <div class="search-container">
+          <div class="logo-container">
+            <button
+              class="menu-toggle"
+              onclick="toggleMenu()"
+              aria-label="Toggle menu"
+            >
+              <i class="fas fa-bars"></i>
+            </button>
+            <div class="logo-content">
+              <img src="/logo.svg" alt="logo" class="logo" />
+            </div>
+          </div>
+          <input
+            type="text"
+            class="search-input"
+            placeholder="Search for a song..."
+          />
+          <div class="search-dropdown" id="searchDropdown"></div>
         </div>
-        <input
-          type="text"
-          class="search-input"
-          placeholder="Search for a song..."
-        />
-        <div class="search-dropdown" id="searchDropdown"></div>
+
+        <!-- Player Controls -->
+        <div class="side-controls">
+          <div class="volume-controls">
+            <label>Vocals:</label>
+            <input type="range" id="vocalsVolume" min="0" max="1" step="0.1" value="0.5" />
+          </div>
+          <div class="volume-controls">
+            <label>Music:</label>
+            <input type="range" id="musicVolume" min="0" max="1" step="0.1" value="0.5" />
+          </div>
+          <div class="control-buttons">
+            <button class="control-btn" id="randomSong">
+              <i class="fas fa-dice"></i>
+            </button>
+            <button class="control-btn" id="toggleFullscreen">
+              <i class="fas fa-expand"></i>
+            </button>
+            <button class="control-btn" id="downloadButton" title="Download" disabled>
+              <i class="fas fa-download"></i>
+            </button>
+            <button class="control-btn" id="shareSong" title="Share" disabled>
+              <i class="fas fa-share-alt"></i>
+            </button>
+          </div>
+        </div>
+
+        <h2>Song Queue</h2>
+        <div id="songQueue"></div>
       </div>
-      <div class="controls">
-        <div class="now-playing" id="nowPlaying">Select a song to begin</div>
-        <div class="progress-bar">
-          <div class="progress" id="progress"></div>
-        </div>
-        <div class="progress-time">
-          <span id="currentTime">0:00</span> / <span id="totalTime">0:00</span>
-        </div>
-        <div class="player-controls">
-          <button class="control-btn play-btn" id="playButton">
-            <i class="fas fa-play"></i>
-          </button>
-          <button class="control-btn" id="randomSong">
-            <i class="fas fa-dice"></i>
-          </button>
-          <button class="control-btn" id="toggleFullscreen">
-            <i class="fas fa-expand"></i>
-          </button>
+
+      <div class="lyrics-container" id="lyricsContainer">
+        <div class="lyrics-header">
           <button
             class="control-btn"
-            id="downloadButton"
-            title="Download"
-            disabled
+            onclick="toggleMenu()"
+            aria-label="Toggle menu"
           >
-            <i class="fas fa-download"></i>
+            <i class="fas fa-bars"></i>
           </button>
-          <button class="control-btn" id="shareSong" title="Share" disabled>
-            <i class="fas fa-share-alt"></i>
-          </button>
-        </div>
-
-        <div class="volume-controls">
-          <label>Vocals:</label>
-          <input
-            type="range"
-            id="vocalsVolume"
-            min="0"
-            max="1"
-            step="0.1"
-            value="0.5"
-          />
-        </div>
-        <div class="volume-controls">
-          <label>Music:</label>
-          <input
-            type="range"
-            id="musicVolume"
-            min="0"
-            max="1"
-            step="0.1"
-            value="0.5"
-          />
-        </div>
-      </div>
-      <h2>Song Queue</h2>
-      <div id="songQueue"></div>
-    </div>
-
-    <div class="lyrics-container" id="lyricsContainer">
-      <div class="lyrics-header">
-        <button
-          class="control-btn"
-          onclick="toggleMenu()"
-          aria-label="Toggle menu"
-        >
-          <i class="fas fa-bars"></i>
-        </button>
-        <div class="lyrics-title-container">
-          <img class="lyrics-cover" src="/logo.svg" alt="Album cover" />
-          <div class="lyrics-info">
-            <div class="lyrics-title"></div>
-            <div class="lyrics-artist"></div>
+          <div class="lyrics-title-container">
+            <img class="lyrics-cover" src="/logo.svg" alt="Album cover" />
+            <div class="lyrics-info">
+              <div class="lyrics-title"></div>
+              <div class="lyrics-artist"></div>
+            </div>
           </div>
           <div class="lyrics-profile">
             <button class="profile-button" id="profileButton">
@@ -141,9 +118,26 @@
             </div>
           </div>
         </div>
+        <div class="lyrics-content">
+          <h2>Select or search for a song to start</h2>
+        </div>
       </div>
-      <div class="lyrics-content">
-        <h2>Select a song to start</h2>
+    </div>
+
+    <!-- Fixed bottom player bar -->
+    <div class="player-bar">
+      <div class="player-bar-content">
+        <div class="progress-bar">
+          <div class="progress" id="progress"></div>
+          <div class="progress-text">
+            <span class="progress-time" id="currentTime">0:00</span>
+            /
+            <span class="total-time" id="totalTime">0:00</span>
+          </div>
+        </div>
+        <button class="play-btn" id="playButton">
+          <i class="fas fa-play"></i>
+        </button>
       </div>
     </div>
 
@@ -158,6 +152,7 @@
         <i class="fas fa-compact-disc"></i> Download Full Song
       </div>
     </div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <script src="/js/player.js"></script>
   </body>

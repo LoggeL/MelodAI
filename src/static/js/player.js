@@ -207,12 +207,18 @@ class KaraokePlayer {
   }
 
   clickProgressBar(e) {
-    const rect = e.target.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const width = rect.width
-    const progress = x / width
-    const time = progress * this.vocalsAudio.duration
-    this.jumpToTime(time)
+    const rect = this.progressBar.getBoundingClientRect()
+    const clickX = e.clientX - rect.left
+    const barWidth = rect.width
+    let progress = (clickX / barWidth)
+    
+    // Clamp progress between 0 and 1
+    progress = Math.max(0, Math.min(1, progress))
+    
+    // Update progress and seek to position
+    const duration = this.vocalsAudio.duration
+    this.vocalsAudio.currentTime = duration * progress
+    this.musicAudio.currentTime = duration * progress
   }
 
   startLyricsSync() {
@@ -220,17 +226,13 @@ class KaraokePlayer {
       if (!this.playing) return
 
       const currentTime = this.vocalsAudio.currentTime
+      const duration = this.vocalsAudio.duration
 
-      // Update progress bar
-      const progress = (currentTime / this.vocalsAudio.duration) * 100
+      // Update progress bar and time displays
+      const progress = (currentTime / duration) * 100
       document.getElementById('progress').style.width = `${progress}%`
-
-      // Update current time
-      const minutes = Math.floor(currentTime / 60)
-      const seconds = Math.floor(currentTime % 60)
-      document.getElementById(
-        'currentTime'
-      ).textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`
+      document.getElementById('currentTime').textContent = this.formatTime(currentTime)
+      document.getElementById('totalTime').textContent = this.formatTime(duration)
 
       // Get the next lyrics block as active
       let currentIndex = 0
@@ -321,10 +323,10 @@ class KaraokePlayer {
 
     this.updateQueueHighlight()
 
-    // Update UI elements
-    document.getElementById(
-      'nowPlaying'
-    ).textContent = `Now Playing: ${song.title}`
+    // Update lyrics info
+    document.querySelector('.lyrics-cover').src = song.thumbnail
+    document.querySelector('.lyrics-artist').textContent = song.artist
+    document.querySelector('.lyrics-title').textContent = song.title
 
     // Reset player state
     this.playing = false
@@ -334,17 +336,15 @@ class KaraokePlayer {
       .querySelector('#playButton i')
       .classList.replace('fa-pause', 'fa-play')
 
-    // Update total time
-    this.vocalsAudio.onloadedmetadata = () => {
-      const minutes = Math.floor(this.vocalsAudio.duration / 60)
-      const seconds = Math.floor(this.vocalsAudio.duration % 60)
-      document.getElementById(
-        'totalTime'
-      ).textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`
+    // Reset progress bar and time displays
+    document.getElementById('progress').style.width = '0'
+    document.getElementById('currentTime').textContent = '0:00'
+    document.getElementById('totalTime').textContent = '0:00'
 
-      // Reset progress bar
-      document.getElementById('progress').style.width = '0'
-    }
+    // Add event listener for duration change to update total time immediately when available
+    this.vocalsAudio.addEventListener('loadedmetadata', () => {
+      document.getElementById('totalTime').textContent = this.formatTime(this.vocalsAudio.duration)
+    }, { once: true })
 
     // Load lyrics
     this.loadLyrics(song.lyricsUrl)
@@ -462,6 +462,12 @@ class KaraokePlayer {
   }
 
   setupControls() {
+    // Store reference to progress bar
+    this.progressBar = document.querySelector('.progress-bar')
+    
+    // Add click handler to progress bar
+    this.progressBar.addEventListener('click', (e) => this.clickProgressBar(e))
+
     document
       .getElementById('playButton')
       .addEventListener('click', () => this.togglePlay())
@@ -875,6 +881,13 @@ class KaraokePlayer {
     }
 
     this.renderQueue()
+  }
+
+  formatTime(seconds) {
+    if (isNaN(seconds)) return '0:00'
+    const minutes = Math.floor(seconds / 60)
+    const remainingSeconds = Math.floor(seconds % 60)
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
   }
 }
 
