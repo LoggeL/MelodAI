@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About MelodAI</title>
+    <link rel="icon" href="/logo.svg" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+    />
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --secondary: #0ea5e9;
+            --background: #f8fafc;
+            --surface: #ffffff;
+            --text: #1e293b;
+            --text-light: #64748b;
+            --border: #6366f1;
+        }
+
+        [data-theme='dark'] {
+            --primary: #818cf8;
+            --primary-dark: #6366f1;
+            --secondary: #38bdf8;
+            --background: #0f172a;
+            --surface: #1e293b;
+            --text: #f1f5f9;
+            --text-light: #94a3b8;
+            --border: #334155;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: var(--background);
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .logo {
+            width: 150px;
+            margin-bottom: 1rem;
+        }
+
+        h1 {
+            color: var(--primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            color: var(--text-light);
+            font-size: 1.2rem;
+            margin-bottom: 2rem;
+        }
+
+        .section {
+            background: var(--surface);
+            padding: 2rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+            margin: 2rem 0;
+        }
+
+        .feature {
+            text-align: center;
+            padding: 1.5rem;
+        }
+
+        .feature i {
+            font-size: 2.5rem;
+            color: var(--primary);
+            margin-bottom: 1rem;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            background: var(--primary);
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+
+        .button:hover {
+            background: var(--primary-dark);
+        }
+
+        .cta {
+            text-align: center;
+            margin-top: 3rem;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+
+            .section {
+                padding: 1.5rem;
+            }
+
+            .feature-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .theme-toggle {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            padding: 0.5rem;
+            border-radius: 50%;
+            border: none;
+            background: var(--surface);
+            color: var(--text);
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .theme-toggle:hover {
+            background: var(--border);
+            color: var(--surface);
+        }
+    </style>
+</head>
+<body>
+    <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
+        <i class="fas fa-moon"></i>
+    </button>
+
+    <div class="container">
+        <div class="header">
+            <img src="/logo.svg" alt="MelodAI Logo" class="logo">
+            <h1>MelodAI</h1>
+            <div class="subtitle">The Ultimate AI-Powered Karaoke Experience</div>
+        </div>
+
+        <div class="section">
+            <h2>About MelodAI</h2>
+            <p>
+                MelodAI is an innovative karaoke platform that combines artificial intelligence with music to create
+                an immersive singing experience. Our platform uses advanced AI technology to separate vocals from
+                music and generate synchronized lyrics, allowing you to sing along with your favorite songs like never before.
+            </p>
+        </div>
+
+        <div class="section">
+            <h2>Key Features</h2>
+            <div class="feature-grid">
+                <div class="feature">
+                    <i class="fas fa-microphone"></i>
+                    <h3>Vocal Separation</h3>
+                    <p>AI-powered technology that cleanly separates vocals from music</p>
+                </div>
+                <div class="feature">
+                    <i class="fas fa-music"></i>
+                    <h3>Music Library</h3>
+                    <p>Access to a vast collection of popular songs</p>
+                </div>
+                <div class="feature">
+                    <i class="fas fa-closed-captioning"></i>
+                    <h3>Synchronized Lyrics</h3>
+                    <p>Real-time lyrics synchronization for perfect timing</p>
+                </div>
+                <div class="feature">
+                    <i class="fas fa-sliders-h"></i>
+                    <h3>Volume Control</h3>
+                    <p>Separate volume controls for vocals and music</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>How It Works</h2>
+            <p>
+                MelodAI uses state-of-the-art machine learning models to analyze and process music tracks. Our system:
+            </p>
+            <ul>
+                <li>Separates vocal and instrumental tracks with high precision</li>
+                <li>Generates word-by-word synchronized lyrics</li>
+                <li>Provides an intuitive interface for karaoke performance</li>
+                <li>Allows downloading of separated tracks for offline use</li>
+            </ul>
+        </div>
+
+        <div class="cta">
+            <a href="/" class="button">Start Singing Now</a>
+        </div>
+    </div>
+
+    <script>
+        // Theme management
+        function getTheme() {
+            return localStorage.getItem('theme') || 'light';
+        }
+
+        function setTheme(theme) {
+            localStorage.setItem('theme', theme);
+            document.documentElement.setAttribute('data-theme', theme);
+            updateThemeButton(theme);
+        }
+
+        function updateThemeButton(theme) {
+            const button = document.querySelector('.theme-toggle i');
+            button.className = theme === 'light' ? 'fas fa-moon' : 'fas fa-sun';
+        }
+
+        function toggleTheme() {
+            const currentTheme = getTheme();
+            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+            setTheme(newTheme);
+        }
+
+        // Initialize theme
+        document.addEventListener('DOMContentLoaded', () => {
+            setTheme(getTheme());
+        });
+    </script>
+</body>
+</html> 

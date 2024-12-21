@@ -188,9 +188,49 @@
         border-radius: 4px;
         font-size: 1rem;
       }
+
+      .nav-links {
+        position: fixed;
+        top: 1rem;
+        right: 1rem;
+        display: flex;
+        gap: 1rem;
+        z-index: 1001;
+      }
+
+      .nav-link {
+        color: #007bff;
+        text-decoration: none;
+        padding: 0.5rem 1rem;
+        border-radius: 4px;
+        background: white;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.9rem;
+      }
+
+      .nav-link:hover {
+        background: #f8f9fa;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
     </style>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+    />
   </head>
   <body>
+    <div class="nav-links">
+      <a href="/about" class="nav-link">
+        <i class="fas fa-info-circle"></i>
+        About
+      </a>
+    </div>
+
     <div class="loading-overlay">
       <img src="/static/logo.svg" alt="MelodAI Logo" class="loading-logo" />
     </div>
