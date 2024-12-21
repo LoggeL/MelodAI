@@ -554,39 +554,41 @@ class KaraokePlayer {
           }
           const results = await response.json()
           
-          searchDropdown.innerHTML = ''
-          results.forEach(result => {
-            const resultElement = document.createElement('div')
-            resultElement.classList.add('search-result')
-            resultElement.innerHTML = `
-              <img src="https://cdn-images.dzcdn.net/images/cover/${result.cover}/56x56-000000-80-0-0.jpg" alt="${result.title}">
+          searchDropdown.innerHTML = results.map(result => `
+            <div class="search-result">
+              <img src="https://e-cdns-images.dzcdn.net/images/cover/${result.cover}/56x56-000000-80-0-0.jpg" alt="${result.title}">
               <div class="search-result-info">
                 <div class="search-result-title">${result.title}</div>
                 <div class="search-result-artist">${result.artist}</div>
               </div>
-            `
-            
-            resultElement.addEventListener('click', async () => {
+            </div>
+          `).join('')
+
+          // Add click handlers after creating the elements
+          searchDropdown.querySelectorAll('.search-result').forEach((element, index) => {
+            element.addEventListener('click', async () => {
+              const result = results[index]
               // Prepare song object with necessary information
               const song = {
                 id: result.id,
                 title: result.title,
                 artist: result.artist,
-                thumbnail: `https://cdn-images.dzcdn.net/images/cover/${result.cover}/56x56-000000-80-0-0.jpg`,
+                thumbnail: `https://e-cdns-images.dzcdn.net/images/cover/${result.cover}/250x250-000000-80-0-0.jpg`,
                 vocalsUrl: `songs/${result.id}/vocals.mp3`,
                 musicUrl: `songs/${result.id}/no_vocals.mp3`,
-                lyricsUrl: `songs/${result.id}/lyrics.json`
+                lyricsUrl: `songs/${result.id}/lyrics.json`,
+                ready: false,
+                progress: 0,
+                status: 'processing'
               }
               
-              // Add to queue with validation and processing
+              // Add to queue
               await this.addToQueue(song)
               
               // Clear search
               searchInput.value = ''
               searchDropdown.classList.remove('active')
             })
-            
-            searchDropdown.appendChild(resultElement)
           })
           
           searchDropdown.classList.add('active')
