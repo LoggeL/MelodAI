@@ -5,7 +5,8 @@ import os
 from flask import g, current_app
 
 # Define database path relative to the application root
-DATABASE = os.path.join('src', 'database.db')
+DATABASE = os.path.join("src", "database.db")
+
 
 def get_db():
     """Get database connection for the current request."""
@@ -107,6 +108,26 @@ def migrate_db():
             db.commit()
         except sqlite3.OperationalError as e:
             print(f"Migration error: {e}")
+
+        try:
+            # Add system_status table if it doesn't exist
+            db.execute(
+                """
+                CREATE TABLE IF NOT EXISTS system_status (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    component TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    details TEXT,
+                    last_checked TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    checked_by INTEGER,
+                    FOREIGN KEY (checked_by) REFERENCES users (id)
+                )
+            """
+            )
+            db.commit()
+            print("Added system_status table")
+        except sqlite3.OperationalError as e:
+            print(f"Migration error when creating system_status table: {e}")
 
 
 def create_invite_key(created_by, key):
@@ -235,3 +256,19 @@ def init_app(app):
         init_db()
     else:
         migrate_db()
+
+
+def reset_db():
+    """Reset the database by recreating all tables.
+    This should only be used in development or when specifically needed.
+    WARNING: This will delete all data in the database!
+    """
+    with current_app.app_context():
+        import os
+
+        if os.path.exists(DATABASE):
+            os.rename(DATABASE, f"{DATABASE}.backup")
+            print(f"Existing database backed up to {DATABASE}.backup")
+
+        init_db()
+        print("Database has been reset with the current schema")

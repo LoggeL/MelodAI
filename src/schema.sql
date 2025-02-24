@@ -36,4 +36,14 @@ CREATE TABLE IF NOT EXISTS password_resets (
     used BOOLEAN DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users (id)
+);
+
+CREATE TABLE IF NOT EXISTS system_status (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    component TEXT NOT NULL,
+    status TEXT NOT NULL,
+    details TEXT,
+    last_checked TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    checked_by INTEGER,
+    FOREIGN KEY (checked_by) REFERENCES users (id)
 ); 

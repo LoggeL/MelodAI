@@ -1,8 +1,23 @@
-from flask import Blueprint, jsonify, request, session
+from flask import (
+    Blueprint,
+    jsonify,
+    request,
+    session,
+    render_template,
+    redirect,
+    url_for,
+    send_from_directory,
+)
 import secrets
 from ..models.db import get_db
 from ..utils.decorators import admin_required
 from ..models.db import create_invite_key
+from ..utils.status_checks import (
+    run_all_checks,
+    get_processing_queue,
+    get_unfinished_songs,
+)
+import time
 
 admin_bp = Blueprint("admin", __name__)
 
@@ -129,7 +144,8 @@ def get_usage_stats():
 @admin_required
 def list_invite_keys():
     db = get_db()
-    keys = db.execute("""
+    keys = db.execute(
+        """
         SELECT 
             ik.key, 
             ik.created_at,
@@ -140,5 +156,186 @@ def list_invite_keys():
         JOIN users creator ON ik.created_by = creator.id
         LEFT JOIN users user ON ik.used_by = user.id
         ORDER BY ik.created_at DESC
-    """).fetchall()
+    """
+    ).fetchall()
     return jsonify([dict(key) for key in keys])
+
+
+@admin_bp.route("/admin/status", methods=["GET"])
+@admin_required
+def show_status_page():
+    """Render the system status page for admins"""
+    return send_from_directory("static", "status.html")
+
+
+@admin_bp.route("/admin/status/check", methods=["GET", "POST"])
+@admin_required
+def check_system_status():
+    """Run system status checks and return results"""
+    # Run all system checks
+    check_results = run_all_checks(session.get("user_id"))
+
+    # Return the results as JSON
+    return jsonify(
+        {"checks": check_results, "timestamp": request.args.get("timestamp")}
+    )
+
+
+@admin_bp.route("/admin/status/history", methods=["GET"])
+@admin_required
+def get_status_history():
+    """Get historical status check data"""
+    db = get_db()
+
+    # Get query parameters
+    component = request.args.get("component")
+    limit = request.args.get("limit", 50, type=int)
+
+    # Build the query
+    query = """
+        SELECT 
+            s.id,
+            s.component,
+            s.status,
+            s.details,
+            s.last_checked,
+            u.username as checked_by
+        FROM system_status s
+        LEFT JOIN users u ON s.checked_by = u.id
+        WHERE 1=1
+    """
+    params = []
+
+    if component:
+        query += " AND s.component = ?"
+        params.append(component)
+
+    # Add sorting and limit
+    query += " ORDER BY s.last_checked DESC LIMIT ?"
+    params.append(limit)
+
+    # Execute the query
+    history = db.execute(query, params).fetchall()
+
+    # Get list of unique components for filtering
+    components = db.execute(
+        "SELECT DISTINCT component FROM system_status ORDER BY component"
+    ).fetchall()
+
+    return jsonify(
+        {
+            "history": [dict(item) for item in history],
+            "components": [item["component"] for item in components],
+        }
+    )
+
+
+@admin_bp.route("/admin/status/queue", methods=["GET"])
+@admin_required
+def get_track_queue():
+    """Get the current track processing queue"""
+    # Get the current processing queue
+    queue = get_processing_queue()
+
+    # Format the queue data for display
+    formatted_queue = []
+    for track_id, info in queue.items():
+        # Calculate elapsed time
+        elapsed_seconds = time.time() - info.get("start_time", 0)
+        elapsed_minutes = elapsed_seconds // 60
+        elapsed_seconds = elapsed_seconds % 60
+
+        # Format queue item
+        formatted_item = {
+            "track_id": track_id,
+            "title": info.get("metadata", {}).get("title", "Unknown"),
+            "artist": info.get("metadata", {}).get("artist", "Unknown"),
+            "status": info.get("status", "unknown"),
+            "progress": info.get("progress", 0),
+            "elapsed_time": f"{int(elapsed_minutes)}m {int(elapsed_seconds)}s",
+            "start_time": info.get("start_time", 0),
+        }
+        formatted_queue.append(formatted_item)
+
+    # Sort by start time (oldest first)
+    formatted_queue.sort(key=lambda x: x.get("start_time", 0))
+
+    return jsonify({"queue": formatted_queue})
+
+
+@admin_bp.route("/admin/status/unfinished", methods=["GET"])
+@admin_required
+def get_unfinished_songs_list():
+    """Get the list of unfinished songs that can be reprocessed"""
+    unfinished_songs = get_unfinished_songs()
+
+    # Format timestamps to readable format
+    for song in unfinished_songs:
+        song["last_modified"] = time.strftime(
+            "%Y-%m-%d %H:%M:%S", time.localtime(song["last_modified"])
+        )
+
+    return jsonify({"unfinished_songs": unfinished_songs})
+
+
+@admin_bp.route("/admin/status/reprocess", methods=["POST"])
+@admin_required
+def reprocess_track():
+    """Reprocess a track that was not completed successfully"""
+    data = request.get_json()
+    track_id = data.get("track_id")
+
+    if not track_id:
+        return jsonify({"error": "Missing track ID"}), 400
+
+    # Import here to avoid circular imports
+    from ..routes.track import de_add_track
+    import threading
+    from flask import current_app
+    from ..utils.extensions import socketio
+    from ..utils.status_checks import save_status_check, STATUS_ERROR
+
+    # Store user_id from session before starting the thread
+    user_id = session.get("user_id")
+
+    # Start reprocessing in background
+    def process_track(app, track_id, user_id):
+        with app.app_context():
+            try:
+                save_status_check(
+                    "Track Reprocessing",
+                    "OK",
+                    f"Started reprocessing track {track_id} manually",
+                    user_id,
+                )
+                de_add_track(track_id)
+                socketio.emit("track_ready", {"track_id": track_id})
+                socketio.emit(
+                    "track_reprocessed", {"track_id": track_id, "success": True}
+                )
+            except Exception as e:
+                print(f"Error reprocessing track {track_id}:", e)
+                socketio.emit("track_error", {"track_id": track_id, "error": str(e)})
+                socketio.emit(
+                    "track_reprocessed",
+                    {"track_id": track_id, "success": False, "error": str(e)},
+                )
+
+                # Log the processing error
+                save_status_check(
+                    "Track Reprocessing",
+                    STATUS_ERROR,
+                    f"Failed to reprocess track {track_id}: {str(e)}",
+                    user_id,
+                )
+
+    # Start processing in a new thread with app instance and user_id
+    thread = threading.Thread(
+        target=process_track,
+        args=(current_app._get_current_object(), track_id, user_id),
+    )
+    thread.start()
+
+    return jsonify(
+        {"success": True, "message": f"Track {track_id} reprocessing started"}
+    )
