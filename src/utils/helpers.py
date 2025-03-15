@@ -1,6 +1,7 @@
 from groq import Groq
 import json
 import os
+import requests
 
 # env
 from dotenv import load_dotenv
@@ -183,10 +184,10 @@ def merge_lyrics(lyrics_id):
         if prev_index < 0 and next_index >= len(words):
             return None
         # If previous timestamp is missing, use the next timestamp
-        if prev_index < 0:  
+        if prev_index < 0:
             return words[next_index][key]
         # If next timestamp is missing, use the previous timestamp
-        if next_index >= len(words): 
+        if next_index >= len(words):
             return words[prev_index][key]
         # Perform linear interpolation using previous and next timestamps
         prev_time = words[prev_index][key]
@@ -237,11 +238,14 @@ def merge_lyrics(lyrics_id):
 
                 # Interpolate missing timestamps
                 if "start" not in new_word:
-                    new_word["start"] = interpolate_timestamp(word_index, segment["words"], "start")
+                    new_word["start"] = interpolate_timestamp(
+                        word_index, segment["words"], "start"
+                    )
 
                 if "end" not in new_word:
-                    new_word["end"] = interpolate_timestamp(word_index, segment["words"], "end")
-
+                    new_word["end"] = interpolate_timestamp(
+                        word_index, segment["words"], "end"
+                    )
 
                 new_words.append(new_word)
 
@@ -258,7 +262,117 @@ def merge_lyrics(lyrics_id):
         json.dump(lyrics, f)
 
 
+def split_long_lyrics_lines(lyrics_id):
+    """Splits long lyrics lines into shorter, more manageable chunks using OpenRouter.
+
+    This function takes a lyrics ID, loads the corresponding lyrics from a JSON file,
+    sends the lyrics text to OpenRouter for line length analysis, and returns split
+    points for long lines.
+
+    Args:
+        lyrics_id: The ID of the song lyrics to process.
+
+    Returns:
+        A modified lyrics JSON with split lines and adjusted timestamps.
+    """
+    # Load the lyrics
+    lyrics_path = f"src/songs/{lyrics_id}/lyrics_raw.json"
+    with open(lyrics_path, "r") as f:
+        lyrics = json.load(f)
+
+    # Extract just the text for each segment
+    segments_text = []
+    for segment in lyrics["segments"]:
+        segments_text.append(segment["text"].strip())
+
+    # Join with line markers for easy splitting later
+    lyrics_text = "\n".join(segments_text)
+
+    # Call OpenRouter API
+    headers = {
+        "Authorization": f"Bearer {os.environ['OPENROUTER_API_KEY']}",
+        "HTTP-Referer": "https://github.com/LoggeL/MelodAI",
+        "X-Title": "MelodAI",
+    }
+
+    response = requests.post(
+        "https://openrouter.ai/api/v1/chat/completions",
+        headers=headers,
+        json={
+            "model": os.environ["LLM_MODEL"],
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "You are a lyrics formatting expert. Your task is to split long lyrics lines into shorter, more natural segments while preserving the meaning and flow. Return only the split lyrics with no additional text.",
+                },
+                {"role": "user", "content": lyrics_text},
+            ],
+        },
+    )
+
+    if response.status_code != 200:
+        raise Exception(f"OpenRouter API error: {response.text}")
+
+    print(response.json())
+    split_lyrics = response.json()["choices"][0]["message"]["content"]
+    split_lines = split_lyrics.strip().split("\n")
+
+    # Create new segments based on the split lines
+    new_segments = []
+    original_segment_idx = 0
+    word_idx = 0
+
+    for split_line in split_lines:
+        if not split_line.strip():
+            continue
+
+        # Find the original segment this line came from
+        while (
+            original_segment_idx < len(lyrics["segments"])
+            and split_line not in lyrics["segments"][original_segment_idx]["text"]
+        ):
+            original_segment_idx += 1
+            word_idx = 0
+
+        if original_segment_idx >= len(lyrics["segments"]):
+            break
+
+        original_segment = lyrics["segments"][original_segment_idx]
+
+        # Create a new segment for this split line
+        new_segment = {
+            "text": split_line,
+            "speaker": original_segment["speaker"],
+            "words": [],
+        }
+
+        # Find the words that belong to this split line
+        split_words = split_line.split()
+        while len(new_segment["words"]) < len(split_words):
+            if word_idx >= len(original_segment["words"]):
+                break
+
+            word_data = original_segment["words"][word_idx]
+            new_segment["words"].append(word_data)
+            word_idx += 1
+
+        if new_segment["words"]:
+            new_segment["start"] = new_segment["words"][0]["start"]
+            new_segment["end"] = new_segment["words"][-1]["end"]
+            new_segments.append(new_segment)
+
+    # Update the lyrics with new segments
+    lyrics["segments"] = new_segments
+
+    # Save the split lyrics
+    with open(f"src/songs/{lyrics_id}/lyrics.json", "w", encoding="utf-8") as f:
+        json.dump(lyrics, f)
+
+    return lyrics
+
+
 # Test
 if __name__ == "__main__":
     # chunk_lyrics("2984775641")
-    merge_lyrics("2867606132")
+    # merge_lyrics("2867606132")
+    split_long_lyrics_lines("3151824061")

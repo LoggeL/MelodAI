@@ -43,6 +43,11 @@ class KaraokePlayer {
   }
 
   startStatusPolling() {
+    // Do first check immediately
+    setTimeout(() => {
+      this.checkTrackStatus()
+    }, 1000)
+
     // Poll every 5 seconds for track status updates
     this.pollingInterval = setInterval(() => {
       this.checkTrackStatus()

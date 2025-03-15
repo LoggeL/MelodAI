@@ -2,7 +2,7 @@ from flask import current_app
 import replicate
 import json
 import os
-from ..utils.helpers import chunk_lyrics, merge_lyrics
+from ..utils.helpers import chunk_lyrics, merge_lyrics, split_long_lyrics_lines
 from ..utils.status_checks import save_status_check, update_queue_item_status
 import librosa
 import soundfile as sf
@@ -70,14 +70,21 @@ def process_lyrics(track_id):
 
                 print("Processing Lyrics")
 
-                update_queue_item_status(track_id, "processing_lyrics", 80)
+                update_queue_item_status(track_id, "processing_lyrics", 75)
 
-                # temp
-                processed_lyrics = raw_lyrics
+                # Merge character-level lyrics into word-level
+                merge_lyrics(track_id)
+
+                update_queue_item_status(track_id, "lyrics_merged", 80)
+
+                # Split long lines into more manageable chunks
+                split_lyrics = split_long_lyrics_lines(track_id)
+
+                update_queue_item_status(track_id, "lyrics_split", 85)
 
                 # Save the processed lyrics
                 with open(f"src/songs/{track_id}/lyrics.json", "w") as f:
-                    json.dump(processed_lyrics, f)
+                    json.dump(split_lyrics, f)
 
                 # Log successful lyrics processing
                 save_status_check(
