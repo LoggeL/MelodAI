@@ -41,11 +41,25 @@
         <div class="side-controls">
           <div class="volume-controls">
             <label>Vocals:</label>
-            <input type="range" id="vocalsVolume" min="0" max="1" step="0.1" value="0.5" />
+            <input
+              type="range"
+              id="vocalsVolume"
+              min="0"
+              max="1"
+              step="0.1"
+              value="0.5"
+            />
           </div>
           <div class="volume-controls">
             <label>Music:</label>
-            <input type="range" id="musicVolume" min="0" max="1" step="0.1" value="0.5" />
+            <input
+              type="range"
+              id="musicVolume"
+              min="0"
+              max="1"
+              step="0.1"
+              value="0.5"
+            />
           </div>
           <div class="control-buttons">
             <button class="control-btn" id="randomSong">
@@ -54,7 +68,12 @@
             <button class="control-btn" id="toggleFullscreen">
               <i class="fas fa-expand"></i>
             </button>
-            <button class="control-btn" id="downloadButton" title="Download" disabled>
+            <button
+              class="control-btn"
+              id="downloadButton"
+              title="Download"
+              disabled
+            >
               <i class="fas fa-download"></i>
             </button>
             <button class="control-btn" id="shareSong" title="Share" disabled>
@@ -97,7 +116,11 @@
                 <i class="fas fa-info-circle"></i>
                 About MelodAI
               </a>
-              <div class="profile-dropdown-item" id="darkModeButton" onclick="toggleTheme()">
+              <div
+                class="profile-dropdown-item"
+                id="darkModeButton"
+                onclick="toggleTheme()"
+              >
                 <i class="fas fa-moon"></i>
                 Dark Mode
               </div>
@@ -153,7 +176,6 @@
       </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <script src="/js/player.js"></script>
   </body>
 </html>

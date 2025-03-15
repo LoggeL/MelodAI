@@ -65,6 +65,36 @@
         margin-top: 1rem;
         text-align: center;
         transition: color 0.3s ease;
+        font-weight: bold;
+        padding: 8px;
+        background-color: rgba(220, 53, 69, 0.1);
+        border-radius: 4px;
+        display: none;
+      }
+
+      .error.show {
+        display: block;
+        animation: shake 0.5s;
+      }
+
+      @keyframes shake {
+        0%,
+        100% {
+          transform: translateX(0);
+        }
+        10%,
+        30%,
+        50%,
+        70%,
+        90% {
+          transform: translateX(-5px);
+        }
+        20%,
+        40%,
+        60%,
+        80% {
+          transform: translateX(5px);
+        }
       }
 
       button:disabled {
@@ -349,34 +379,44 @@
           forgotPassword()
         })
 
-      async function login() {
+      function login() {
         const username = document.getElementById('loginUsername').value
         const password = document.getElementById('loginPassword').value
         const rememberMe = document.getElementById('rememberMe').checked
+        const errorElement = document.getElementById('loginError')
 
-        try {
-          const response = await fetch('/auth/login', {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              username,
-              password,
-              remember_me: rememberMe,
-            }),
+        // Reset any previous error state
+        errorElement.textContent = ''
+        errorElement.classList.remove('show')
+
+        fetch('/auth/login', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username,
+            password,
+            remember_me: rememberMe,
+          }),
+        })
+          .then((response) => {
+            if (response.ok) {
+              window.location.href = window.location.href.split('=')[1] || '/'
+            } else {
+              return response.json().then((data) => {
+                errorElement.textContent =
+                  data.error || 'Invalid username or password'
+                errorElement.classList.add('show')
+              })
+            }
           })
-
-          const data = await response.json()
-
-          if (response.ok) {
-            window.location.href = window.location.href.split('=')[1] || '/'
-          } else {
-            document.getElementById('loginError').textContent = data.error
-          }
-        } catch (error) {
-          document.getElementById('loginError').textContent =
-            'An error occurred. Please try again.'
-        }
+          .catch((error) => {
+            errorElement.textContent = 'An error occurred. Please try again.'
+            errorElement.classList.add('show')
+          })
+          .finally(() => {
+            document.getElementById('loginButton').disabled = false
+          })
       }
 
       async function register() {
@@ -384,10 +424,15 @@
         const password = document.getElementById('registerPassword').value
         const confirmPassword = document.getElementById('confirmPassword').value
         const inviteKey = document.getElementById('inviteKey').value
+        const errorElement = document.getElementById('registerError')
+
+        // Reset any previous error state
+        errorElement.textContent = ''
+        errorElement.classList.remove('show')
 
         if (password !== confirmPassword) {
-          document.getElementById('registerError').textContent =
-            'Passwords do not match'
+          errorElement.textContent = 'Passwords do not match'
+          errorElement.classList.add('show')
           return
         }
 
@@ -401,23 +446,32 @@
           const data = await response.json()
 
           if (response.ok) {
-            document.getElementById('registerError').textContent = data.message
+            errorElement.textContent = data.message
+            errorElement.style.color = '#198754'
+            errorElement.classList.add('show')
             if (data.auto_login) {
               window.location.href = '/'
             } else {
               setTimeout(() => toggleForm('login'), 2000)
             }
           } else {
-            document.getElementById('registerError').textContent = data.error
+            errorElement.textContent = data.error
+            errorElement.classList.add('show')
           }
         } catch (error) {
-          document.getElementById('registerError').textContent =
-            'An error occurred. Please try again.'
+          errorElement.textContent = 'An error occurred. Please try again.'
+          errorElement.classList.add('show')
         }
       }
 
       async function forgotPassword() {
         const username = document.getElementById('resetUsername').value
+        const errorElement = document.getElementById('resetError')
+
+        // Reset any previous error state
+        errorElement.textContent = ''
+        errorElement.classList.remove('show')
+        errorElement.style.color = '#dc3545'
 
         try {
           const response = await fetch('/auth/forgot-password', {
@@ -429,15 +483,16 @@
           const data = await response.json()
 
           if (response.ok) {
-            document.getElementById('resetError').textContent = data.message
-            document.getElementById('resetError').style.color = '#198754'
+            errorElement.textContent = data.message
+            errorElement.style.color = '#198754'
+            errorElement.classList.add('show')
           } else {
-            document.getElementById('resetError').textContent = data.error
-            document.getElementById('resetError').style.color = '#dc3545'
+            errorElement.textContent = data.error
+            errorElement.classList.add('show')
           }
         } catch (error) {
-          document.getElementById('resetError').textContent =
-            'An error occurred. Please try again.'
+          errorElement.textContent = 'An error occurred. Please try again.'
+          errorElement.classList.add('show')
         }
       }
 
@@ -476,28 +531,36 @@
         }
       }
 
-      // Add this function to handle unauthorized responses
+      // Modify the handleUnauthorized function to allow promise chain to continue
       function handleUnauthorized(response) {
         if (response.status === 401) {
-          response.json().then((data) => {
-            if (data.redirect) {
-              window.location.href = data.redirect
-            }
-          })
-          return true
+          // Clone the response so we can both read it for redirect and pass it along
+          const clone = response.clone()
+          clone
+            .json()
+            .then((data) => {
+              if (data.redirect) {
+                window.location.href = data.redirect
+              }
+            })
+            .catch((err) =>
+              console.error('Error parsing unauthorized response:', err)
+            )
+          // Return false to allow the promise chain to continue
+          return false
         }
         return false
       }
 
-      // Add this to your fetch wrapper
+      // Modify the addAuthHandling function to allow promise chain to continue
       function addAuthHandling() {
         const originalFetch = window.fetch
         window.fetch = async function () {
           try {
             const response = await originalFetch.apply(this, arguments)
-            if (handleUnauthorized(response)) {
-              return new Promise(() => {}) // Prevent further processing
-            }
+            // Only prevent further processing if we handle the unauthorized case AND want to stop processing
+            // For now, always let the promise chain continue
+            handleUnauthorized(response)
             return response
           } catch (error) {
             throw error

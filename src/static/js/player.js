@@ -7,6 +7,7 @@ class KaraokePlayer {
     this.currentWordIndex = 0
     this.currentSongIndex = -1
     this.hasUserInteracted = false
+    this.pollingInterval = null
 
     // Add event listener for first interaction
     document.addEventListener(
@@ -21,8 +22,8 @@ class KaraokePlayer {
     document.getElementById('downloadButton').disabled = true
     document.getElementById('shareSong').disabled = true
 
-    this.socket = io('')
-    this.setupSocketListeners()
+    // Start polling for track status updates
+    this.startStatusPolling()
 
     // Sample song queue (in real app, this might come from an API)
     this.songQueue = []
@@ -41,35 +42,77 @@ class KaraokePlayer {
     })
   }
 
-  setupSocketListeners() {
-    this.socket.on('track_ready', (data) => {
-      const song = this.songQueue.find((s) => s.id == data.track_id)
-      if (song) {
-        song.ready = true
-        song.status = ''
-        this.updateQueue()
-        console.log('track_ready', data)
-      }
-    })
+  startStatusPolling() {
+    // Poll every 5 seconds for track status updates
+    this.pollingInterval = setInterval(() => {
+      this.checkTrackStatus()
+    }, 5000)
+  }
 
-    this.socket.on('track_progress', (data) => {
-      const song = this.songQueue.find((s) => s.id == data.track_id)
-      if (song) {
-        song.ready = song.progress < 100 ? false : true
-        song.progress = data.progress
-        song.status = data.status
-        this.updateQueue()
-      }
-    })
+  stopStatusPolling() {
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval)
+      this.pollingInterval = null
+    }
+  }
 
-    this.socket.on('track_error', (data) => {
-      const song = this.songQueue.find((s) => s.id == data.track_id)
-      if (song) {
-        song.status = data.error
-        song.error = true
-        this.updateQueue()
+  async checkTrackStatus() {
+    // Only check if we have songs in the queue that are not yet ready
+    const unreadySongs = this.songQueue.filter(
+      (song) => !song.ready && !song.error
+    )
+    if (unreadySongs.length === 0) return
+
+    try {
+      // Fetch status for all tracks in the queue
+      const response = await fetch('/track/status')
+      if (!response.ok) {
+        throw new Error('Failed to fetch track status')
       }
-    })
+
+      const data = await response.json()
+
+      // Update each track's status
+      for (const trackInfo of data.tracks) {
+        const song = this.songQueue.find((s) => s.id == trackInfo.track_id)
+        if (song) {
+          song.ready = trackInfo.progress === 100
+          song.progress = trackInfo.progress
+          song.status = trackInfo.status
+
+          // If the track has an error status, mark it as an error
+          if (trackInfo.status === 'error') {
+            song.error = true
+          }
+        }
+      }
+
+      // Also check for completed tracks that might not be in the processing queue anymore
+      for (const song of unreadySongs) {
+        const trackFound = data.tracks.some((t) => t.track_id == song.id)
+        if (!trackFound) {
+          // If the track is not in the queue, check if it's completed
+          try {
+            const trackResponse = await fetch(`/track/status?id=${song.id}`)
+            if (trackResponse.ok) {
+              const trackData = await trackResponse.json()
+              if (trackData.status === 'complete') {
+                song.ready = true
+                song.progress = 100
+                song.status = 'complete'
+              }
+            }
+          } catch (e) {
+            console.error(`Error checking status for track ${song.id}:`, e)
+          }
+        }
+      }
+
+      // Update the UI
+      this.updateQueue()
+    } catch (error) {
+      console.error('Error checking track status:', error)
+    }
   }
 
   async loadLyrics(lyricsUrl) {
@@ -210,11 +253,11 @@ class KaraokePlayer {
     const rect = this.progressBar.getBoundingClientRect()
     const clickX = e.clientX - rect.left
     const barWidth = rect.width
-    let progress = (clickX / barWidth)
-    
+    let progress = clickX / barWidth
+
     // Clamp progress between 0 and 1
     progress = Math.max(0, Math.min(1, progress))
-    
+
     // Update progress and seek to position
     const duration = this.vocalsAudio.duration
     this.vocalsAudio.currentTime = duration * progress
@@ -231,8 +274,10 @@ class KaraokePlayer {
       // Update progress bar and time displays
       const progress = (currentTime / duration) * 100
       document.getElementById('progress').style.width = `${progress}%`
-      document.getElementById('currentTime').textContent = this.formatTime(currentTime)
-      document.getElementById('totalTime').textContent = this.formatTime(duration)
+      document.getElementById('currentTime').textContent =
+        this.formatTime(currentTime)
+      document.getElementById('totalTime').textContent =
+        this.formatTime(duration)
 
       // Get the next lyrics block as active
       let currentIndex = 0
@@ -269,9 +314,7 @@ class KaraokePlayer {
       })
 
       this.lyrics.forEach((segment, segmentIndex) => {
-        const lineElement = document.getElementById(
-          `line-${segmentIndex}`
-        )
+        const lineElement = document.getElementById(`line-${segmentIndex}`)
 
         const timeDiff = segment.start - currentTime
         const indexDiff =
@@ -308,8 +351,7 @@ class KaraokePlayer {
 
   async loadSong(index) {
     console.log('loadSong', index)
-    if (index === null || index < 0 || index >= this.songQueue.length)
-      return
+    if (index === null || index < 0 || index >= this.songQueue.length) return
 
     this.currentSongIndex = index
     const song = this.songQueue[index]
@@ -342,9 +384,15 @@ class KaraokePlayer {
     document.getElementById('totalTime').textContent = '0:00'
 
     // Add event listener for duration change to update total time immediately when available
-    this.vocalsAudio.addEventListener('loadedmetadata', () => {
-      document.getElementById('totalTime').textContent = this.formatTime(this.vocalsAudio.duration)
-    }, { once: true })
+    this.vocalsAudio.addEventListener(
+      'loadedmetadata',
+      () => {
+        document.getElementById('totalTime').textContent = this.formatTime(
+          this.vocalsAudio.duration
+        )
+      },
+      { once: true }
+    )
 
     // Load lyrics
     this.loadLyrics(song.lyricsUrl)
@@ -366,17 +414,19 @@ class KaraokePlayer {
                     <div class="queue-status">${this.getStatus(song)}</div>
                 </div>
                 <div class="queue-item-controls">
-                    ${song.error ? 
-                      `<button class="queue-control-btn retry-btn" title="Retry" onclick="karaokePlayer.retrySong(${index})">
+                    ${
+                      song.error
+                        ? `<button class="queue-control-btn retry-btn" title="Retry" onclick="karaokePlayer.retrySong(${index})">
                         <i class="fas fa-redo"></i>
-                       </button>` 
-                      : ''
+                       </button>`
+                        : ''
                     }
-                    ${index !== this.currentSongIndex ? 
-                      `<button class="queue-control-btn remove-btn" title="Remove" onclick="karaokePlayer.removeSong(${index})">
+                    ${
+                      index !== this.currentSongIndex
+                        ? `<button class="queue-control-btn remove-btn" title="Remove" onclick="karaokePlayer.removeSong(${index})">
                         <i class="fas fa-times"></i>
                        </button>`
-                      : ''
+                        : ''
                     }
                 </div>
                 <div class="progress-overlay" style="width: ${
@@ -442,8 +492,7 @@ class KaraokePlayer {
         }
 
         // Update progress bar
-        const existingProgress =
-          queueItem.querySelector('.progress-overlay')
+        const existingProgress = queueItem.querySelector('.progress-overlay')
         if (existingProgress) {
           existingProgress.style.width = `${song.progress || 0}%`
         }
@@ -464,7 +513,7 @@ class KaraokePlayer {
   setupControls() {
     // Store reference to progress bar
     this.progressBar = document.querySelector('.progress-bar')
-    
+
     // Add click handler to progress bar
     this.progressBar.addEventListener('click', (e) => this.clickProgressBar(e))
 
@@ -478,25 +527,17 @@ class KaraokePlayer {
       .getElementById('toggleFullscreen')
       .addEventListener('click', () => this.toggleFullscreen())
 
-    document
-      .getElementById('vocalsVolume')
-      .addEventListener('input', (e) => {
-        this.vocalsAudio.volume = e.target.value
-      })
+    document.getElementById('vocalsVolume').addEventListener('input', (e) => {
+      this.vocalsAudio.volume = e.target.value
+    })
 
-    document
-      .getElementById('musicVolume')
-      .addEventListener('input', (e) => {
-        this.musicAudio.volume = e.target.value
-      })
+    document.getElementById('musicVolume').addEventListener('input', (e) => {
+      this.musicAudio.volume = e.target.value
+    })
 
     // Keep audio tracks synchronized
-    this.vocalsAudio.addEventListener('play', () =>
-      this.musicAudio.play()
-    )
-    this.vocalsAudio.addEventListener('pause', () =>
-      this.musicAudio.pause()
-    )
+    this.vocalsAudio.addEventListener('play', () => this.musicAudio.play())
+    this.vocalsAudio.addEventListener('pause', () => this.musicAudio.pause())
     this.vocalsAudio.addEventListener('ended', () => this.nextSong())
 
     // Setup download button
@@ -540,7 +581,7 @@ class KaraokePlayer {
     searchInput.addEventListener('input', (e) => {
       clearTimeout(searchTimeout)
       const query = e.target.value.trim()
-      
+
       if (query.length < 2) {
         searchDropdown.classList.remove('active')
         return
@@ -553,8 +594,10 @@ class KaraokePlayer {
             throw new Error('Search failed')
           }
           const results = await response.json()
-          
-          searchDropdown.innerHTML = results.map(result => `
+
+          searchDropdown.innerHTML = results
+            .map(
+              (result) => `
             <div class="search-result">
               <img src="${result.thumb}" alt="${result.title}">
               <div class="search-result-info">
@@ -562,39 +605,44 @@ class KaraokePlayer {
                 <div class="search-result-artist">${result.artist}</div>
               </div>
             </div>
-          `).join('')
+          `
+            )
+            .join('')
 
           // Add click handlers after creating the elements
-          searchDropdown.querySelectorAll('.search-result').forEach((element, index) => {
-            element.addEventListener('click', async () => {
-              const result = results[index]
-              // Prepare song object with necessary information
-              const song = {
-                id: result.id,
-                title: result.title,
-                artist: result.artist,
-                thumbnail: result.thumb,
-                vocalsUrl: `songs/${result.id}/vocals.mp3`,
-                musicUrl: `songs/${result.id}/no_vocals.mp3`,
-                lyricsUrl: `songs/${result.id}/lyrics.json`,
-                ready: false,
-                progress: 0,
-                status: 'processing'
-              }
-              
-              // Add to queue
-              await this.addToQueue(song)
-              
-              // Clear search
-              searchInput.value = ''
-              searchDropdown.classList.remove('active')
+          searchDropdown
+            .querySelectorAll('.search-result')
+            .forEach((element, index) => {
+              element.addEventListener('click', async () => {
+                const result = results[index]
+                // Prepare song object with necessary information
+                const song = {
+                  id: result.id,
+                  title: result.title,
+                  artist: result.artist,
+                  thumbnail: result.thumb,
+                  vocalsUrl: `songs/${result.id}/vocals.mp3`,
+                  musicUrl: `songs/${result.id}/no_vocals.mp3`,
+                  lyricsUrl: `songs/${result.id}/lyrics.json`,
+                  ready: false,
+                  progress: 0,
+                  status: 'processing',
+                }
+
+                // Add to queue
+                await karaokePlayer.addToQueue(song)
+
+                // Clear search
+                searchInput.value = ''
+                searchDropdown.classList.remove('active')
+              })
             })
-          })
-          
+
           searchDropdown.classList.add('active')
         } catch (error) {
           console.error('Search error:', error)
-          searchDropdown.innerHTML = '<div class="search-error">Search failed. Please try again.</div>'
+          searchDropdown.innerHTML =
+            '<div class="search-error">Search failed. Please try again.</div>'
           searchDropdown.classList.add('active')
         }
       }, 300)
@@ -643,31 +691,66 @@ class KaraokePlayer {
     // check if enter key is pressed
     if (e.key !== 'Enter') return
 
-    const query = e.target.value
+    const query = e.target.value.trim()
 
     const dropdown = document.getElementById('searchDropdown')
     if (query.length < 2) {
       dropdown.classList.remove('active')
       return
     }
-    fetch('/search?q=' + query)
+    fetch('/search?q=' + encodeURIComponent(query))
       .then((response) => response.json())
-      .then((data) => {
+      .then((results) => {
         // Show results
-        dropdown.innerHTML = data
+        dropdown.innerHTML = results
           .map(
-            (song) => `
-              <div class="search-result" onclick="karaokePlayer.addToQueue(${song.id})">
-                  <img src="${song.thumb}" alt="${song.title}">
-                  <div>
-                      <div><strong>${song.title}</strong></div>
-                      <div style="font-size: 0.8em; color: #666;">${song.artist}</div>
-                  </div>
+            (result) => `
+              <div class="search-result">
+                <img src="${result.thumb}" alt="${result.title}">
+                <div class="search-result-info">
+                  <div class="search-result-title">${result.title}</div>
+                  <div class="search-result-artist">${result.artist}</div>
+                </div>
               </div>
-          `
+            `
           )
           .join('')
 
+        // Add click handlers after creating the elements
+        dropdown
+          .querySelectorAll('.search-result')
+          .forEach((element, index) => {
+            element.addEventListener('click', async () => {
+              const result = results[index]
+              // Prepare song object with necessary information
+              const song = {
+                id: result.id,
+                title: result.title,
+                artist: result.artist,
+                thumbnail: result.thumb,
+                vocalsUrl: `songs/${result.id}/vocals.mp3`,
+                musicUrl: `songs/${result.id}/no_vocals.mp3`,
+                lyricsUrl: `songs/${result.id}/lyrics.json`,
+                ready: false,
+                progress: 0,
+                status: 'processing',
+              }
+
+              // Add to queue
+              await karaokePlayer.addToQueue(song)
+
+              // Clear search
+              document.querySelector('.search-input').value = ''
+              dropdown.classList.remove('active')
+            })
+          })
+
+        dropdown.classList.add('active')
+      })
+      .catch((error) => {
+        console.error('Search error:', error)
+        dropdown.innerHTML =
+          '<div class="search-error">Search failed. Please try again.</div>'
         dropdown.classList.add('active')
       })
   }
@@ -675,7 +758,7 @@ class KaraokePlayer {
   async addToQueue(song) {
     try {
       // First check if the song is already being processed
-      const existingSong = this.songQueue.find(s => s.id === song.id)
+      const existingSong = this.songQueue.find((s) => s.id === song.id)
       if (existingSong) {
         console.log('Song is already in queue')
         return
@@ -687,12 +770,11 @@ class KaraokePlayer {
         ready: false,
         status: 'processing',
         progress: 0,
-        error: false
+        error: false,
       }
       this.songQueue.push(queueItem)
       this.updateQueue()
       this.renderQueue()
-
 
       // Request song processing from the server
       const response = await fetch(`/add?id=${song.id}`)
@@ -700,11 +782,11 @@ class KaraokePlayer {
         throw new Error('Failed to process song')
       }
 
-      // The socket listeners will handle progress updates and completion
+      // Status updates will be handled by the polling mechanism
     } catch (error) {
       console.error('Error adding song to queue:', error)
       // Update queue item to show error
-      const songIndex = this.songQueue.findIndex(s => s.id === song.id)
+      const songIndex = this.songQueue.findIndex((s) => s.id === song.id)
       if (songIndex !== -1) {
         this.songQueue[songIndex].error = true
         this.songQueue[songIndex].status = 'Failed to process song'
@@ -922,16 +1004,14 @@ window.addEventListener('DOMContentLoaded', () => {
     .then((response) => response.json())
     .then((data) => {
       // Update profile button
-      const profileInitials =
-        document.querySelectorAll('.profile-initial')
+      const profileInitials = document.querySelectorAll('.profile-initial')
       profileInitials.forEach((initial) => {
         initial.textContent = data.name.substring(0, 2).toUpperCase()
       })
 
       // Update profile name
-      document
-        .getElementById('profileName')
-        .querySelector('span').textContent = data.name
+      document.getElementById('profileName').querySelector('span').textContent =
+        data.name
 
       // Show admin button if user is admin
       if (data.is_admin) {
@@ -955,14 +1035,12 @@ window.addEventListener('DOMContentLoaded', () => {
           artist: metadata.artist,
           thumbnail: `https://e-cdns-images.dzcdn.net/images/cover/${metadata.cover}/250x250-000000-80-0-0.jpg`,
           vocalsUrl: `songs/${songId}/vocals.mp3`,
-          musicUrl: `songs/${songId}/no_vocals.mp3`, 
-          lyricsUrl: `songs/${songId}/lyrics.json`
+          musicUrl: `songs/${songId}/no_vocals.mp3`,
+          lyricsUrl: `songs/${songId}/lyrics.json`,
         }
         karaokePlayer.addToQueue(song)
       })
-      .catch((error) =>
-        console.error('Error loading song from URL:', error)
-      )
+      .catch((error) => console.error('Error loading song from URL:', error))
   }
 })
 

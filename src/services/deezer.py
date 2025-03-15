@@ -14,37 +14,85 @@ import os
 
 # env
 from dotenv import load_dotenv
+
 load_dotenv()
 
 # BEGIN TYPES
 TYPE_TRACK = "track"
 TYPE_ALBUM = "album"
 TYPE_PLAYLIST = "playlist"
-TYPE_ALBUM_TRACK = "album_track" # used for listing songs of an album
+TYPE_ALBUM_TRACK = "album_track"  # used for listing songs of an album
 # END TYPES
 
 session = None
+license_token = {}
+sound_format = ""
+USER_AGENT = "Mozilla/5.0 (X11; Linux i686; rv:135.0) Gecko/20100101 Firefox/135.0"
 
 
-def init_deezer_session():
-    global session
+def get_user_data() -> tuple[str, str]:
+    try:
+        user_data = session.get(
+            "https://www.deezer.com/ajax/gw-light.php?method=deezer.getUserData&input=3&api_version=1.0&api_token="
+        )
+        user_data_json = user_data.json()["results"]
+        options = user_data_json["USER"]["OPTIONS"]
+        license_token = options["license_token"]
+        web_sound_quality = options["web_sound_quality"]
+        return license_token, web_sound_quality
+    except (requests.exceptions.RequestException, KeyError) as e:
+        print(f"ERROR: Could not get license token: {e}")
+        return "", {}
+
+
+# quality_config comes from config file
+# web_sound_quality is a dict coming from Deezer API and depends on ARL cookie (premium subscription)
+def set_song_quality(quality_config: str, web_sound_quality: dict):
+    global sound_format
+    flac_supported = web_sound_quality.get("lossless") is True
+    if flac_supported:
+        if quality_config == "flac":
+            sound_format = "FLAC"
+        else:
+            sound_format = "MP3_320"
+    else:
+        if quality_config == "flac":
+            print(
+                "WARNING: flac quality is configured but not supported (no premium subscription?). Falling back to mp3"
+            )
+        sound_format = "MP3_128"
+
+
+def get_file_extension() -> str:
+    return "flac" if sound_format == "FLAC" else "mp3"
+
+
+def init_deezer_session(proxy_server: str = "", quality: str = "mp3"):
+    global session, license_token, web_sound_quality
     header = {
-        'Pragma': 'no-cache',
-        'Origin': 'https://www.deezer.com',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.106 Safari/537.36',
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'Accept': '*/*',
-        'Cache-Control': 'no-cache',
-        'X-Requested-With': 'XMLHttpRequest',
-        'Connection': 'keep-alive',
-        'Referer': 'https://www.deezer.com/login',
-        'DNT': '1',
+        "Pragma": "no-cache",
+        "Origin": "https://www.deezer.com",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Accept-Language": "en-US,en;q=0.9",
+        "User-Agent": USER_AGENT,
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "Accept": "*/*",
+        "Cache-Control": "no-cache",
+        "X-Requested-With": "XMLHttpRequest",
+        "Connection": "keep-alive",
+        "Referer": "https://www.deezer.com/login",
+        "DNT": "1",
     }
     session = requests.session()
     session.headers.update(header)
-    session.cookies.update({'arl': os.getenv("DEEZER_ARL"), 'comeback': '1'})
+    session.cookies.update({"arl": os.getenv("DEEZER_ARL"), "comeback": "1"})
+
+    if proxy_server and len(proxy_server.strip()) > 0:
+        print(f"Using proxy {proxy_server}")
+        session.proxies.update({"https": proxy_server})
+
+    license_token, web_sound_quality = get_user_data()
+    set_song_quality(quality, web_sound_quality)
 
 
 class Deezer404Exception(Exception):
@@ -60,7 +108,8 @@ class DeezerApiException(Exception):
 
 
 class ScriptExtractor(html.parser.HTMLParser):
-    """ extract <script> tag contents from a html page """
+    """extract <script> tag contents from a html page"""
+
     def __init__(self):
         html.parser.HTMLParser.__init__(self)
         self.scripts = []
@@ -78,7 +127,7 @@ class ScriptExtractor(html.parser.HTMLParser):
 
 
 def md5hex(data):
-    """ return hex string of md5 of the given string """
+    """return hex string of md5 of the given string"""
     # type(data): bytes
     # returns: bytes
     h = MD5.new()
@@ -87,25 +136,30 @@ def md5hex(data):
 
 
 def hexaescrypt(data, key):
-    """ returns hex string of aes encrypted data """
+    """returns hex string of aes encrypted data"""
     c = AES.new(key.encode(), AES.MODE_ECB)
     return b2a_hex(c.encrypt(data))
 
 
 def genurlkey(songid, md5origin, mediaver=4, fmt=1):
-    """ Calculate the deezer download url given the songid, origin and media+format """
-    data_concat = b'\xa4'.join(_ for _ in [md5origin.encode(),
-                                           str(fmt).encode(),
-                                           str(songid).encode(),
-                                           str(mediaver).encode()])
-    data = b'\xa4'.join([md5hex(data_concat), data_concat]) + b'\xa4'
+    """Calculate the deezer download url given the songid, origin and media+format"""
+    data_concat = b"\xa4".join(
+        _
+        for _ in [
+            md5origin.encode(),
+            str(fmt).encode(),
+            str(songid).encode(),
+            str(mediaver).encode(),
+        ]
+    )
+    data = b"\xa4".join([md5hex(data_concat), data_concat]) + b"\xa4"
     if len(data) % 16 != 0:
-        data += b'\0' * (16 - len(data) % 16)
+        data += b"\0" * (16 - len(data) % 16)
     return hexaescrypt(data, "jo6aey6haid2Teih")
 
 
 def calcbfkey(songid):
-    """ Calculate the Blowfish decrypt key for a given songid """
+    """Calculate the Blowfish decrypt key for a given songid"""
     key = b"g4el58wc0zvf9na1"
     songid_md5 = md5hex(songid.encode())
 
@@ -133,7 +187,7 @@ def decryptfile(fh, key, fo):
         if not data:
             break
 
-        isEncrypted = ((i % 3) == 0)
+        isEncrypted = (i % 3) == 0
         isWholeBlock = len(data) == blockSize
 
         if isEncrypted and isWholeBlock:
@@ -148,30 +202,32 @@ def writeid3v1_1(fo, song):
     # Bugfix changed song["SNG_TITLE... to song.get("SNG_TITLE... to avoid 'key-error' in case the key does not exist
     def song_get(song, key):
         try:
-            return song.get(key).encode('utf-8')
+            return song.get(key).encode("utf-8")
         except:
             return b""
 
     def album_get(key):
         global album_Data
         try:
-            return album_Data.get(key).encode('utf-8')
+            return album_Data.get(key).encode("utf-8")
         except:
             return b""
 
     # what struct.pack expects
     # B => int
     # s => bytes
-    data = struct.pack("3s" "30s" "30s" "30s" "4s" "28sB" "B"  "B",
-                       b"TAG",                                            # header
-                       song_get(song, "SNG_TITLE"),                       # title
-                       song_get(song, "ART_NAME"),                        # artist
-                       song_get(song, "ALB_TITLE"),                       # album
-                       album_get("PHYSICAL_RELEASE_DATE"),                # year
-                       album_get("LABEL_NAME"), 0,                        # comment
-                       int(song_get(song, "TRACK_NUMBER")),               # tracknum
-                       255                                                # genre
-                       )
+    data = struct.pack(
+        "3s" "30s" "30s" "30s" "4s" "28sB" "B" "B",
+        b"TAG",  # header
+        song_get(song, "SNG_TITLE"),  # title
+        song_get(song, "ART_NAME"),  # artist
+        song_get(song, "ALB_TITLE"),  # album
+        album_get("PHYSICAL_RELEASE_DATE"),  # year
+        album_get("LABEL_NAME"),
+        0,  # comment
+        int(song_get(song, "TRACK_NUMBER")),  # tracknum
+        255,  # genre
+    )
 
     fo.write(data)
 
@@ -190,8 +246,12 @@ def get_picture_link(pic_idid):
 def writeid3v2(fo, song):
 
     def make28bit(x):
-        return ((x << 3) & 0x7F000000) | ((x << 2) & 0x7F0000) | (
-               (x << 1) & 0x7F00) | (x & 0x7F)
+        return (
+            ((x << 3) & 0x7F000000)
+            | ((x << 2) & 0x7F0000)
+            | ((x << 1) & 0x7F00)
+            | (x & 0x7F)
+        )
 
     def maketag(tag, content):
         return struct.pack(">4sLH", tag.encode("ascii"), len(content), 0) + content
@@ -201,18 +261,18 @@ def writeid3v2(fo, song):
         try:
             return album_Data.get(key)
         except:
-            #raise
+            # raise
             return ""
 
     def song_get(song, key):
         try:
             return song[key]
         except:
-            #raise
+            # raise
             return ""
 
     def makeutf8(txt):
-        #return b"\x03" + txt.encode('utf-8')
+        # return b"\x03" + txt.encode('utf-8')
         return "\x03{}".format(txt).encode()
 
     def makepic(data):
@@ -237,35 +297,39 @@ def writeid3v2(fo, song):
         # 0x11     A bright coloured fish
         # 0x12     Illustration
         # 0x13     Band/artist logotype
-        # 0x14     Publisher/Studio logotype        
-        imgframe = (b"\x00",                 # text encoding
-                    b"image/jpeg", b"\0",    # mime type
-                    b"\x03",                 # picture type: 'Cover (front)'
-                    b""[:64], b"\0",         # description
-                    data
-                    )
+        # 0x14     Publisher/Studio logotype
+        imgframe = (
+            b"\x00",  # text encoding
+            b"image/jpeg",
+            b"\0",  # mime type
+            b"\x03",  # picture type: 'Cover (front)'
+            b""[:64],
+            b"\0",  # description
+            data,
+        )
 
-        return b'' .join(imgframe)
+        return b"".join(imgframe)
 
     # get Data as DDMM
     try:
-        phyDate_YYYYMMDD = album_get("PHYSICAL_RELEASE_DATE") .split('-') #'2008-11-21'
+        phyDate_YYYYMMDD = album_get("PHYSICAL_RELEASE_DATE").split("-")  #'2008-11-21'
         phyDate_DDMM = phyDate_YYYYMMDD[2] + phyDate_YYYYMMDD[1]
     except:
-        phyDate_DDMM = ''
+        phyDate_DDMM = ""
 
     # get size of first item in the list that is not 0
     try:
         FileSize = [
             song_get(song, i)
             for i in (
-                'FILESIZE_AAC_64',
-                'FILESIZE_MP3_320',
-                'FILESIZE_MP3_256',
-                'FILESIZE_MP3_64',
-                'FILESIZE',
-                ) if song_get(song, i)
-            ][0]
+                "FILESIZE_AAC_64",
+                "FILESIZE_MP3_320",
+                "FILESIZE_MP3_256",
+                "FILESIZE_MP3_64",
+                "FILESIZE",
+            )
+            if song_get(song, i)
+        ][0]
     except:
         FileSize = 0
 
@@ -277,27 +341,60 @@ def writeid3v2(fo, song):
 
     # http://id3.org/id3v2.3.0#Attached_picture
     id3 = [
-        maketag("TRCK", makeutf8(track)),     # The 'Track number/Position in set' frame is a numeric string containing the order number of the audio-file on its original recording. This may be extended with a "/" character and a numeric string containing the total numer of tracks/elements on the original recording. E.g. "4/9".
-        maketag("TLEN", makeutf8(str(int(song["DURATION"]) * 1000))),     # The 'Length' frame contains the length of the audiofile in milliseconds, represented as a numeric string.
-        maketag("TORY", makeutf8(str(album_get("PHYSICAL_RELEASE_DATE")[:4]))),     # The 'Original release year' frame is intended for the year when the original recording was released. if for example the music in the file should be a cover of a previously released song
-        maketag("TYER", makeutf8(str(album_get("DIGITAL_RELEASE_DATE")[:4]))),     # The 'Year' frame is a numeric string with a year of the recording. This frames is always four characters long (until the year 10000).
-        maketag("TDAT", makeutf8(str(phyDate_DDMM))),     # The 'Date' frame is a numeric string in the DDMM format containing the date for the recording. This field is always four characters long.
-        maketag("TPUB", makeutf8(album_get("LABEL_NAME"))),     # The 'Publisher' frame simply contains the name of the label or publisher.
-        maketag("TSIZ", makeutf8(str(FileSize))),     # The 'Size' frame contains the size of the audiofile in bytes, excluding the ID3v2 tag, represented as a numeric string.
+        maketag(
+            "TRCK", makeutf8(track)
+        ),  # The 'Track number/Position in set' frame is a numeric string containing the order number of the audio-file on its original recording. This may be extended with a "/" character and a numeric string containing the total numer of tracks/elements on the original recording. E.g. "4/9".
+        maketag(
+            "TLEN", makeutf8(str(int(song["DURATION"]) * 1000))
+        ),  # The 'Length' frame contains the length of the audiofile in milliseconds, represented as a numeric string.
+        maketag(
+            "TORY", makeutf8(str(album_get("PHYSICAL_RELEASE_DATE")[:4]))
+        ),  # The 'Original release year' frame is intended for the year when the original recording was released. if for example the music in the file should be a cover of a previously released song
+        maketag(
+            "TYER", makeutf8(str(album_get("DIGITAL_RELEASE_DATE")[:4]))
+        ),  # The 'Year' frame is a numeric string with a year of the recording. This frames is always four characters long (until the year 10000).
+        maketag(
+            "TDAT", makeutf8(str(phyDate_DDMM))
+        ),  # The 'Date' frame is a numeric string in the DDMM format containing the date for the recording. This field is always four characters long.
+        maketag(
+            "TPUB", makeutf8(album_get("LABEL_NAME"))
+        ),  # The 'Publisher' frame simply contains the name of the label or publisher.
+        maketag(
+            "TSIZ", makeutf8(str(FileSize))
+        ),  # The 'Size' frame contains the size of the audiofile in bytes, excluding the ID3v2 tag, represented as a numeric string.
         maketag("TFLT", makeutf8("MPG/3")),
-
-        ]  # decimal, no term NUL
-    id3.extend([
-        maketag(ID_id3_frame, makeutf8(song_get(song, ID_song))) for (ID_id3_frame, ID_song) in \
-        (
-            ("TALB", "ALB_TITLE"),   # The 'Album/Movie/Show title' frame is intended for the title of the recording(/source of sound) which the audio in the file is taken from.
-            ("TPE1", "ART_NAME"),   # The 'Lead artist(s)/Lead performer(s)/Soloist(s)/Performing group' is used for the main artist(s). They are seperated with the "/" character.
-            ("TPE2", "ART_NAME"),   # The 'Band/Orchestra/Accompaniment' frame is used for additional information about the performers in the recording.
-            ("TPOS", "DISK_NUMBER"),   # The 'Part of a set' frame is a numeric string that describes which part of a set the audio came from. This frame is used if the source described in the "TALB" frame is divided into several mediums, e.g. a double CD. The value may be extended with a "/" character and a numeric string containing the total number of parts in the set. E.g. "1/2".
-            ("TIT2", "SNG_TITLE"),   # The 'Title/Songname/Content description' frame is the actual name of the piece (e.g. "Adagio", "Hurricane Donna").
-            ("TSRC", "ISRC"),   # The 'ISRC' frame should contain the International Standard Recording Code (ISRC) (12 characters).
-        )
-    ])
+    ]  # decimal, no term NUL
+    id3.extend(
+        [
+            maketag(ID_id3_frame, makeutf8(song_get(song, ID_song)))
+            for (ID_id3_frame, ID_song) in (
+                (
+                    "TALB",
+                    "ALB_TITLE",
+                ),  # The 'Album/Movie/Show title' frame is intended for the title of the recording(/source of sound) which the audio in the file is taken from.
+                (
+                    "TPE1",
+                    "ART_NAME",
+                ),  # The 'Lead artist(s)/Lead performer(s)/Soloist(s)/Performing group' is used for the main artist(s). They are seperated with the "/" character.
+                (
+                    "TPE2",
+                    "ART_NAME",
+                ),  # The 'Band/Orchestra/Accompaniment' frame is used for additional information about the performers in the recording.
+                (
+                    "TPOS",
+                    "DISK_NUMBER",
+                ),  # The 'Part of a set' frame is a numeric string that describes which part of a set the audio came from. This frame is used if the source described in the "TALB" frame is divided into several mediums, e.g. a double CD. The value may be extended with a "/" character and a numeric string containing the total number of parts in the set. E.g. "1/2".
+                (
+                    "TIT2",
+                    "SNG_TITLE",
+                ),  # The 'Title/Songname/Content description' frame is the actual name of the piece (e.g. "Adagio", "Hurricane Donna").
+                (
+                    "TSRC",
+                    "ISRC",
+                ),  # The 'ISRC' frame should contain the International Standard Recording Code (ISRC) (12 characters).
+            )
+        ]
+    )
 
     try:
         id3.append(maketag("APIC", makepic(downloadpicture(song["ALB_PICTURE"]))))
@@ -305,57 +402,96 @@ def writeid3v2(fo, song):
         print("ERROR: no album cover?", e)
 
     id3data = b"".join(id3)
-#>      big-endian
-#s      char[]  bytes
-#H      unsigned short  integer 2
-#B      unsigned char   integer 1
-#L      unsigned long   integer 4
+    # >      big-endian
+    # s      char[]  bytes
+    # H      unsigned short  integer 2
+    # B      unsigned char   integer 1
+    # L      unsigned long   integer 4
 
-    hdr = struct.pack(">"
-                      "3s" "H" "B" "L",
-                      "ID3".encode("ascii"),
-                      0x300,   # version
-                      0x00,    # flags
-                      make28bit(len(id3data)))
+    hdr = struct.pack(
+        ">" "3s" "H" "B" "L",
+        "ID3".encode("ascii"),
+        0x300,  # version
+        0x00,  # flags
+        make28bit(len(id3data)),
+    )
 
     fo.write(hdr)
     fo.write(id3data)
 
 
-def download_song(song, output_file):
+def get_song_url(track_token: str, quality: int = 3) -> str:
+    try:
+        response = requests.post(
+            "https://media.deezer.com/v1/get_url",
+            json={
+                "license_token": license_token,
+                "media": [
+                    {
+                        "type": "FULL",
+                        "formats": [
+                            {"cipher": "BF_CBC_STRIPE", "format": sound_format}
+                        ],
+                    }
+                ],
+                "track_tokens": [
+                    track_token,
+                ],
+            },
+            headers={"User-Agent": USER_AGENT},
+        )
+        response.raise_for_status()
+        data = response.json()
+    except requests.exceptions.RequestException as e:
+        raise RuntimeError(f"Could not retrieve song URL: {e}")
+
+    if not data.get("data") or "errors" in data["data"][0]:
+        raise RuntimeError(
+            f"Could not get download url from API: {data['data'][0]['errors'][0]['message']}"
+        )
+
+    url = data["data"][0]["media"][0]["sources"][0]["url"]
+    return url
+
+
+def download_song(song: dict, output_file: str) -> None:
     # downloads and decrypts the song from Deezer. Adds ID3 and art cover
     # song: dict with information of the song (grabbed from Deezer.com)
     # output_file: absolute file name of the output file
-    assert type(song) == dict, "song must be a dict"
-    assert type(output_file) == str, "output_file must be a str"
+    assert type(song) is dict, "song must be a dict"
+    assert type(output_file) is str, "output_file must be a str"
 
-    song_quality = 3 if song.get("FILESIZE_MP3_320") and song.get("FILESIZE_MP3_320") != '0' else \
-                   5 if song.get("FILESIZE_MP3_256") and song.get("FILESIZE_MP3_256") != '0' else \
-                   1
+    try:
+        url = get_song_url(song["TRACK_TOKEN"])
+    except Exception as e:
+        print(
+            f"Could not download song (https://www.deezer.com/us/track/{song['SNG_ID']}). Maybe it's not available anymore or at least not in your country. {e}"
+        )
+        if "FALLBACK" in song:
+            song = song["FALLBACK"]
+            print(
+                f"Trying fallback song https://www.deezer.com/us/track/{song['SNG_ID']}"
+            )
+            try:
+                url = get_song_url(song["TRACK_TOKEN"])
+            except Exception:
+                pass
+            else:
+                print("Fallback song seems to work")
+        else:
+            raise
 
-    urlkey = genurlkey(song["SNG_ID"], song["MD5_ORIGIN"], song["MEDIA_VERSION"], song_quality)
     key = calcbfkey(song["SNG_ID"])
     try:
-        url = "https://e-cdns-proxy-%s.dzcdn.net/mobile/1/%s" % (song["MD5_ORIGIN"][0], urlkey.decode())
-        fh = session.get(url)
-        if fh.status_code != 200:
-            # I don't why this happens. to reproduce:
-            # go to https://www.deezer.com/de/playlist/1180748301
-            # search for Moby
-            # open in a new tab the song Moby - Honey
-            # this will give you a 404!?
-            # but you can play the song in the browser
-            print("ERROR: Can not download this song. Got a {}".format(fh.status_code))
-            return
-
-        with open(output_file, "w+b") as fo:
-            # add songcover and DL first 30 sec's that are unencrypted
-            writeid3v2(fo, song)
-            decryptfile(fh, key, fo)
-            writeid3v1_1(fo, song)
-
+        with session.get(url, stream=True) as response:
+            response.raise_for_status()
+            with open(output_file, "w+b") as fo:
+                # Add song cover and first 30 seconds of unencrypted data
+                writeid3v2(fo, song)
+                decryptfile(response, key, fo)
+                writeid3v1_1(fo, song)
     except Exception as e:
-        raise
+        raise DeezerApiException(f"Could not write song to disk: {e}") from e
     else:
         print("Dowload finished: {}".format(output_file))
 
@@ -371,12 +507,14 @@ def get_song_infos_from_deezer_website(search_type, id):
     # 2. Deezer gives you a 404: https://www.deezer.com/de/track/68925038
     # Deezer403Exception if we are not logged in
 
-    url = "https://www.deezer.com/de/{}/{}".format(search_type, id)
+    url = "https://www.deezer.com/us/{}/{}".format(search_type, id)
     resp = session.get(url)
     if resp.status_code == 404:
         raise Deezer404Exception("ERROR: Got a 404 for {} from Deezer".format(url))
     if "MD5_ORIGIN" not in resp.text:
-        raise Deezer403Exception("ERROR: we are not logged in on deezer.com. Please update the cookie")
+        raise Deezer403Exception(
+            "ERROR: we are not logged in on deezer.com. Please update the cookie"
+        )
 
     parser = ScriptExtractor()
     parser.feed(resp.text)
@@ -389,13 +527,16 @@ def get_song_infos_from_deezer_website(search_type, id):
             DZR_APP_STATE = json.loads(regex.group())
             global album_Data
             album_Data = DZR_APP_STATE.get("DATA")
-            if DZR_APP_STATE['DATA']['__TYPE__'] == 'playlist' or DZR_APP_STATE['DATA']['__TYPE__'] == 'album':
+            if (
+                DZR_APP_STATE["DATA"]["__TYPE__"] == "playlist"
+                or DZR_APP_STATE["DATA"]["__TYPE__"] == "album"
+            ):
                 # songs if you searched for album/playlist
-                for song in DZR_APP_STATE['SONGS']['data']:
+                for song in DZR_APP_STATE["SONGS"]["data"]:
                     songs.append(song)
-            elif DZR_APP_STATE['DATA']['__TYPE__'] == 'song':
+            elif DZR_APP_STATE["DATA"]["__TYPE__"] == "song":
                 # just one song on that page
-                songs.append(DZR_APP_STATE['DATA'])
+                songs.append(DZR_APP_STATE["DATA"])
     return songs[0] if search_type == TYPE_TRACK else songs
 
 
@@ -411,39 +552,51 @@ def deezer_search(search, search_type):
     if search_type == TYPE_ALBUM_TRACK:
         resp = get_song_infos_from_deezer_website(TYPE_ALBUM, search)
     else:
-        resp = session.get("https://api.deezer.com/search/{}?q={}".format(search_type, search)).json()['data']
+        try:
+            resp = session.get(
+                "https://api.deezer.com/search/{}?q={}".format(search_type, search)
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            resp = data["data"]
+        except (requests.exceptions.RequestException, KeyError) as e:
+            raise DeezerApiException(
+                f"Could not search for track '{search}': {e}"
+            ) from e
     return_nice = []
     for item in resp:
         i = {}
         if search_type == TYPE_ALBUM:
-            i['id'] = str(item['id'])
-            i['id_type'] = TYPE_ALBUM
-            i['album'] = item['title']
-            i['album_id'] = item['id']
-            i['img_url'] = item['cover_small']
-            i['artist'] = item['artist']['name']
-            i['title'] = ''
-            i['preview_url'] = ''
+            i["id"] = str(item["id"])
+            i["id_type"] = TYPE_ALBUM
+            i["album"] = item["title"]
+            i["album_id"] = item["id"]
+            i["img_url"] = item["cover_small"]
+            i["artist"] = item["artist"]["name"]
+            i["title"] = ""
+            i["preview_url"] = ""
 
         if search_type == TYPE_TRACK:
-            i['id'] = str(item['id'])
-            i['id_type'] = TYPE_TRACK
-            i['title'] = item['title']
-            i['img_url'] = item['album']['cover_small']
-            i['album'] = item['album']['title']
-            i['album_id'] = item['album']['id']
-            i['artist'] = item['artist']['name']
-            i['preview_url'] = item['preview']
+            i["id"] = str(item["id"])
+            i["id_type"] = TYPE_TRACK
+            i["title"] = item["title"]
+            i["img_url"] = item["album"]["cover_small"]
+            i["album"] = item["album"]["title"]
+            i["album_id"] = item["album"]["id"]
+            i["artist"] = item["artist"]["name"]
+            i["preview_url"] = item["preview"]
 
         if search_type == TYPE_ALBUM_TRACK:
-            i['id'] = str(item['SNG_ID'])
-            i['id_type'] = TYPE_TRACK
-            i['title'] = item['SNG_TITLE']
-            i['img_url'] = '' # item['album']['cover_small']
-            i['album'] = item['ALB_TITLE']
-            i['album_id'] = item['ALB_ID']
-            i['artist'] = item['ART_NAME']
-            i['preview_url'] = next(media['HREF'] for media in item['MEDIA'] if media['TYPE'] == 'preview')
+            i["id"] = str(item["SNG_ID"])
+            i["id_type"] = TYPE_TRACK
+            i["title"] = item["SNG_TITLE"]
+            i["img_url"] = ""  # item['album']['cover_small']
+            i["album"] = item["ALB_TITLE"]
+            i["album_id"] = item["ALB_ID"]
+            i["artist"] = item["ART_NAME"]
+            i["preview_url"] = next(
+                media["HREF"] for media in item["MEDIA"] if media["TYPE"] == "preview"
+            )
 
         return_nice.append(i)
     return return_nice
@@ -456,61 +609,79 @@ def parse_deezer_playlist(playlist_id):
     # raises DeezerApiException if something with the Deezer API is broken
 
     try:
-        playlist_id = re.search(r'\d+', playlist_id).group(0)
+        playlist_id = re.search(r"\d+", playlist_id).group(0)
     except AttributeError:
-        raise DeezerApiException("ERROR: Regex (\\d+) for playlist_id failed. You gave me '{}'".format(playlist_id))
+        raise DeezerApiException(
+            "ERROR: Regex (\\d+) for playlist_id failed. You gave me '{}'".format(
+                playlist_id
+            )
+        )
 
     url_get_csrf_token = "https://www.deezer.com/ajax/gw-light.php?method=deezer.getUserData&input=3&api_version=1.0&api_token="
     req = session.post(url_get_csrf_token)
-    csrf_token = req.json()['results']['checkForm']
+    csrf_token = req.json()["results"]["checkForm"]
 
-    url_get_playlist_songs = "https://www.deezer.com/ajax/gw-light.php?method=deezer.pagePlaylist&input=3&api_version=1.0&api_token={}".format(csrf_token)
-    data = {'playlist_id': int(playlist_id),
-            'start': 0,
-            'tab': 0,
-            'header': True,
-            'lang': 'de',
-            'nb': 500}
+    url_get_playlist_songs = "https://www.deezer.com/ajax/gw-light.php?method=deezer.pagePlaylist&input=3&api_version=1.0&api_token={}".format(
+        csrf_token
+    )
+    data = {
+        "playlist_id": int(playlist_id),
+        "start": 0,
+        "tab": 0,
+        "header": True,
+        "lang": "de",
+        "nb": 500,
+    }
     req = session.post(url_get_playlist_songs, json=data)
     json = req.json()
 
-    if len(json['error']) > 0:
-        raise DeezerApiException("ERROR: deezer api said {}".format(json['error']))
-    json_data = json['results']
+    if len(json["error"]) > 0:
+        raise DeezerApiException("ERROR: deezer api said {}".format(json["error"]))
+    json_data = json["results"]
 
-    playlist_name = json_data['DATA']['TITLE']
-    number_songs = json_data['DATA']['NB_SONG']
+    playlist_name = json_data["DATA"]["TITLE"]
+    number_songs = json_data["DATA"]["NB_SONG"]
     print("Playlist '{}' has {} songs".format(playlist_name, number_songs))
 
-    print("Got {} songs from API".format(json_data['SONGS']['count']))
-    return playlist_name, json_data['SONGS']['data']
+    print("Got {} songs from API".format(json_data["SONGS"]["count"]))
+    return playlist_name, json_data["SONGS"]["data"]
 
 
 def get_deezer_favorites(user_id: str) -> Optional[Sequence[int]]:
     if not user_id.isnumeric():
         raise Exception(f"User id '{user_id}' must be numeric")
-    resp = session.get(f"https://api.deezer.com/user/{user_id}/tracks?limit=10000000000")
-    assert resp.status_code == 200, f"got invalid status asking for favorite song\n{resp.text}s"
+    resp = session.get(
+        f"https://api.deezer.com/user/{user_id}/tracks?limit=10000000000"
+    )
+    assert (
+        resp.status_code == 200
+    ), f"got invalid status asking for favorite song\n{resp.text}s"
     resp_json = resp.json()
     if "error" in resp_json.keys():
-        raise Exception(f"Upstream api error getting favorite songs for user {user_id}:\n{resp_json['error']}")
+        raise Exception(
+            f"Upstream api error getting favorite songs for user {user_id}:\n{resp_json['error']}"
+        )
     # check is set next
-    
+
     while "next" in resp_json.keys():
         resp = session.get(resp_json["next"])
-        assert resp.status_code == 200, f"got invalid status asking for favorite song\n{resp.text}s"
+        assert (
+            resp.status_code == 200
+        ), f"got invalid status asking for favorite song\n{resp.text}s"
         resp_json_next = resp.json()
         if "error" in resp_json_next.keys():
-            raise Exception(f"Upstream api error getting favorite songs for user {user_id}:\n{resp_json_next['error']}")
+            raise Exception(
+                f"Upstream api error getting favorite songs for user {user_id}:\n{resp_json_next['error']}"
+            )
         resp_json["data"] += resp_json_next["data"]
 
         if "next" in resp_json_next.keys():
             resp_json["next"] = resp_json_next["next"]
         else:
             del resp_json["next"]
- 
+
     print(f"Got {resp_json['total']} favorite songs for user {user_id} from the api")
-    songs = [song['id'] for song in resp_json['data']]
+    songs = [song["id"] for song in resp_json["data"]]
     return songs
 
 
@@ -531,15 +702,6 @@ def test_deezer_login():
         return False
 
 
-async def get_track(self, track_id: str):
-    """Get track details from Deezer"""
-    url = f"{self.api_base}/track/{track_id}"
-    async with self.session.get(url) as response:
-        if response.status == 200:
-            return await response.json()
-        return None
-
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "check-login":
         test_deezer_login()

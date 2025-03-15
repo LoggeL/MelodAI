@@ -59,7 +59,8 @@ def admin_required(f):
         ).fetchone()
 
         if not user or not user["is_admin"]:
-            return jsonify({"error": "Admin access required"}), 403
+            print("User is not admin")
+            return redirect("/")
 
         # add user_id to session
         session["user_id"] = token_data["user_id"]

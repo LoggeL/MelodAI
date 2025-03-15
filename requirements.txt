@@ -1,5 +1,4 @@
 flask
-flask-socketio
 replicate
 python-dotenv
 pycryptodome

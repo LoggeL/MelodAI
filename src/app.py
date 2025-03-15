@@ -5,7 +5,6 @@ import os
 from datetime import timedelta
 from .models.db import init_app, update_last_online
 from .services.deezer import init_deezer_session, test_deezer_login
-from .utils.extensions import socketio
 
 # Import and register blueprints
 from .routes.auth import auth_bp
@@ -17,7 +16,6 @@ from .routes.static import static_bp
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 app.permanent_session_lifetime = timedelta(days=30)
-socketio.init_app(app, cors_allowed_origins="*")
 
 # Setup CORS
 CORS(app, supports_credentials=True)
@@ -37,17 +35,6 @@ app.register_blueprint(track_bp)
 app.register_blueprint(static_bp)
 
 
-# WebSocket events
-@socketio.on("connect")
-def handle_connect():
-    print("Client connected")
-
-
-@socketio.on("disconnect")
-def handle_disconnect():
-    print("Client disconnected")
-
-
 # Before request handler
 @app.before_request
 def before_request():
@@ -57,10 +44,8 @@ def before_request():
 
 
 if __name__ == "__main__":
-    socketio.run(
-        app,
+    app.run(
         host=os.getenv("HOST", "0.0.0.0"),
         port=int(os.getenv("PORT", 5000)),
         debug=bool(os.getenv("DEBUG", True)),
-        allow_unsafe_werkzeug=True,
     )
