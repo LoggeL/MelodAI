@@ -364,6 +364,51 @@ def check_processing_queue():
         }
 
 
+def check_openrouter_api():
+    """Check if the OpenRouter API is accessible"""
+    try:
+        # Check for API token
+        api_token = os.environ.get("OPENROUTER_API_KEY")
+        if not api_token:
+            return {
+                "component": "OpenRouter API",
+                "status": STATUS_WARNING,
+                "details": "OPENROUTER_API_KEY environment variable not set",
+            }
+
+        # Check API connectivity
+        headers = {
+            "Authorization": f"Bearer {api_token}",
+            "HTTP-Referer": "https://melodai.local",  # Replace with your actual domain
+        }
+        response = requests.get("https://openrouter.ai/api/v1/models", headers=headers)
+
+        if response.status_code == 200:
+            return {
+                "component": "OpenRouter API",
+                "status": STATUS_OK,
+                "details": "OpenRouter API is accessible",
+            }
+        else:
+            return {
+                "component": "OpenRouter API",
+                "status": STATUS_ERROR,
+                "details": f"OpenRouter API returned status code {response.status_code}: {response.text}",
+            }
+    except requests.exceptions.RequestException as e:
+        return {
+            "component": "OpenRouter API",
+            "status": STATUS_ERROR,
+            "details": f"OpenRouter API connection error: {str(e)}",
+        }
+    except Exception as e:
+        return {
+            "component": "OpenRouter API",
+            "status": STATUS_ERROR,
+            "details": f"Unexpected error: {str(e)}",
+        }
+
+
 def run_all_checks(user_id=None):
     """Run all system checks and save results to database"""
     checks = [
@@ -372,6 +417,7 @@ def run_all_checks(user_id=None):
         check_file_system(),
         check_replicate_api(),
         check_processing_queue(),
+        check_openrouter_api(),
     ]
 
     # Save all check results to database

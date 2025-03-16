@@ -174,8 +174,39 @@ def show_status_page():
 @admin_required
 def check_system_status():
     """Run system status checks and return results"""
+    db = get_db()
+
     # Run all system checks
     check_results = run_all_checks(session.get("user_id"))
+
+    # For each component, get the last 90 days of history
+    for check in check_results:
+        history = db.execute(
+            """
+            SELECT status, details, last_checked
+            FROM system_status
+            WHERE component = ?
+            AND last_checked >= datetime('now', '-90 days')
+            ORDER BY last_checked ASC
+        """,
+            (check["component"],),
+        ).fetchall()
+
+        # Calculate uptime percentage
+        total_checks = len(history) if history else 1
+        ok_checks = (
+            sum(1 for h in history if h["status"] == "OK")
+            if history
+            else (1 if check["status"] == "OK" else 0)
+        )
+        uptime = (ok_checks / total_checks) * 100
+
+        # Add history and uptime to check results
+        check["history"] = [dict(h) for h in history]
+        check["uptime"] = f"{uptime:.2f}%"
+        check["last_checked"] = (
+            check["history"][-1]["last_checked"] if history else None
+        )
 
     # Return the results as JSON
     return jsonify(
