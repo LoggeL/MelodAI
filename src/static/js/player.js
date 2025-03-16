@@ -1,7 +1,26 @@
 class KaraokePlayer {
   constructor() {
+    // Initialize Web Audio API context
+    this.audioContext = new (window.AudioContext || window.webkitAudioContext)()
+
+    // Create audio elements
     this.vocalsAudio = new Audio()
     this.musicAudio = new Audio()
+
+    // Create audio sources and gain nodes
+    this.vocalsSource = null
+    this.musicSource = null
+    this.vocalsGain = this.audioContext.createGain()
+    this.musicGain = this.audioContext.createGain()
+
+    // Connect gain nodes to destination
+    this.vocalsGain.connect(this.audioContext.destination)
+    this.musicGain.connect(this.audioContext.destination)
+
+    // Set initial volumes
+    this.vocalsGain.gain.value = 1
+    this.musicGain.gain.value = 1
+
     this.lyrics = null
     this.playing = false
     this.currentWordIndex = 0
@@ -377,8 +396,44 @@ class KaraokePlayer {
 
     // Reset player state
     this.playing = false
-    this.vocalsAudio.src = song.vocalsUrl
-    this.musicAudio.src = song.musicUrl
+
+    // Disconnect and clean up old audio elements and sources
+    if (this.vocalsSource) {
+      this.vocalsSource.disconnect()
+      this.vocalsSource = null
+    }
+    if (this.musicSource) {
+      this.musicSource.disconnect()
+      this.musicSource = null
+    }
+
+    // Create new audio elements
+    this.vocalsAudio.pause()
+    this.musicAudio.pause()
+    const newVocalsAudio = new Audio()
+    const newMusicAudio = new Audio()
+
+    // Set the sources
+    newVocalsAudio.src = song.vocalsUrl
+    newMusicAudio.src = song.musicUrl
+
+    // Replace old audio elements
+    this.vocalsAudio = newVocalsAudio
+    this.musicAudio = newMusicAudio
+
+    // Setup event listeners for new audio elements
+    this.setupAudioEventListeners()
+
+    // Create new audio sources and connect them
+    this.vocalsSource = this.audioContext.createMediaElementSource(
+      this.vocalsAudio
+    )
+    this.musicSource = this.audioContext.createMediaElementSource(
+      this.musicAudio
+    )
+    this.vocalsSource.connect(this.vocalsGain)
+    this.musicSource.connect(this.musicGain)
+
     document
       .querySelector('#playButton i')
       .classList.replace('fa-pause', 'fa-play')
@@ -448,16 +503,19 @@ class KaraokePlayer {
     if (!song.status) return ''
 
     const statusMap = {
+      loading: 'Loading...',
       starting: 'Starting...',
       downloading: 'Downloading...',
       downloaded: 'Downloaded',
       splitting: 'Splitting audio...',
-      extracting_lyrics: 'Extracted lyrics...',
+      extracting_lyrics: 'Extracting lyrics...',
       lyrics_extracted: 'Lyrics extracted...',
       chunking_lyrics: 'Chunking lyrics...',
       merging_lyrics: 'Merging lyrics...',
       lyrics_complete: 'Lyrics complete',
+      lyrics_split: 'Lyrics split',
       error: 'Error processing track',
+      complete: 'Complete',
     }
 
     return statusMap[song.status] || song.status
@@ -515,6 +573,13 @@ class KaraokePlayer {
     items[this.currentSongIndex].classList.add('active')
   }
 
+  setupAudioEventListeners() {
+    // Keep audio tracks synchronized
+    this.vocalsAudio.addEventListener('play', () => this.musicAudio.play())
+    this.vocalsAudio.addEventListener('pause', () => this.musicAudio.pause())
+    this.vocalsAudio.addEventListener('ended', () => this.nextSong())
+  }
+
   setupControls() {
     // Store reference to progress bar
     this.progressBar = document.querySelector('.progress-bar')
@@ -533,17 +598,15 @@ class KaraokePlayer {
       .addEventListener('click', () => this.toggleFullscreen())
 
     document.getElementById('vocalsVolume').addEventListener('input', (e) => {
-      this.vocalsAudio.volume = e.target.value
+      this.vocalsGain.gain.value = e.target.value
     })
 
     document.getElementById('musicVolume').addEventListener('input', (e) => {
-      this.musicAudio.volume = e.target.value
+      this.musicGain.gain.value = e.target.value
     })
 
-    // Keep audio tracks synchronized
-    this.vocalsAudio.addEventListener('play', () => this.musicAudio.play())
-    this.vocalsAudio.addEventListener('pause', () => this.musicAudio.pause())
-    this.vocalsAudio.addEventListener('ended', () => this.nextSong())
+    // Setup initial audio event listeners
+    this.setupAudioEventListeners()
 
     // Setup download button
     const downloadButton = document.getElementById('downloadButton')
@@ -664,19 +727,30 @@ class KaraokePlayer {
   togglePlay() {
     if (this.currentSongIndex === -1) return
 
+    // Resume audio context if it's suspended (browser autoplay policy)
+    if (this.audioContext.state === 'suspended') {
+      this.audioContext.resume()
+    }
+
     if (this.playing) {
       this.vocalsAudio.pause()
+      this.musicAudio.pause()
       this.playing = false
       document
         .querySelector('#playButton i')
         .classList.replace('fa-pause', 'fa-play')
     } else {
-      this.vocalsAudio.play()
-      this.playing = true
-      this.startLyricsSync()
-      document
-        .querySelector('#playButton i')
-        .classList.replace('fa-play', 'fa-pause')
+      Promise.all([this.vocalsAudio.play(), this.musicAudio.play()])
+        .then(() => {
+          this.playing = true
+          this.startLyricsSync()
+          document
+            .querySelector('#playButton i')
+            .classList.replace('fa-play', 'fa-pause')
+        })
+        .catch((error) => {
+          console.error('Error playing audio:', error)
+        })
     }
   }
 
