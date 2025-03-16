@@ -285,7 +285,7 @@ body.collapsed .side-container {
 }
 
 .skeleton-line {
-  height: 24px;
+  height: 25px;
   background: linear-gradient(
     90deg,
     var(--hover) 25%,
@@ -294,7 +294,7 @@ body.collapsed .side-container {
   );
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
-  border-radius: 4px;
+  border-radius: 8px;
   margin: 20px 10px;
   padding: 10px;
 }
@@ -749,8 +749,7 @@ button:hover {
 /* Firefox scrollbar styling */
 * {
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--text) 20%, transparent)
-    transparent;
+  scrollbar-color: color-mix(in srgb, var(--text) 20%, transparent) transparent;
 }
 
 /* Hide scrollbar when not hovering */

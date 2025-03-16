@@ -152,6 +152,15 @@ class KaraokePlayer {
       </div>
       `
 
+      // Scroll the first line into view
+      const firstLine = document.querySelector('.skeleton-line')
+      if (firstLine) {
+        firstLine.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+        })
+      }
+
       const response = await fetch(lyricsUrl)
       if (!response.ok) {
         throw new Error('Failed to load lyrics')
