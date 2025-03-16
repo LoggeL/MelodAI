@@ -8,136 +8,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-client = Groq(api_key=os.environ["GROQ_API_KEY"])
-
-
-def chunk_lyrics(lyrics_id):
-    """Chunks lyrics into meaningful lines using a large language model.
-
-    This function takes a lyrics ID, loads the corresponding lyrics from a JSON
-    file, sends the lyrics to a large language model for chunking, and then
-    saves the formatted lyrics and original lyrics to text files. It also
-    updates the original JSON file with the formatted lyrics, including start
-    and end times for each segment.
-
-    Args:
-        lyrics_id: The ID of the song lyrics to process.
-    """
-    # songs/{id}/lyrics.json
-    lyrics_path = f"src/songs/{lyrics_id}/lyrics_merged.json"
-    with open(lyrics_path, "r") as f:
-        lyrics = json.load(f)
-
-    # segments -> text -> join \n
-    lyrics_text = "\n".join([segment["text"] for segment in lyrics["segments"]])
-
-    completion = client.chat.completions.create(
-        model="gemma2-9b-it",
-        messages=[
-            {
-                "role": "system",
-                "content": "You chunk lyrics into meaningful lines\nOnly return the lyrics in proper formatting",
-            },
-            {
-                "role": "user",
-                "content": lyrics_text,
-            },
-        ],
-        temperature=0,
-        top_p=1,
-        stop=None,
-    )
-
-    formatted_lyrics_str = completion.choices[0].message.content
-
-    # store txt versions of both
-    with open(
-        f"src/songs/{lyrics_id}/lyrics_formatted.txt", "w", encoding="utf-8"
-    ) as f:
-        f.write(formatted_lyrics_str)
-
-    with open(f"src/songs/{lyrics_id}/lyrics.txt", "w", encoding="utf-8") as f:
-        f.write(lyrics_text)
-
-    #     "segments": [
-    # {
-    #     "end": 14.587,
-    #     "speaker": "SPEAKER_00",
-    #     "start": 11.144,
-    #     "text": " I am the monster you created.",
-    #     "words": [
-    #         {
-    #             "end": 11.204,
-    #             "score": 0.801,
-    #             "speaker": "SPEAKER_00",
-    #             "start": 11.144,
-    #             "word": "I"
-    #         },
-
-    formatted_segments = []
-    original_segments = lyrics["segments"]
-    current_segment_idx = 0
-    current_word_idx = 0
-    formatted_lines = formatted_lyrics_str.strip().split("\n")
-
-    # Process each formatted line
-    for formatted_line in formatted_lines:
-        words = formatted_line.split()
-        new_segment = {
-            "text": formatted_line,
-            "speaker": original_segments[current_segment_idx]["speaker"],
-            "words": [],
-        }
-
-        # Add words from original segment until we match the formatted line
-        while len(new_segment["words"]) < len(words):
-            if current_word_idx >= len(original_segments[current_segment_idx]["words"]):
-                current_segment_idx += 1
-                current_word_idx = 0
-
-            word_data = original_segments[current_segment_idx]["words"][
-                current_word_idx
-            ]
-            new_segment["words"].append(word_data)
-            current_word_idx += 1
-
-        if len(new_segment["words"]) == 0:
-            continue
-
-        # Set start/end times based on first/last word
-        if new_segment["words"]:
-            new_segment["start"] = new_segment["words"][0].get("start", 0)
-            new_segment["end"] = new_segment["words"][-1].get("end", 0)
-
-        # start, end and speaker for new_segment based on its words
-        for word in new_segment["words"]:
-            if "start" in word:
-                new_segment["start"] = min(new_segment["start"], word["start"])
-            if "end" in word:
-                new_segment["end"] = max(new_segment["end"], word["end"])
-
-        # count speaker occurrences
-        speaker_counts = {}
-        for word in new_segment["words"]:
-            if "speaker" in word:
-                speaker_counts[word["speaker"]] = (
-                    speaker_counts.get(word["speaker"], 0) + 1
-                )
-        # if non have been found set SPEAKER_00
-        if len(speaker_counts) == 0:
-            new_segment["speaker"] = "SPEAKER_00"
-        else:
-            new_segment["speaker"] = max(speaker_counts, key=speaker_counts.get)
-
-        formatted_segments.append(new_segment)
-
-    lyrics["segments"] = formatted_segments
-    formatted_lyrics = lyrics
-
-    # write to json
-    with open(f"src/songs/{lyrics_id}/lyrics.json", "w", encoding="utf-8") as f:
-        json.dump(formatted_lyrics, f)
-
 
 def merge_lyrics(lyrics_id):
     """Merges character-level lyrics into word-level lyrics.
@@ -288,86 +158,110 @@ def split_long_lyrics_lines(lyrics_id):
     # Join with line markers for easy splitting later
     lyrics_text = "\n".join(segments_text)
 
-    # Call OpenRouter API
-    headers = {
-        "Authorization": f"Bearer {os.environ['OPENROUTER_API_KEY']}",
-        "HTTP-Referer": "https://github.com/LoggeL/MelodAI",
-        "X-Title": "MelodAI",
-    }
+    try:
+        # Call OpenRouter API
+        headers = {
+            "Authorization": f"Bearer {os.environ['OPENROUTER_API_KEY']}",
+            "HTTP-Referer": "https://github.com/LoggeL/MelodAI",
+            "X-Title": "MelodAI",
+        }
 
-    response = requests.post(
-        "https://openrouter.ai/api/v1/chat/completions",
-        headers=headers,
-        json={
-            "model": os.environ["LLM_MODEL"],
-            "messages": [
-                {
-                    "role": "system",
-                    "content": "You are a lyrics formatting expert. Your task is to split long lyrics lines into shorter, more natural segments while preserving the meaning and flow. Return only the split lyrics with no additional text.",
-                },
-                {"role": "user", "content": lyrics_text},
-            ],
-        },
-    )
+        response = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers=headers,
+            json={
+                "model": os.environ["LLM_MODEL"],
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "You are a lyrics formatting expert. Your task is to split long lyrics lines into shorter, more natural segments while preserving the meaning and flow. Split on natural breaks in the lyrics. Return only the split lyrics with no additional text. Preserve all original text exactly as provided. Do not modify any words.",
+                    },
+                    {"role": "user", "content": lyrics_text},
+                ],
+            },
+        )
 
-    if response.status_code != 200:
-        raise Exception(f"OpenRouter API error: {response.text}")
+        response.raise_for_status()
+        split_lyrics = response.json()["choices"][0]["message"]["content"]
+        split_lines = [
+            line.strip() for line in split_lyrics.strip().split("\n") if line.strip()
+        ]
 
-    print(response.json())
-    split_lyrics = response.json()["choices"][0]["message"]["content"]
-    split_lines = split_lyrics.strip().split("\n")
+    except Exception as e:
+        print(f"Error calling OpenRouter API: {str(e)}")
+        return lyrics
 
     # Create new segments based on the split lines
     new_segments = []
-    original_segment_idx = 0
-    word_idx = 0
+    new_idx = 0
+    old_idx = 0
+    new_offset = 0
 
-    for split_line in split_lines:
-        if not split_line.strip():
-            continue
+    while old_idx < len(lyrics["segments"]):
+        old_count = len(lyrics["segments"][old_idx]["words"])
+        new_count = len(split_lines[new_idx].split(" "))
+        old_words = lyrics["segments"][old_idx]["words"]
+        if old_count == new_count + new_offset:
+            start_times = [
+                old_words[i]["start"] for i in range(new_offset, new_offset + new_count)
+            ]
+            end_times = [
+                old_words[i]["end"] for i in range(new_offset, new_offset + new_count)
+            ]
+            new_segments.append(
+                {
+                    "words": old_words[new_offset : new_offset + new_count],
+                    "text": split_lines[new_idx],
+                    "speaker": lyrics["segments"][old_idx]["speaker"],
+                    "start": min(start_times),
+                    "end": max(end_times),
+                }
+            )
+            new_idx += 1
+            old_idx += 1
+            new_offset = 0
+        elif old_count > new_count + new_offset:
+            start_times = [
+                old_words[i]["start"] for i in range(new_offset, new_offset + new_count)
+            ]
+            end_times = [
+                old_words[i]["end"] for i in range(new_offset, new_offset + new_count)
+            ]
+            new_segments.append(
+                {
+                    "words": old_words[new_offset : new_offset + new_count],
+                    "text": split_lines[new_idx],
+                    "speaker": lyrics["segments"][old_idx]["speaker"],
+                    "start": min(start_times),
+                    "end": max(end_times),
+                }
+            )
+            new_idx += 1
+            new_offset += new_count
+        else:
+            old_idx += 1
+            print("oh no")
 
-        # Find the original segment this line came from
-        while (
-            original_segment_idx < len(lyrics["segments"])
-            and split_line not in lyrics["segments"][original_segment_idx]["text"]
-        ):
-            original_segment_idx += 1
-            word_idx = 0
+    # print old lyrics and new lyrics structure
+    print("Old lyrics:")
+    for i, segment in enumerate(lyrics["segments"]):
+        print(i, len(segment["words"]))
+    print(f"Sum: {sum([len(segment['words']) for segment in lyrics['segments']])}")
 
-        if original_segment_idx >= len(lyrics["segments"]):
-            break
-
-        original_segment = lyrics["segments"][original_segment_idx]
-
-        # Create a new segment for this split line
-        new_segment = {
-            "text": split_line,
-            "speaker": original_segment["speaker"],
-            "words": [],
-        }
-
-        # Find the words that belong to this split line
-        split_words = split_line.split()
-        while len(new_segment["words"]) < len(split_words):
-            if word_idx >= len(original_segment["words"]):
-                break
-
-            word_data = original_segment["words"][word_idx]
-            new_segment["words"].append(word_data)
-            word_idx += 1
-
-        if new_segment["words"]:
-            new_segment["start"] = new_segment["words"][0]["start"]
-            new_segment["end"] = new_segment["words"][-1]["end"]
-            new_segments.append(new_segment)
+    print("\nNew lyrics:")
+    for i, segment in enumerate(new_segments):
+        print(i, len(segment["words"]))
+    print(f"Sum: {sum([len(segment['words']) for segment in new_segments])}")
 
     # Update the lyrics with new segments
     lyrics["segments"] = new_segments
 
     # Save the split lyrics
-    with open(f"src/songs/{lyrics_id}/lyrics.json", "w", encoding="utf-8") as f:
-        json.dump(lyrics, f)
+    output_path = f"src/songs/{lyrics_id}/lyrics.json"
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(lyrics, f, ensure_ascii=False, indent=4)
 
+    print(f"Successfully processed {len(new_segments)} segments")
     return lyrics
 
 
@@ -375,4 +269,4 @@ def split_long_lyrics_lines(lyrics_id):
 if __name__ == "__main__":
     # chunk_lyrics("2984775641")
     # merge_lyrics("2867606132")
-    split_long_lyrics_lines("3151824061")
+    split_long_lyrics_lines("3122055081")
