@@ -31,7 +31,7 @@ def chunk_lyrics(lyrics_id):
     lyrics_text = "\n".join([segment["text"] for segment in lyrics["segments"]])
 
     completion = client.chat.completions.create(
-        model="gemma2-9b-it",
+        model="meta-llama/llama-4-scout-17b-16e-instruct",
         messages=[
             {
                 "role": "system",
@@ -42,7 +42,7 @@ def chunk_lyrics(lyrics_id):
                 "content": lyrics_text,
             },
         ],
-        temperature=0,
+        temperature=0.1,
         top_p=1,
         stop=None,
     )
