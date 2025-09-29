@@ -4,10 +4,9 @@ import time
 import requests
 from ..models.db import get_db
 from ..services.deezer import init_deezer_session, test_deezer_login
-import logging
 import threading
 import json
-from .constants import STATUS_OK, STATUS_WARNING, STATUS_ERROR, STATUS_UNKNOWN
+from .constants import STATUS_OK, STATUS_WARNING, STATUS_ERROR
 
 # Track processing queue tracker
 # Dictionary of {track_id: {start_time, metadata, status, progress}}
@@ -47,6 +46,12 @@ def get_processing_queue():
     with _queue_lock:
         # Return a copy to avoid threading issues
         return {k: v.copy() for k, v in _processing_queue.items()}
+
+
+def is_track_in_queue(track_id):
+    """Check if a track is currently being processed"""
+    with _queue_lock:
+        return track_id in _processing_queue
 
 
 def get_unfinished_songs():
@@ -101,7 +106,7 @@ def get_unfinished_songs():
                 try:
                     with open(os.path.join(track_path, "metadata.json"), "r") as f:
                         metadata = json.load(f)
-                except:
+                except Exception:
                     pass
 
             # Add to unfinished list
@@ -149,7 +154,7 @@ def save_status_check(component, status, details=None, checked_by=None):
             print(
                 f"Warning: system_status table does not exist. Status check for {component} not saved."
             )
-            print(f"Run 'python src/add_system_status_table.py' to create the table.")
+            print("Run 'python src/add_system_status_table.py' to create the table.")
             return False
         # For other database errors, re-raise
         raise

@@ -14,6 +14,10 @@ from ..utils.status_checks import (
     get_processing_queue,
     get_unfinished_songs,
     save_status_check,
+    add_to_processing_queue,
+    is_track_in_queue,
+    remove_from_processing_queue,
+    update_queue_item_status,
 )
 from ..utils.constants import STATUS_ERROR
 import time
@@ -318,14 +322,36 @@ def reprocess_track():
     if not track_id:
         return jsonify({"error": "Missing track ID"}), 400
 
+    # Check if track is already being processed
+    if is_track_in_queue(track_id):
+        return (
+            jsonify({"error": "Track is already being processed", "in_queue": True}),
+            400,
+        )
+
     # Import here to avoid circular imports
     from ..routes.track import de_add_track
     import threading
     from flask import current_app
-    from ..utils.status_checks import update_queue_item_status
+    import json as json_lib
+    import os
 
     # Store user_id from session before starting the thread
     user_id = session.get("user_id")
+
+    # Try to get existing metadata
+    metadata_path = f"src/songs/{track_id}/metadata.json"
+    metadata = {}
+
+    if os.path.isfile(metadata_path) and os.path.getsize(metadata_path) > 0:
+        try:
+            with open(metadata_path, "r") as f:
+                metadata = json_lib.load(f)
+        except Exception as e:
+            print(f"Error loading metadata: {e}")
+
+    # Add to processing queue BEFORE starting the thread
+    add_to_processing_queue(track_id, metadata)
 
     # Start reprocessing in background
     def process_track(app, track_id, user_id):
@@ -353,11 +379,15 @@ def reprocess_track():
                     user_id,
                 )
 
+                # Ensure cleanup on error
+                remove_from_processing_queue(track_id)
+
     # Start processing in a new thread with app instance and user_id
     thread = threading.Thread(
         target=process_track,
         args=(current_app._get_current_object(), track_id, user_id),
     )
+    thread.daemon = True  # Make thread daemon so it doesn't prevent app shutdown
     thread.start()
 
     return jsonify(

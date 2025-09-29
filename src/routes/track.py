@@ -13,6 +13,7 @@ from ..utils.status_checks import (
     update_queue_item_status,
     remove_from_processing_queue,
     get_processing_queue,
+    is_track_in_queue,
 )
 from ..utils.constants import STATUS_OK, STATUS_ERROR
 import os
@@ -190,16 +191,7 @@ def de_add_track(track_id):
                 with open(f"src/songs/{track_id}/metadata.json", "w") as f:
                     json.dump(metadata, f)
 
-                # Add to processing queue with metadata
-                add_to_processing_queue(track_id, metadata)
-
                 update_queue_item_status(track_id, "metadata_complete", 10)
-            else:
-                # Load existing metadata
-                with open(f"src/songs/{track_id}/metadata.json", "r") as f:
-                    metadata = json.load(f)
-                # Add to processing queue with metadata
-                add_to_processing_queue(track_id, metadata)
 
             download_track(track_id)
 
@@ -263,6 +255,30 @@ def add():
     if not track_id:
         return jsonify({"error": "Missing track ID"}), 400
 
+    # Check if track is already being processed
+    if is_track_in_queue(track_id):
+        return jsonify(
+            {
+                "success": False,
+                "message": "Track is already being processed",
+                "in_queue": True,
+            }
+        )
+
+    # Try to get existing metadata, or create minimal entry
+    metadata_path = f"src/songs/{track_id}/metadata.json"
+    metadata = {}
+
+    if os.path.isfile(metadata_path) and os.path.getsize(metadata_path) > 0:
+        try:
+            with open(metadata_path, "r") as f:
+                metadata = json.load(f)
+        except Exception as e:
+            print(f"Error loading metadata: {e}")
+
+    # Add to processing queue BEFORE starting the thread
+    add_to_processing_queue(track_id, metadata)
+
     # Start processing in background
     def process_track(app):
         with app.app_context():
@@ -281,6 +297,9 @@ def add():
                     f"Failed to process track {track_id}: {str(e)}",
                 )
 
+                # Ensure cleanup on error
+                remove_from_processing_queue(track_id)
+
     # Log the download
     db = get_db()
     db.execute(
@@ -293,6 +312,7 @@ def add():
     thread = threading.Thread(
         target=process_track, args=(current_app._get_current_object(),)
     )
+    thread.daemon = True  # Make thread daemon so it doesn't prevent app shutdown
     thread.start()
 
     return jsonify({"success": True})
