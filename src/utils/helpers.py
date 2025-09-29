@@ -1,7 +1,7 @@
 from groq import Groq
+from openai import OpenAI
 import json
 import os
-import requests
 
 # env
 from dotenv import load_dotenv
@@ -159,30 +159,29 @@ def split_long_lyrics_lines(lyrics_id):
     lyrics_text = "\n".join(segments_text)
 
     try:
-        # Call OpenRouter API
-        headers = {
-            "Authorization": f"Bearer {os.environ['OPENROUTER_API_KEY']}",
-            "HTTP-Referer": "https://github.com/LoggeL/MelodAI",
-            "X-Title": "MelodAI",
-        }
-
-        response = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers=headers,
-            json={
-                "model": os.environ["LLM_MODEL"],
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": "You are a lyrics formatting expert. Your task is to split long lyrics lines into shorter, more natural segments while preserving the meaning and flow. Split on natural breaks in the lyrics. Return only the split lyrics with no additional text. Preserve all original text exactly as provided. Do not modify any words.",
-                    },
-                    {"role": "user", "content": lyrics_text},
-                ],
-            },
+        # Initialize OpenAI client with OpenRouter
+        client = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=os.environ["OPENROUTER_API_KEY"],
         )
 
-        response.raise_for_status()
-        split_lyrics = response.json()["choices"][0]["message"]["content"]
+        # Call OpenRouter API using OpenAI client
+        completion = client.chat.completions.create(
+            extra_headers={
+                "HTTP-Referer": "https://github.com/LoggeL/MelodAI",
+                "X-Title": "MelodAI",
+            },
+            model=os.environ["LLM_MODEL"],
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a lyrics formatting expert. Your task is to split long lyrics lines into shorter, more natural segments while preserving the meaning and flow. Split on natural breaks in the lyrics. Return only the split lyrics with no additional text. Preserve all original text exactly as provided. Do not modify any words.",
+                },
+                {"role": "user", "content": lyrics_text},
+            ],
+        )
+
+        split_lyrics = completion.choices[0].message.content
         split_lines = [
             line.strip() for line in split_lyrics.strip().split("\n") if line.strip()
         ]
