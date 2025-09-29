@@ -593,41 +593,84 @@ button:hover {
 }
 
 .profile-dropdown-item {
-  padding: 0.75rem 1rem;
+  padding: 12px 16px;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 12px;
   cursor: pointer;
   color: var(--text);
   text-decoration: none;
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.2s;
 }
 
-.profile-dropdown-item:hover {
+/* First item (profile name) - non-interactive */
+.profile-dropdown-item:first-child {
+  cursor: default;
+  font-weight: 600;
   background: var(--hover);
+  color: var(--text);
+  padding: 14px 16px;
+}
+
+.profile-dropdown-item:first-child:hover {
+  background: var(--hover);
+  padding-left: 16px;
+}
+
+[data-theme='dark'] .profile-dropdown-item:first-child {
+  background: color-mix(in srgb, var(--surface), var(--background) 50%);
+  color: var(--text);
+}
+
+/* Interactive items */
+.profile-dropdown-item:not(:first-child):hover {
+  background: var(--hover);
+  padding-left: 20px;
+}
+
+.profile-dropdown-item:not(:first-child):active {
+  background: var(--primary);
+  color: white;
+}
+
+.profile-dropdown-item:not(:first-child):active i {
+  color: white;
 }
 
 .profile-dropdown-item i {
   width: 20px;
   text-align: center;
+  color: var(--primary);
+  font-size: 1rem;
+  transition: transform 0.2s;
+}
+
+/* First item icon color */
+.profile-dropdown-item:first-child i {
+  color: var(--text-light);
+}
+
+.profile-dropdown-item:hover i {
+  transform: scale(1.1);
+}
+
+.profile-dropdown-item:first-child:hover i {
+  transform: none;
 }
 
 .profile-dropdown hr {
   border: none;
   border-top: 1px solid var(--border);
-  margin: 0.5rem 0;
+  margin: 0;
 }
 
-/* Add this theme toggle button style */
-.theme-toggle {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text);
-}
-
-.theme-toggle:hover {
-  background: var(--hover);
-}
+/* Theme toggle button - removed, now using profile-dropdown-item styles */
 
 /* Add smooth transitions for theme changes */
 * {
@@ -739,11 +782,18 @@ button:hover {
   margin-top: 0.5rem;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
   display: none;
-  min-width: 200px;
+  min-width: 240px;
   z-index: 1000;
+  overflow: hidden;
+  animation: dropdownSlideIn 0.2s ease;
+}
+
+[data-theme='dark'] .profile-dropdown {
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  border-color: var(--border);
 }
 
 .lyrics-cover {
@@ -825,10 +875,24 @@ button:hover {
   position: absolute;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 4px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
   display: none;
   z-index: 1000;
+  min-width: 200px;
+  overflow: hidden;
+  animation: dropdownSlideIn 0.2s ease;
+}
+
+@keyframes dropdownSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .download-dropdown.active {
@@ -836,20 +900,69 @@ button:hover {
 }
 
 .download-option {
-  padding: 10px 15px;
+  padding: 12px 16px;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.2s;
+  border-bottom: 1px solid var(--border);
+}
+
+.download-option:last-child {
+  border-bottom: none;
+}
+
+.download-option i {
+  width: 20px;
+  text-align: center;
+  color: var(--primary);
+  font-size: 1rem;
+  transition: transform 0.2s;
 }
 
 .download-option:hover {
   background: var(--hover);
+  padding-left: 20px;
+}
+
+.download-option:hover i {
+  transform: scale(1.1);
+}
+
+.download-option:active {
+  background: var(--primary);
+  color: white;
+}
+
+.download-option:active i {
+  color: white;
 }
 
 /* Dark mode adjustments */
 [data-theme='dark'] .download-dropdown {
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  border-color: var(--border);
+}
+
+[data-theme='dark'] .download-option {
+  color: var(--text);
+}
+
+[data-theme='dark'] .download-option:hover {
+  background: var(--hover);
+}
+
+[data-theme='dark'] .download-option:active {
+  background: var(--primary);
+  color: white;
 }
 
 /* Toast notification styles */
