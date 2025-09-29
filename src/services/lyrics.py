@@ -4,14 +4,10 @@ import json
 import os
 from ..utils.helpers import split_long_lyrics_lines
 from ..utils.status_checks import save_status_check, update_queue_item_status
+from ..utils.constants import STATUS_OK, STATUS_ERROR
 import librosa
 import soundfile as sf
 from pathlib import Path
-
-# Status constants
-STATUS_OK = "OK"
-STATUS_WARNING = "WARNING"
-STATUS_ERROR = "ERROR"
 
 
 def process_lyrics(track_id):

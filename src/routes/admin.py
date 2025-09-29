@@ -3,9 +3,6 @@ from flask import (
     jsonify,
     request,
     session,
-    render_template,
-    redirect,
-    url_for,
     send_from_directory,
 )
 import secrets
@@ -17,8 +14,8 @@ from ..utils.status_checks import (
     get_processing_queue,
     get_unfinished_songs,
     save_status_check,
-    STATUS_ERROR,
 )
+from ..utils.constants import STATUS_ERROR
 import time
 
 admin_bp = Blueprint("admin", __name__)
@@ -366,23 +363,3 @@ def reprocess_track():
     return jsonify(
         {"success": True, "message": f"Track {track_id} reprocessing started"}
     )
-
-
-# Temporary route to promote a user to admin status - remove in production
-@admin_bp.route("/admin/promote/<int:user_id>", methods=["GET"])
-def promote_to_admin(user_id):
-    """Temporary route to promote a user to admin status"""
-    try:
-        db = get_db()
-        db.execute(
-            """
-            UPDATE users SET is_admin = 1 WHERE id = ?
-            """,
-            (user_id,),
-        )
-        db.commit()
-        return jsonify(
-            {"success": True, "message": f"User {user_id} promoted to admin"}
-        )
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500

@@ -14,6 +14,7 @@ from ..utils.status_checks import (
     remove_from_processing_queue,
     get_processing_queue,
 )
+from ..utils.constants import STATUS_OK, STATUS_ERROR
 import os
 import random
 import json
@@ -23,11 +24,6 @@ import replicate
 import requests
 
 track_bp = Blueprint("track", __name__)
-
-# Status constants
-STATUS_OK = "OK"
-STATUS_WARNING = "WARNING"
-STATUS_ERROR = "ERROR"
 
 
 def de_search_track(search_term):

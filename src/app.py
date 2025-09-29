@@ -41,11 +41,3 @@ def before_request():
     """Update user's last online timestamp before each request."""
     if "user_id" in session:
         update_last_online(session["user_id"])
-
-
-if __name__ == "__main__":
-    app.run(
-        host=os.getenv("HOST", "0.0.0.0"),
-        port=int(os.getenv("PORT", 5000)),
-        debug=bool(os.getenv("DEBUG", True)),
-    )

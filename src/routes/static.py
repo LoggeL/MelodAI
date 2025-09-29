@@ -1,6 +1,5 @@
 from flask import Blueprint, send_from_directory, session, redirect
-from ..utils.decorators import login_required, admin_required
-from .auth import validate_auth_token
+from ..utils.decorators import login_required, admin_required, _validate_auth
 
 static_bp = Blueprint("static", __name__)
 
@@ -8,7 +7,7 @@ static_bp = Blueprint("static", __name__)
 @static_bp.route("/", methods=["GET"])
 def index():
     # Check both session and auth token
-    if "user_id" not in session and not validate_auth_token():
+    if not _validate_auth():
         return redirect("/login")
 
     return send_from_directory("static", "index.html")
@@ -31,7 +30,7 @@ def about_html():
 
 @static_bp.route("/login", methods=["GET"])
 def login_html():
-    if "user_id" in session or validate_auth_token():
+    if _validate_auth():
         return redirect("/")
     return send_from_directory("static", "login.html")
 

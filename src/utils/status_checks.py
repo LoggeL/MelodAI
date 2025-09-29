@@ -7,12 +7,7 @@ from ..services.deezer import init_deezer_session, test_deezer_login
 import logging
 import threading
 import json
-
-# Status constants
-STATUS_OK = "OK"
-STATUS_WARNING = "WARNING"
-STATUS_ERROR = "ERROR"
-STATUS_UNKNOWN = "UNKNOWN"
+from .constants import STATUS_OK, STATUS_WARNING, STATUS_ERROR, STATUS_UNKNOWN
 
 # Track processing queue tracker
 # Dictionary of {track_id: {start_time, metadata, status, progress}}
