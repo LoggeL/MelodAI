@@ -83,6 +83,56 @@ body.collapsed .side-container {
   padding: 0 10px;
 }
 
+.search-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  /* top: 50%; */
+  transform: translateY(-25%);
+  color: var(--text-light);
+  pointer-events: none;
+  z-index: 1;
+  transition: opacity 0.2s;
+}
+
+.search-spinner {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--primary);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.search-spinner i {
+  font-size: 0.9rem;
+}
+
+.search-clear {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text-light);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.search-clear:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
 .logo-container {
   display: flex;
   align-items: center;
@@ -103,11 +153,15 @@ body.collapsed .side-container {
 }
 
 .search-input {
-  width: calc(100% - 24px);
-  padding: 10px;
-  border-radius: 4px;
+  width: 100%;
+  padding: 10px 36px;
+  border-radius: 8px;
   border: 2px solid var(--border);
   margin-bottom: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.9rem;
+  transition: all 0.2s;
 }
 
 .search-input:focus {
@@ -257,10 +311,70 @@ body.collapsed .side-container {
 
 .volume-controls {
   display: grid;
-  grid-template-columns: 80px 1fr;
+  grid-template-columns: 90px 1fr 45px;
   gap: 8px;
   align-items: center;
   margin: 8px 0;
+}
+
+.volume-controls label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.875rem;
+  color: var(--text);
+}
+
+.volume-controls label i {
+  font-size: 0.75rem;
+  color: var(--primary);
+}
+
+.volume-value {
+  font-size: 0.75rem;
+  color: var(--text-light);
+  text-align: right;
+  min-width: 40px;
+}
+
+input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--hover);
+  outline: none;
+  cursor: pointer;
+}
+
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--primary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+input[type='range']::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+input[type='range']::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--primary);
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+}
+
+input[type='range']::-moz-range-thumb:hover {
+  transform: scale(1.2);
 }
 
 .lyrics-container {
@@ -917,6 +1031,7 @@ body.collapsed .main-container {
   padding: 10px 15px;
   border-radius: 8px;
   margin-bottom: 10px;
+  border: 1px solid var(--border);
 }
 
 .control-buttons {
@@ -930,12 +1045,132 @@ body.collapsed .main-container {
 #songQueue {
   flex: 1;
   overflow-y: auto;
+  padding: 0 10px;
 }
 
-/* Queue heading */
-.side-container h2 {
-  font-size: 1.1em;
+/* Queue header */
+.queue-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 0 10px;
+  margin-bottom: 10px;
+}
+
+.queue-header h2 {
+  font-size: 1.1em;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.queue-count {
+  font-size: 0.75rem;
+  color: var(--text-light);
+  font-weight: normal;
+}
+
+.queue-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.queue-action-btn {
+  font-size: 0.875rem;
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: var(--text-light);
+}
+
+.empty-state i {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+  opacity: 0.3;
+}
+
+.empty-state h2 {
+  margin: 0 0 0.5rem 0;
+  color: var(--text);
+  font-size: 1.5rem;
+}
+
+.empty-state p {
+  margin: 0;
+  font-size: 1rem;
+}
+
+/* Toast container */
+.toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.toast-container .toast {
+  pointer-events: all;
+  background: var(--surface);
+  color: var(--text);
+  padding: 12px 20px;
+  border-radius: 8px;
+  box-shadow: var(--shadow-lg);
+  border-left: 4px solid var(--success);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 300px;
+  animation: slideInRight 0.3s ease;
+}
+
+.toast.error {
+  border-left-color: var(--danger);
+}
+
+.toast.warning {
+  border-left-color: var(--warning);
+}
+
+.toast i {
+  font-size: 1.2rem;
+}
+
+.toast.success i {
+  color: var(--success);
+}
+
+.toast.error i {
+  color: var(--danger);
+}
+
+.toast.warning i {
+  color: var(--warning);
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  to {
+    opacity: 0;
+    transform: translateX(100%);
+  }
 }
 
 /* Style for the menu toggle button */

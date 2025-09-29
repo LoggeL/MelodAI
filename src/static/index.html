@@ -3,7 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MelodAI</title>
+    <meta
+      name="description"
+      content="MelodAI - AI-Powered Karaoke Player with synchronized lyrics and vocal separation"
+    />
+    <title>MelodAI - Karaoke Player</title>
     <link rel="icon" href="/logo.svg" />
     <link
       rel="stylesheet"
@@ -13,34 +17,75 @@
   </head>
 
   <body>
-    <div class="main-container">
-      <div class="side-container">
-        <!-- Search -->
+    <!-- Toast notification container -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <main class="main-container">
+      <aside
+        class="side-container"
+        role="complementary"
+        aria-label="Song queue and search"
+      >
+        <!-- Search Section -->
         <div class="search-container">
           <div class="logo-container">
             <button
               class="menu-toggle"
+              id="menuToggle"
               onclick="toggleMenu()"
-              aria-label="Toggle menu"
+              aria-label="Toggle sidebar"
+              title="Toggle sidebar"
             >
               <i class="fas fa-bars"></i>
             </button>
             <div class="logo-content">
-              <img src="/logo.svg" alt="logo" class="logo" />
+              <a href="/" aria-label="MelodAI Home">
+                <img src="/logo.svg" alt="MelodAI Logo" class="logo" />
+              </a>
             </div>
           </div>
-          <input
-            type="text"
-            class="search-input"
-            placeholder="Search for a song..."
-          />
-          <div class="search-dropdown" id="searchDropdown"></div>
+
+          <div class="search-input-wrapper">
+            <i class="fas fa-search search-icon" id="searchIcon"></i>
+            <div
+              class="search-spinner"
+              id="searchSpinner"
+              style="display: none"
+            >
+              <i class="fas fa-circle-notch fa-spin"></i>
+            </div>
+            <input
+              type="text"
+              class="search-input"
+              placeholder="Search for a song..."
+              aria-label="Search for songs"
+              autocomplete="off"
+            />
+            <button
+              class="search-clear"
+              id="searchClear"
+              aria-label="Clear search"
+              style="display: none"
+              title="Clear search"
+            >
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          <div
+            class="search-dropdown"
+            id="searchDropdown"
+            role="listbox"
+            aria-label="Search results"
+          ></div>
         </div>
 
         <!-- Player Controls -->
         <div class="side-controls">
           <div class="volume-controls">
-            <label>Vocals:</label>
+            <label for="vocalsVolume">
+              <i class="fas fa-microphone"></i>
+              Vocals:
+            </label>
             <input
               type="range"
               id="vocalsVolume"
@@ -48,10 +93,16 @@
               max="1"
               step="0.1"
               value="0.5"
+              aria-label="Vocals volume"
+              title="Adjust vocals volume"
             />
+            <span class="volume-value" id="vocalsVolumeValue">50%</span>
           </div>
           <div class="volume-controls">
-            <label>Music:</label>
+            <label for="musicVolume">
+              <i class="fas fa-music"></i>
+              Music:
+            </label>
             <input
               type="range"
               id="musicVolume"
@@ -59,121 +110,227 @@
               max="1"
               step="0.1"
               value="0.5"
+              aria-label="Music volume"
+              title="Adjust music volume"
             />
+            <span class="volume-value" id="musicVolumeValue">50%</span>
           </div>
           <div class="control-buttons">
-            <button class="control-btn" id="randomSong">
+            <button
+              class="control-btn"
+              id="randomSong"
+              aria-label="Random song"
+              title="Play random song from queue"
+            >
               <i class="fas fa-dice"></i>
             </button>
-            <button class="control-btn" id="toggleFullscreen">
+            <button
+              class="control-btn"
+              id="toggleFullscreen"
+              aria-label="Toggle fullscreen"
+              title="Enter fullscreen mode"
+            >
               <i class="fas fa-expand"></i>
             </button>
             <button
               class="control-btn"
               id="downloadButton"
-              title="Download"
               disabled
+              aria-label="Download track"
+              title="Download options"
             >
               <i class="fas fa-download"></i>
             </button>
-            <button class="control-btn" id="shareSong" title="Share" disabled>
+            <button
+              class="control-btn"
+              id="shareSong"
+              disabled
+              aria-label="Share song"
+              title="Share this song"
+            >
               <i class="fas fa-share-alt"></i>
             </button>
           </div>
         </div>
 
-        <h2>Song Queue</h2>
-        <div id="songQueue"></div>
-      </div>
+        <!-- Queue Header -->
+        <div class="queue-header">
+          <h2>
+            Song Queue <span class="queue-count" id="queueCount">(0)</span>
+          </h2>
+          <div class="queue-actions">
+            <button
+              class="control-btn queue-action-btn"
+              id="shuffleQueue"
+              aria-label="Shuffle queue"
+              title="Shuffle queue"
+            >
+              <i class="fas fa-random"></i>
+            </button>
+            <button
+              class="control-btn queue-action-btn"
+              id="clearQueue"
+              aria-label="Clear queue"
+              title="Clear queue"
+            >
+              <i class="fas fa-trash"></i>
+            </button>
+          </div>
+        </div>
 
-      <div class="lyrics-container" id="lyricsContainer">
-        <div class="lyrics-header">
+        <!-- Song Queue -->
+        <div id="songQueue" role="list" aria-label="Song queue"></div>
+      </aside>
+
+      <!-- Lyrics Section -->
+      <section
+        class="lyrics-container"
+        id="lyricsContainer"
+        role="main"
+        aria-label="Karaoke player"
+      >
+        <header class="lyrics-header">
           <button
             class="control-btn"
             onclick="toggleMenu()"
-            aria-label="Toggle menu"
+            aria-label="Toggle sidebar"
+            title="Toggle sidebar"
           >
             <i class="fas fa-bars"></i>
           </button>
           <div class="lyrics-title-container">
             <img class="lyrics-cover" src="/logo.svg" alt="Album cover" />
             <div class="lyrics-info">
-              <div class="lyrics-title"></div>
-              <div class="lyrics-artist"></div>
+              <div class="lyrics-artist">Select a song to begin</div>
+              <h1 class="lyrics-title">No song selected</h1>
             </div>
           </div>
-          <div class="lyrics-profile">
-            <button class="profile-button" id="profileButton">
+          <nav class="lyrics-profile" aria-label="User menu">
+            <button
+              class="profile-button"
+              id="profileButton"
+              aria-haspopup="true"
+              aria-expanded="false"
+            >
               <i class="fas fa-user"></i>
             </button>
-            <div class="profile-dropdown" id="profileDropdown">
+            <div
+              class="profile-dropdown"
+              id="profileDropdown"
+              role="menu"
+              aria-label="User menu"
+            >
               <div class="profile-dropdown-item" id="profileName">
                 <i class="fas fa-user"></i>
                 <span>Loading...</span>
               </div>
               <hr />
-              <a href="/about" class="profile-dropdown-item">
+              <a href="/about" class="profile-dropdown-item" role="menuitem">
                 <i class="fas fa-info-circle"></i>
                 About MelodAI
               </a>
-              <div
+              <button
                 class="profile-dropdown-item"
                 id="darkModeButton"
                 onclick="toggleTheme()"
+                role="menuitem"
               >
                 <i class="fas fa-moon"></i>
-                Dark Mode
-              </div>
-              <div
+                <span id="themeToggleText">Dark Mode</span>
+              </button>
+              <button
                 class="profile-dropdown-item"
                 id="adminButton"
                 style="display: none"
                 onclick="window.location.href='/admin'"
+                role="menuitem"
               >
                 <i class="fas fa-shield-alt"></i>
                 Admin Panel
-              </div>
+              </button>
               <hr />
-              <div class="profile-dropdown-item" onclick="logout()">
+              <button
+                class="profile-dropdown-item"
+                onclick="logout()"
+                role="menuitem"
+              >
                 <i class="fas fa-sign-out-alt"></i>
                 Logout
-              </div>
+              </button>
             </div>
+          </nav>
+        </header>
+        <div class="lyrics-content" id="lyricsContent">
+          <div class="empty-state">
+            <i class="fas fa-music"></i>
+            <h2>Ready to sing?</h2>
+            <p>Search for a song or select one from your queue to start</p>
           </div>
         </div>
-        <div class="lyrics-content">
-          <h2>Select or search for a song to start</h2>
-        </div>
-      </div>
-    </div>
+      </section>
+    </main>
 
     <!-- Fixed bottom player bar -->
-    <div class="player-bar">
+    <footer class="player-bar" role="contentinfo" aria-label="Player controls">
       <div class="player-bar-content">
-        <div class="progress-bar">
+        <div
+          class="progress-bar"
+          role="slider"
+          aria-label="Seek"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          aria-valuenow="0"
+          tabindex="0"
+        >
           <div class="progress" id="progress"></div>
-          <div class="progress-text">
+          <div class="progress-text" aria-live="off">
             <span class="progress-time" id="currentTime">0:00</span>
             /
             <span class="total-time" id="totalTime">0:00</span>
           </div>
         </div>
-        <button class="play-btn" id="playButton">
+        <button
+          class="play-btn"
+          id="playButton"
+          aria-label="Play"
+          title="Play/Pause (Space)"
+        >
           <i class="fas fa-play"></i>
         </button>
       </div>
-    </div>
+    </footer>
 
-    <div class="download-dropdown" id="downloadDropdown">
-      <div class="download-option" id="downloadVocals">
-        <i class="fas fa-microphone"></i> Download Vocals
-      </div>
-      <div class="download-option" id="downloadMusic">
-        <i class="fas fa-music"></i> Download Music
-      </div>
-      <div class="download-option" id="downloadFull">
-        <i class="fas fa-compact-disc"></i> Download Full Song
-      </div>
+    <!-- Download Dropdown -->
+    <div
+      class="download-dropdown"
+      id="downloadDropdown"
+      role="menu"
+      aria-label="Download options"
+    >
+      <button
+        class="download-option"
+        id="downloadVocals"
+        role="menuitem"
+        title="Download vocals only"
+      >
+        <i class="fas fa-microphone"></i> Vocals Only
+      </button>
+      <button
+        class="download-option"
+        id="downloadMusic"
+        role="menuitem"
+        title="Download instrumental only"
+      >
+        <i class="fas fa-music"></i> Instrumental
+      </button>
+      <button
+        class="download-option"
+        id="downloadFull"
+        role="menuitem"
+        title="Download full song"
+      >
+        <i class="fas fa-compact-disc"></i> Full Song
+      </button>
     </div>
 
     <script src="/js/player.js"></script>
