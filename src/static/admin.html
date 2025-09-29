@@ -4,17 +4,46 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MelodAI Admin</title>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+    />
+    <link rel="icon" href="/logo.svg" />
     <style>
+      :root {
+        --primary: #6366f1;
+        --primary-dark: #4f46e5;
+        --secondary: #0ea5e9;
+        --success: #22c55e;
+        --danger: #ef4444;
+        --warning: #f59e0b;
+        --background: #f8fafc;
+        --surface: #ffffff;
+        --text: #1e293b;
+        --text-light: #64748b;
+        --border: #e2e8f0;
+        --hover: #f1f5f9;
+        --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+        --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
       body {
         font-family: system-ui, -apple-system, sans-serif;
-        background: #f0f0f0;
+        background: var(--background);
         margin: 0;
-        padding: 20px;
+        padding: 0;
+        color: var(--text);
+        min-height: 100vh;
       }
 
       .container {
-        max-width: 1200px;
+        max-width: 1400px;
         margin: 0 auto;
+        padding: 20px;
       }
 
       .header {
@@ -22,298 +51,441 @@
         justify-content: space-between;
         align-items: center;
         margin-bottom: 2rem;
-      }
-
-      .card {
-        background: white;
         padding: 1.5rem;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        margin-bottom: 1rem;
+        background: var(--surface);
+        border-radius: 12px;
+        box-shadow: var(--shadow);
       }
 
-      table {
-        width: 100%;
-        border-collapse: collapse;
+      .header h1 {
+        margin: 0;
+        font-size: 1.875rem;
+        color: var(--primary);
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
       }
 
-      th,
-      td {
-        padding: 0.75rem;
-        text-align: left;
-        border-bottom: 1px solid #ddd;
-      }
-
-      th {
-        background: #f8f9fa;
-      }
-
-      button {
-        padding: 0.5rem 1rem;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-      }
-
-      .approve-btn {
-        background: #28a745;
-        color: white;
-      }
-
-      .approve-btn:hover {
-        background: #218838;
+      .header h1 i {
+        font-size: 1.5rem;
       }
 
       .btn-container {
         display: flex;
-        justify-content: flex-end;
+        gap: 0.75rem;
+      }
+
+      button {
+        padding: 0.625rem 1.25rem;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        font-weight: 500;
+        transition: all 0.2s;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
       }
 
       .home-btn {
-        background: #007bff;
+        background: var(--primary);
         color: white;
-        margin-right: 1rem;
       }
 
       .home-btn:hover {
-        background: #0056b3;
+        background: var(--primary-dark);
+        transform: translateY(-1px);
+        box-shadow: var(--shadow-lg);
       }
 
       .logout-btn {
-        background: #dc3545;
+        background: var(--danger);
         color: white;
       }
 
       .logout-btn:hover {
-        background: #c82333;
-      }
-
-      .status {
-        padding: 0.25rem 0.5rem;
-        border-radius: 4px;
-        font-size: 0.875rem;
-      }
-
-      .status-pending {
-        background: #ffeeba;
-        color: #856404;
-      }
-
-      .status-approved {
-        background: #d4edda;
-        color: #155724;
+        background: #dc2626;
+        transform: translateY(-1px);
+        box-shadow: var(--shadow-lg);
       }
 
       .tab-container {
-        margin-bottom: 1rem;
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1.5rem;
+        background: var(--surface);
+        padding: 0.5rem;
+        border-radius: 12px;
+        box-shadow: var(--shadow);
       }
 
       .tab {
-        padding: 0.5rem 1rem;
+        padding: 0.75rem 1.5rem;
         border: none;
-        background: none;
+        background: transparent;
         cursor: pointer;
         font-size: 1rem;
-        color: #6c757d;
+        color: var(--text-light);
+        border-radius: 8px;
+        transition: all 0.2s;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .tab:hover {
+        background: var(--hover);
+        color: var(--text);
       }
 
       .tab.active {
-        color: #007bff;
-        border-bottom: 2px solid #007bff;
-      }
-
-      .filters {
-        margin-bottom: 1rem;
-        display: flex;
-        gap: 1rem;
-      }
-
-      .filters input,
-      .filters select {
-        padding: 0.5rem;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-      }
-
-      .pagination {
-        margin-top: 1rem;
-        display: flex;
-        gap: 1rem;
-        align-items: center;
-        justify-content: center;
-      }
-
-      .pagination button {
-        padding: 0.5rem 1rem;
-        border: none;
-        border-radius: 4px;
-        background: #007bff;
+        background: var(--primary);
         color: white;
-        cursor: pointer;
       }
 
-      .pagination button:disabled {
-        background: #ccc;
-        cursor: not-allowed;
+      .card {
+        background: var(--surface);
+        padding: 1.5rem;
+        border-radius: 12px;
+        box-shadow: var(--shadow);
+        margin-bottom: 1.5rem;
+      }
+
+      .card h2,
+      .card h3 {
+        margin: 0 0 1.5rem 0;
+        color: var(--text);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
       }
 
       .stats-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 1rem;
-        margin-bottom: 1.5rem;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 1.25rem;
+        margin-bottom: 2rem;
       }
 
       .stat-card {
-        background: #f8f9fa;
-        padding: 1rem;
-        border-radius: 8px;
-        text-align: center;
-        border: 1px solid #e9ecef;
-        min-width: 0;
-        overflow: hidden;
+        background: linear-gradient(
+          135deg,
+          var(--primary) 0%,
+          var(--primary-dark) 100%
+        );
+        padding: 1.5rem;
+        border-radius: 12px;
+        color: white;
+        box-shadow: var(--shadow-lg);
+        transition: transform 0.2s;
+      }
+
+      .stat-card:hover {
+        transform: translateY(-4px);
+      }
+
+      .stat-card i {
+        font-size: 2rem;
+        opacity: 0.8;
+        margin-bottom: 0.75rem;
       }
 
       .stat-card h3 {
         margin: 0 0 0.5rem 0;
-        font-size: 1rem;
-        color: #6c757d;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        font-size: 0.9rem;
+        font-weight: 500;
+        opacity: 0.9;
+        color: white;
       }
 
       .stat-card p {
         margin: 0;
-        font-size: 1.25rem;
+        font-size: 2rem;
         font-weight: bold;
-        color: #007bff;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        color: white;
+      }
+
+      .stat-card:nth-child(1) {
+        background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+      }
+
+      .stat-card:nth-child(2) {
+        background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+      }
+
+      .stat-card:nth-child(3) {
+        background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+      }
+
+      .stat-card:nth-child(4) {
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+      }
+
+      .stat-card:nth-child(5) {
+        background: linear-gradient(135deg, #ec4899 0%, #db2777 100%);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+      }
+
+      th,
+      td {
+        padding: 1rem;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
       }
 
       th {
+        background: var(--hover);
+        font-weight: 600;
+        color: var(--text);
         cursor: pointer;
         user-select: none;
+        transition: background 0.2s;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+      }
+
+      th:first-child {
+        border-top-left-radius: 8px;
+      }
+
+      th:last-child {
+        border-top-right-radius: 8px;
       }
 
       th:hover {
-        background: #e9ecef;
+        background: var(--border);
+      }
+
+      tbody tr {
+        transition: background 0.2s;
+      }
+
+      tbody tr:hover {
+        background: var(--hover);
       }
 
       .sort-asc::after {
         content: ' ↑';
+        color: var(--primary);
       }
 
       .sort-desc::after {
         content: ' ↓';
+        color: var(--primary);
+      }
+
+      .status {
+        padding: 0.375rem 0.75rem;
+        border-radius: 6px;
+        font-size: 0.875rem;
+        font-weight: 500;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+      }
+
+      .status-pending {
+        background: #fef3c7;
+        color: #92400e;
+      }
+
+      .status-approved {
+        background: #d1fae5;
+        color: #065f46;
+      }
+
+      .status-unused {
+        background: #d1fae5;
+        color: #065f46;
+      }
+
+      .status-used {
+        background: #fee2e2;
+        color: #991b1b;
+      }
+
+      .approve-btn {
+        background: var(--success);
+        color: white;
+        padding: 0.5rem 1rem;
+        font-size: 0.875rem;
+      }
+
+      .approve-btn:hover {
+        background: #16a34a;
+        transform: translateY(-1px);
+      }
+
+      .filters {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+      }
+
+      .filters input,
+      .filters select {
+        padding: 0.625rem 1rem;
+        border: 2px solid var(--border);
+        border-radius: 8px;
+        font-size: 0.9rem;
+        background: var(--surface);
+        color: var(--text);
+        transition: border-color 0.2s;
+        min-width: 200px;
+      }
+
+      .filters input:focus,
+      .filters select:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+      }
+
+      .pagination {
+        margin-top: 1.5rem;
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+      }
+
+      .pagination button {
+        background: var(--primary);
+        color: white;
+        min-width: 100px;
+      }
+
+      .pagination button:hover:not(:disabled) {
+        background: var(--primary-dark);
+        transform: translateY(-1px);
+      }
+
+      .pagination button:disabled {
+        background: var(--border);
+        color: var(--text-light);
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      .pagination span {
+        font-weight: 500;
+        color: var(--text);
       }
 
       .invite-key-section {
-        margin-top: 2rem;
+        margin-bottom: 2rem;
+        padding: 1.5rem;
+        background: var(--hover);
+        border-radius: 12px;
+        border: 2px dashed var(--border);
+      }
+
+      .invite-key-section h3 {
+        margin: 0 0 1rem 0;
+      }
+
+      .invite-key-section button {
+        background: var(--primary);
+        color: white;
+        width: 100%;
+        margin-bottom: 1rem;
+      }
+
+      .invite-key-section button:hover {
+        background: var(--primary-dark);
       }
 
       .invite-key-section input {
         width: 100%;
-        padding: 0.5rem;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        margin-bottom: 0.5rem;
-      }
-
-      .invite-keys-list {
-        margin-top: 2rem;
-      }
-
-      .invite-keys-list table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 1rem;
-      }
-
-      .invite-keys-list th,
-      .invite-keys-list td {
         padding: 0.75rem;
-        text-align: left;
-        border-bottom: 1px solid #ddd;
+        border: 2px solid var(--border);
+        border-radius: 8px;
+        font-family: monospace;
+        font-size: 0.9rem;
+        background: var(--surface);
+        color: var(--text);
       }
 
-      .invite-keys-list th {
-        background: #f8f9fa;
-        font-weight: 600;
-      }
-
-      .key-status {
-        padding: 0.25rem 0.5rem;
-        border-radius: 4px;
+      .copy-button,
+      .cancel-button {
+        padding: 0.375rem 0.75rem;
         font-size: 0.875rem;
-      }
-
-      .status-unused {
-        background: #d4edda;
-        color: #155724;
-      }
-
-      .status-used {
-        background: #f8d7da;
-        color: #721c24;
+        border-radius: 6px;
       }
 
       .copy-button {
-        padding: 0.25rem 0.5rem;
-        background: #007bff;
+        background: var(--primary);
         color: white;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 0.875rem;
+        font-family: monospace;
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
 
       .copy-button:hover {
-        background: #0056b3;
+        background: var(--primary-dark);
+        transform: translateY(-1px);
       }
 
       .cancel-button {
-        padding: 0.25rem 0.5rem;
-        background: #dc3545;
+        background: var(--danger);
         color: white;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 0.875rem;
         margin-left: 0.5rem;
-        transition: background-color 0.2s;
       }
 
       .cancel-button:hover {
-        background: #c82333;
-      }
-
-      .cancel-button:active {
-        background: #bd2130;
+        background: #dc2626;
+        transform: translateY(-1px);
       }
 
       .notification {
         position: fixed;
         top: 20px;
         right: 20px;
-        padding: 1rem;
-        border-radius: 4px;
+        padding: 1rem 1.5rem;
+        border-radius: 12px;
         animation: slideIn 0.3s ease-out;
         z-index: 1000;
+        box-shadow: var(--shadow-lg);
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        max-width: 400px;
+      }
+
+      .notification i {
+        font-size: 1.25rem;
       }
 
       .notification.success {
-        background: #d4edda;
-        color: #155724;
-        border: 1px solid #c3e6cb;
+        background: #d1fae5;
+        color: #065f46;
+        border: 2px solid #10b981;
+      }
+
+      .notification.success i {
+        color: #10b981;
       }
 
       .notification.error {
-        background: #f8d7da;
-        color: #721c24;
-        border: 1px solid #f5c6cb;
+        background: #fee2e2;
+        color: #991b1b;
+        border: 2px solid #ef4444;
+      }
+
+      .notification.error i {
+        color: #ef4444;
       }
 
       @keyframes slideIn {
@@ -326,32 +498,145 @@
           opacity: 1;
         }
       }
+
+      .loading {
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        border: 3px solid rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        border-top-color: white;
+        animation: spin 0.8s linear infinite;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      .empty-state {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: var(--text-light);
+      }
+
+      .empty-state i {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+        opacity: 0.3;
+      }
+
+      .empty-state h3 {
+        margin: 0 0 0.5rem 0;
+        color: var(--text);
+      }
+
+      .empty-state p {
+        margin: 0;
+      }
+
+      @media (max-width: 768px) {
+        .container {
+          padding: 10px;
+        }
+
+        .header {
+          flex-direction: column;
+          gap: 1rem;
+          align-items: stretch;
+        }
+
+        .header h1 {
+          font-size: 1.5rem;
+        }
+
+        .btn-container {
+          flex-direction: column;
+        }
+
+        .tab-container {
+          overflow-x: auto;
+        }
+
+        .tab {
+          white-space: nowrap;
+          padding: 0.625rem 1rem;
+          font-size: 0.9rem;
+        }
+
+        .stats-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .filters {
+          flex-direction: column;
+        }
+
+        .filters input,
+        .filters select {
+          width: 100%;
+          min-width: 0;
+        }
+
+        table {
+          font-size: 0.875rem;
+        }
+
+        th,
+        td {
+          padding: 0.75rem 0.5rem;
+        }
+      }
+
+      .table-wrapper {
+        overflow-x: auto;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+      }
     </style>
   </head>
   <body>
     <div class="container">
       <div class="header">
-        <h1>MelodAI Admin Dashboard</h1>
+        <h1>
+          <i class="fas fa-shield-alt"></i>
+          Admin Dashboard
+        </h1>
         <div class="btn-container">
           <button class="home-btn" onclick="window.location.href = '/'">
+            <i class="fas fa-home"></i>
             Home
           </button>
-          <button class="logout-btn" onclick="logout()">Logout</button>
+          <button class="logout-btn" onclick="logout()">
+            <i class="fas fa-sign-out-alt"></i>
+            Logout
+          </button>
         </div>
       </div>
 
       <div class="tab-container">
-        <button class="tab active" onclick="showTab('users')">Users</button>
-        <button class="tab" onclick="showTab('usage')">Usage Logs</button>
+        <button class="tab active" onclick="showTab('users')">
+          <i class="fas fa-users"></i>
+          Users
+        </button>
+        <button class="tab" onclick="showTab('usage')">
+          <i class="fas fa-chart-line"></i>
+          Usage Logs
+        </button>
         <button class="tab" onclick="window.location.href='/admin/status'">
+          <i class="fas fa-heartbeat"></i>
           System Status
         </button>
       </div>
 
-      <div id="usersTab" class="card">
-        <div class="invite-key-section">
-          <h3>Invite Keys</h3>
-          <button onclick="generateInviteKey()">Generate Invite Key</button>
+      <div id="usersTab">
+        <div class="card invite-key-section">
+          <h3><i class="fas fa-key"></i> Generate Invite Key</h3>
+          <button onclick="generateInviteKey()">
+            <i class="fas fa-plus-circle"></i>
+            Generate New Key
+          </button>
           <input
             type="text"
             id="inviteKeyDisplay"
@@ -359,107 +644,126 @@
             placeholder="Generated key will appear here"
           />
         </div>
-        <div class="invite-keys-list">
-          <h3>Invite Keys</h3>
-          <table id="inviteKeysTable">
-            <thead>
-              <tr>
-                <th onclick="sortTable('inviteKeysTable', 0)">Key ↕</th>
-                <th onclick="sortTable('inviteKeysTable', 1)">Created By ↕</th>
-                <th onclick="sortTable('inviteKeysTable', 2)">Created At ↕</th>
-                <th onclick="sortTable('inviteKeysTable', 3)">Status ↕</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
+
+        <div class="card">
+          <h3><i class="fas fa-key"></i> Invite Keys</h3>
+          <div class="table-wrapper">
+            <table id="inviteKeysTable">
+              <thead>
+                <tr>
+                  <th onclick="sortTable('inviteKeysTable', 0)">Key</th>
+                  <th onclick="sortTable('inviteKeysTable', 1)">Created By</th>
+                  <th onclick="sortTable('inviteKeysTable', 2)">Created At</th>
+                  <th onclick="sortTable('inviteKeysTable', 3)">Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
         </div>
-        <h2>User Management</h2>
-        <table id="usersTable">
-          <thead>
-            <tr>
-              <th onclick="sortTable('usersTable', 0)">Username ↕</th>
-              <th onclick="sortTable('usersTable', 1)">Created At ↕</th>
-              <th onclick="sortTable('usersTable', 2)">Status ↕</th>
-              <th onclick="sortTable('usersTable', 3)">Last Online ↕</th>
-              <th onclick="sortTable('usersTable', 4)">Activity Count ↕</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
+
+        <div class="card">
+          <h3><i class="fas fa-users-cog"></i> User Management</h3>
+          <div class="table-wrapper">
+            <table id="usersTable">
+              <thead>
+                <tr>
+                  <th onclick="sortTable('usersTable', 0)">Username</th>
+                  <th onclick="sortTable('usersTable', 1)">Created At</th>
+                  <th onclick="sortTable('usersTable', 2)">Status</th>
+                  <th onclick="sortTable('usersTable', 3)">Last Online</th>
+                  <th onclick="sortTable('usersTable', 4)">Activity</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
-      <div id="usageTab" class="card" style="display: none">
-        <h2>Usage Logs</h2>
+      <div id="usageTab" style="display: none">
         <div class="stats-grid">
           <div class="stat-card">
+            <i class="fas fa-users"></i>
             <h3>Total Users</h3>
             <p id="totalUsers">-</p>
           </div>
           <div class="stat-card">
+            <i class="fas fa-download"></i>
             <h3>Total Downloads</h3>
             <p id="totalDownloads">-</p>
           </div>
           <div class="stat-card">
+            <i class="fas fa-search"></i>
             <h3>Total Searches</h3>
             <p id="totalSearches">-</p>
           </div>
           <div class="stat-card">
+            <i class="fas fa-random"></i>
             <h3>Random Plays</h3>
             <p id="totalRandomPlays">-</p>
           </div>
           <div class="stat-card">
+            <i class="fas fa-trophy"></i>
             <h3>Most Active User</h3>
             <p id="mostActiveUser">-</p>
           </div>
         </div>
-        <div class="filters">
-          <input
-            type="text"
-            id="usernameFilter"
-            placeholder="Filter by username"
-            onchange="loadUsageLogs(1)"
-          />
-          <select id="actionFilter" onchange="loadUsageLogs(1)">
-            <option value="">All actions</option>
-            <option value="download">Download</option>
-            <option value="search">Search</option>
-            <option value="random_play">Random Play</option>
-          </select>
-          <select id="perPage" onchange="loadUsageLogs(1)">
-            <option value="50">50 per page</option>
-            <option value="100">100 per page</option>
-            <option value="200">200 per page</option>
-          </select>
-        </div>
 
-        <div id="usageTable">
-          <table>
-            <thead>
-              <tr>
-                <th>User</th>
-                <th>Action</th>
-                <th>Track ID</th>
-                <th>Timestamp</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
+        <div class="card">
+          <h3><i class="fas fa-history"></i> Usage Logs</h3>
+          <div class="filters">
+            <input
+              type="text"
+              id="usernameFilter"
+              placeholder="🔍 Filter by username"
+              onchange="loadUsageLogs(1)"
+            />
+            <select id="actionFilter" onchange="loadUsageLogs(1)">
+              <option value="">All actions</option>
+              <option value="download">Download</option>
+              <option value="search">Search</option>
+              <option value="random_play">Random Play</option>
+            </select>
+            <select id="perPage" onchange="loadUsageLogs(1)">
+              <option value="50">50 per page</option>
+              <option value="100">100 per page</option>
+              <option value="200">200 per page</option>
+            </select>
+          </div>
 
-        <div class="pagination">
-          <button onclick="loadUsageLogs(currentPage - 1)" id="prevPage">
-            Previous
-          </button>
-          <span id="pageInfo">Page 1 of 1</span>
-          <button onclick="loadUsageLogs(currentPage + 1)" id="nextPage">
-            Next
-          </button>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>Action</th>
+                  <th>Track ID</th>
+                  <th>Timestamp</th>
+                </tr>
+              </thead>
+              <tbody id="usageTableBody"></tbody>
+            </table>
+          </div>
+
+          <div class="pagination">
+            <button onclick="loadUsageLogs(currentPage - 1)" id="prevPage">
+              <i class="fas fa-chevron-left"></i>
+              Previous
+            </button>
+            <span id="pageInfo">Page 1 of 1</span>
+            <button onclick="loadUsageLogs(currentPage + 1)" id="nextPage">
+              Next
+              <i class="fas fa-chevron-right"></i>
+            </button>
+          </div>
         </div>
       </div>
     </div>
 
+    <script src="/js/admin.js"></script>
     <script>
       function formatTimeAgo(dateString) {
         const date = new Date(dateString)
@@ -485,7 +789,6 @@
         const table = document.getElementById(tableId)
         const headers = table.getElementsByTagName('th')
 
-        // Update sort direction
         if (currentSort.column === column) {
           currentSort.direction =
             currentSort.direction === 'asc' ? 'desc' : 'asc'
@@ -494,13 +797,11 @@
           currentSort.direction = 'asc'
         }
 
-        // Update header classes
         Array.from(headers).forEach((header) => {
           header.classList.remove('sort-asc', 'sort-desc')
         })
         headers[column].classList.add(`sort-${currentSort.direction}`)
 
-        // Sort the rows
         const tbody = table.getElementsByTagName('tbody')[0]
         const rows = Array.from(tbody.getElementsByTagName('tr'))
 
@@ -508,13 +809,10 @@
           let aValue = a.cells[column].textContent
           let bValue = b.cells[column].textContent
 
-          // Handle different column types
           if (column === 1 || column === 3) {
-            // dates
             aValue = new Date(aValue)
             bValue = new Date(bValue)
           } else if (column === 4) {
-            // numbers
             aValue = parseInt(aValue)
             bValue = parseInt(bValue)
           }
@@ -524,7 +822,6 @@
           return 0
         })
 
-        // Reorder the table
         rows.forEach((row) => tbody.appendChild(row))
       }
 
@@ -540,12 +837,15 @@
             .map(
               (user) => `
             <tr>
-              <td>${user.username}</td>
+              <td><i class="fas fa-user"></i> ${user.username}</td>
               <td>${new Date(user.created_at).toLocaleString()}</td>
               <td>
                 <span class="status ${
                   user.is_approved ? 'status-approved' : 'status-pending'
                 }">
+                  <i class="fas fa-${
+                    user.is_approved ? 'check-circle' : 'clock'
+                  }"></i>
                   ${user.is_approved ? 'Approved' : 'Pending'}
                 </span>
               </td>
@@ -556,7 +856,9 @@
               <td>
                 ${
                   !user.is_approved
-                    ? `<button class="approve-btn" onclick="approveUser(${user.id})">Approve</button>`
+                    ? `<button class="approve-btn" onclick="approveUser(${user.id})">
+                        <i class="fas fa-check"></i> Approve
+                       </button>`
                     : ''
                 }
               </td>
@@ -592,21 +894,26 @@
 
           currentPage = page
 
-          const tbody = document.querySelector('#usageTable tbody')
+          const tbody = document.getElementById('usageTableBody')
           tbody.innerHTML = data.logs
             .map(
               (log) => `
                 <tr>
-                    <td>${log.username}</td>
-                    <td>${log.action}</td>
-                    <td>${log.track_id}</td>
+                    <td><i class="fas fa-user"></i> ${log.username}</td>
+                    <td><i class="fas fa-${
+                      log.action === 'download'
+                        ? 'download'
+                        : log.action === 'search'
+                        ? 'search'
+                        : 'random'
+                    }"></i> ${log.action}</td>
+                    <td><code>${log.track_id}</code></td>
                     <td>${new Date(log.created_at).toLocaleString()}</td>
                 </tr>
             `
             )
             .join('')
 
-          // Update pagination controls
           document.getElementById(
             'pageInfo'
           ).textContent = `Page ${page} of ${data.total_pages}`
@@ -626,8 +933,11 @@
           })
           const data = await response.json()
           document.getElementById('inviteKeyDisplay').value = data.key
+          showNotification('Invite key generated successfully!', 'success')
+          loadInviteKeys()
         } catch (error) {
           console.error('Error generating invite key:', error)
+          showNotification('Failed to generate invite key', 'error')
         }
       }
 
@@ -638,10 +948,12 @@
             credentials: 'include',
           })
           if (response.ok) {
+            showNotification('User approved successfully!', 'success')
             loadUsers()
           }
         } catch (error) {
           console.error('Error approving user:', error)
+          showNotification('Failed to approve user', 'error')
         }
       }
 
@@ -718,15 +1030,18 @@
                 <button class="copy-button" onclick="copyToClipboard('${
                   key.key
                 }')">
-                  ${key.key}
+                  <i class="fas fa-copy"></i> ${key.key}
                 </button>
               </td>
               <td>${key.created_by || '-'}</td>
               <td>${new Date(key.created_at).toLocaleString()}</td>
               <td>
-                <span class="key-status ${
+                <span class="status ${
                   key.used_by ? 'status-used' : 'status-unused'
                 }">
+                  <i class="fas fa-${
+                    key.used_by ? 'times-circle' : 'check-circle'
+                  }"></i>
                   ${key.used_by ? 'Used' : 'Available'}
                 </span>
               </td>
@@ -734,10 +1049,13 @@
                 ${
                   !key.used_by
                     ? `<button class="cancel-button" onclick="cancelInviteKey('${key.key}')">
-                    Cancel
-                  </button>`
-                    : `Used by ${key.used_by}<br>
-                   ${key.used_at ? new Date(key.used_at).toLocaleString() : ''}`
+                        <i class="fas fa-trash"></i> Cancel
+                      </button>`
+                    : `${key.used_by} <br> <small>${
+                        key.used_at
+                          ? new Date(key.used_at).toLocaleString()
+                          : ''
+                      }</small>`
                 }
               </td>
             </tr>
@@ -750,12 +1068,7 @@
       }
 
       async function cancelInviteKey(key) {
-        // Create a more descriptive confirmation dialog
-        const confirmMessage =
-          'Are you sure you want to cancel this invite key?\n\n' +
-          'This action cannot be undone and the key will no longer be usable for registration.'
-
-        if (!confirm(confirmMessage)) {
+        if (!confirm('Are you sure you want to cancel this invite key?')) {
           return
         }
 
@@ -766,28 +1079,18 @@
           })
 
           if (response.ok) {
-            const notification = document.createElement('div')
-            notification.className = 'notification success'
-            notification.textContent = 'Invite key cancelled successfully'
-            document.body.appendChild(notification)
-            setTimeout(() => notification.remove(), 3000)
-
+            showNotification('Invite key cancelled successfully!', 'success')
             loadInviteKeys()
           } else {
             const data = await response.json()
-            const errorDiv = document.createElement('div')
-            errorDiv.className = 'notification error'
-            errorDiv.textContent = data.error || 'Failed to cancel invite key'
-            document.body.appendChild(errorDiv)
-            setTimeout(() => errorDiv.remove(), 3000)
+            showNotification(
+              data.error || 'Failed to cancel invite key',
+              'error'
+            )
           }
         } catch (error) {
           console.error('Error cancelling invite key:', error)
-          const errorDiv = document.createElement('div')
-          errorDiv.className = 'notification error'
-          errorDiv.textContent = 'Failed to cancel invite key'
-          document.body.appendChild(errorDiv)
-          setTimeout(() => errorDiv.remove(), 3000)
+          showNotification('Failed to cancel invite key', 'error')
         }
       }
 
@@ -795,25 +1098,28 @@
         navigator.clipboard
           .writeText(text)
           .then(() => {
-            const notification = document.createElement('div')
-            notification.className = 'notification success'
-            notification.textContent = 'Invite key copied to clipboard!'
-            document.body.appendChild(notification)
-            setTimeout(() => notification.remove(), 3000)
+            showNotification('Invite key copied to clipboard!', 'success')
           })
           .catch((err) => {
             console.error('Failed to copy text: ', err)
-            const errorDiv = document.createElement('div')
-            errorDiv.className = 'notification error'
-            errorDiv.textContent = 'Failed to copy to clipboard'
-            document.body.appendChild(errorDiv)
-            setTimeout(() => errorDiv.remove(), 3000)
+            showNotification('Failed to copy to clipboard', 'error')
           })
       }
 
-      // Add this to your initialization code
+      function showNotification(message, type) {
+        const notification = document.createElement('div')
+        notification.className = `notification ${type}`
+        notification.innerHTML = `
+          <i class="fas fa-${
+            type === 'success' ? 'check-circle' : 'exclamation-circle'
+          }"></i>
+          ${message}
+        `
+        document.body.appendChild(notification)
+        setTimeout(() => notification.remove(), 3000)
+      }
+
       document.addEventListener('DOMContentLoaded', () => {
-        // Initialize
         loadUsers()
         loadInviteKeys()
       })
