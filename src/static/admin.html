@@ -324,6 +324,54 @@
         transform: translateY(-1px);
       }
 
+      .promote-btn {
+        background: var(--primary);
+        color: white;
+        padding: 0.5rem 1rem;
+        font-size: 0.875rem;
+      }
+
+      .promote-btn:hover {
+        background: var(--primary-dark);
+        transform: translateY(-1px);
+      }
+
+      .demote-btn {
+        background: var(--warning);
+        color: white;
+        padding: 0.5rem 1rem;
+        font-size: 0.875rem;
+      }
+
+      .demote-btn:hover {
+        background: #d97706;
+        transform: translateY(-1px);
+      }
+
+      .delete-btn {
+        background: var(--danger);
+        color: white;
+        padding: 0.5rem 1rem;
+        font-size: 0.875rem;
+      }
+
+      .delete-btn:hover {
+        background: #dc2626;
+        transform: translateY(-1px);
+      }
+
+      .status-admin {
+        background: color-mix(in srgb, var(--primary), white 85%);
+        color: var(--primary-dark);
+        border-color: var(--primary);
+      }
+
+      .status-user {
+        background: color-mix(in srgb, var(--text-light), white 90%);
+        color: var(--text);
+        border-color: var(--text-light);
+      }
+
       .filters {
         display: flex;
         gap: 1rem;
@@ -672,8 +720,9 @@
                   <th onclick="sortTable('usersTable', 0)">Username</th>
                   <th onclick="sortTable('usersTable', 1)">Created At</th>
                   <th onclick="sortTable('usersTable', 2)">Status</th>
-                  <th onclick="sortTable('usersTable', 3)">Last Online</th>
-                  <th onclick="sortTable('usersTable', 4)">Activity</th>
+                  <th onclick="sortTable('usersTable', 3)">Role</th>
+                  <th onclick="sortTable('usersTable', 4)">Last Online</th>
+                  <th onclick="sortTable('usersTable', 5)">Activity</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -825,8 +874,27 @@
         rows.forEach((row) => tbody.appendChild(row))
       }
 
+      let currentUserId = null
+
+      async function getCurrentUser() {
+        try {
+          const response = await fetch('/admin/me', {
+            credentials: 'include',
+          })
+          const data = await response.json()
+          currentUserId = data.user_id
+        } catch (error) {
+          console.error('Error getting current user:', error)
+        }
+      }
+
       async function loadUsers() {
         try {
+          // Ensure we have the current user ID
+          if (currentUserId === null) {
+            await getCurrentUser()
+          }
+
           const response = await fetch('/admin/users', {
             credentials: 'include',
           })
@@ -834,10 +902,16 @@
 
           const tbody = document.querySelector('#usersTable tbody')
           tbody.innerHTML = users
-            .map(
-              (user) => `
+            .map((user) => {
+              const isCurrentUser = user.id === currentUserId
+
+              return `
             <tr>
-              <td><i class="fas fa-user"></i> ${user.username}</td>
+              <td><i class="fas fa-user"></i> ${user.username}${
+                isCurrentUser
+                  ? ' <span style="color: var(--primary); font-weight: 600;">(You)</span>'
+                  : ''
+              }</td>
               <td>${new Date(user.created_at).toLocaleString()}</td>
               <td>
                 <span class="status ${
@@ -849,22 +923,55 @@
                   ${user.is_approved ? 'Approved' : 'Pending'}
                 </span>
               </td>
+              <td>
+                <span class="status ${
+                  user.is_admin ? 'status-admin' : 'status-user'
+                }">
+                  <i class="fas fa-${
+                    user.is_admin ? 'shield-alt' : 'user'
+                  }"></i>
+                  ${user.is_admin ? 'Admin' : 'User'}
+                </span>
+              </td>
               <td>${
                 user.last_online ? formatTimeAgo(user.last_online) : 'Never'
               }</td>
               <td>${user.activity_count}</td>
               <td>
-                ${
-                  !user.is_approved
-                    ? `<button class="approve-btn" onclick="approveUser(${user.id})">
-                        <i class="fas fa-check"></i> Approve
-                       </button>`
-                    : ''
-                }
+                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                  ${
+                    !user.is_approved
+                      ? `<button class="approve-btn" onclick="approveUser(${user.id})" title="Approve user">
+                          <i class="fas fa-check"></i> Approve
+                         </button>`
+                      : ''
+                  }
+                  ${
+                    !isCurrentUser && !user.is_admin
+                      ? `<button class="promote-btn" onclick="promoteUser(${user.id})" title="Promote to admin">
+                          <i class="fas fa-arrow-up"></i> Promote
+                         </button>`
+                      : ''
+                  }
+                  ${
+                    !isCurrentUser && user.is_admin
+                      ? `<button class="demote-btn" onclick="demoteUser(${user.id})" title="Demote from admin">
+                          <i class="fas fa-arrow-down"></i> Demote
+                         </button>`
+                      : ''
+                  }
+                  ${
+                    !isCurrentUser
+                      ? `<button class="delete-btn" onclick="deleteUser(${user.id}, '${user.username}')" title="Delete user">
+                          <i class="fas fa-trash"></i> Delete
+                         </button>`
+                      : ''
+                  }
+                </div>
               </td>
             </tr>
           `
-            )
+            })
             .join('')
         } catch (error) {
           console.error('Error loading users:', error)
@@ -954,6 +1061,81 @@
         } catch (error) {
           console.error('Error approving user:', error)
           showNotification('Failed to approve user', 'error')
+        }
+      }
+
+      async function promoteUser(userId) {
+        try {
+          const response = await fetch(`/admin/users/${userId}/promote`, {
+            method: 'POST',
+            credentials: 'include',
+          })
+
+          const data = await response.json()
+
+          if (response.ok) {
+            showNotification('User promoted to admin successfully!', 'success')
+            loadUsers()
+          } else {
+            showNotification(data.error || 'Failed to promote user', 'error')
+          }
+        } catch (error) {
+          console.error('Error promoting user:', error)
+          showNotification('Failed to promote user', 'error')
+        }
+      }
+
+      async function demoteUser(userId) {
+        if (!confirm('Are you sure you want to demote this user from admin?')) {
+          return
+        }
+
+        try {
+          const response = await fetch(`/admin/users/${userId}/demote`, {
+            method: 'POST',
+            credentials: 'include',
+          })
+
+          const data = await response.json()
+
+          if (response.ok) {
+            showNotification('User demoted from admin successfully!', 'success')
+            loadUsers()
+          } else {
+            showNotification(data.error || 'Failed to demote user', 'error')
+          }
+        } catch (error) {
+          console.error('Error demoting user:', error)
+          showNotification('Failed to demote user', 'error')
+        }
+      }
+
+      async function deleteUser(userId, username) {
+        if (
+          !confirm(
+            `Are you sure you want to delete user "${username}"? This action cannot be undone.`
+          )
+        ) {
+          return
+        }
+
+        try {
+          const response = await fetch(`/admin/users/${userId}`, {
+            method: 'DELETE',
+            credentials: 'include',
+          })
+
+          const data = await response.json()
+
+          if (response.ok) {
+            showNotification('User deleted successfully!', 'success')
+            loadUsers()
+          } else {
+            showNotification(data.error || 'Failed to delete user', 'error')
+          }
+        } catch (error) {
+          console.error('Error deleting user:', error)
+          showNotification('Failed to delete user', 'error')
         }
       }
 

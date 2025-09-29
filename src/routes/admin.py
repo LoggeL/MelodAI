@@ -25,6 +25,13 @@ import time
 admin_bp = Blueprint("admin", __name__)
 
 
+@admin_bp.route("/admin/me", methods=["GET"])
+@admin_required
+def get_current_admin():
+    """Get current admin user info"""
+    return jsonify({"user_id": session.get("user_id")})
+
+
 @admin_bp.route("/admin/users", methods=["GET"])
 @admin_required
 def list_users():
@@ -48,6 +55,56 @@ def approve_user(user_id):
     db.execute("UPDATE users SET is_approved = TRUE WHERE id = ?", (user_id,))
     db.commit()
     return jsonify({"message": "User approved"})
+
+
+@admin_bp.route("/admin/users/<int:user_id>/promote", methods=["POST"])
+@admin_required
+def promote_user(user_id):
+    """Promote a user to admin"""
+    db = get_db()
+
+    # Prevent promoting yourself (optional safety check)
+    if user_id == session.get("user_id"):
+        return jsonify({"error": "Cannot modify your own admin status"}), 400
+
+    db.execute("UPDATE users SET is_admin = TRUE WHERE id = ?", (user_id,))
+    db.commit()
+    return jsonify({"message": "User promoted to admin"})
+
+
+@admin_bp.route("/admin/users/<int:user_id>/demote", methods=["POST"])
+@admin_required
+def demote_user(user_id):
+    """Demote a user from admin"""
+    db = get_db()
+
+    # Prevent demoting yourself
+    if user_id == session.get("user_id"):
+        return jsonify({"error": "Cannot modify your own admin status"}), 400
+
+    db.execute("UPDATE users SET is_admin = FALSE WHERE id = ?", (user_id,))
+    db.commit()
+    return jsonify({"message": "User demoted from admin"})
+
+
+@admin_bp.route("/admin/users/<int:user_id>", methods=["DELETE"])
+@admin_required
+def delete_user(user_id):
+    """Delete a user account"""
+    db = get_db()
+
+    # Prevent deleting yourself
+    if user_id == session.get("user_id"):
+        return jsonify({"error": "Cannot delete your own account"}), 400
+
+    # Delete user's usage logs first (foreign key constraint)
+    db.execute("DELETE FROM usage_logs WHERE user_id = ?", (user_id,))
+
+    # Delete the user
+    db.execute("DELETE FROM users WHERE id = ?", (user_id,))
+    db.commit()
+
+    return jsonify({"message": "User deleted successfully"})
 
 
 @admin_bp.route("/admin/invite-keys", methods=["POST"])
