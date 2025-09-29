@@ -153,33 +153,90 @@
           </div>
         </div>
 
-        <!-- Queue Header -->
-        <div class="queue-header">
-          <h2>
-            Song Queue <span class="queue-count" id="queueCount">(0)</span>
-          </h2>
-          <div class="queue-actions">
-            <button
-              class="control-btn queue-action-btn"
-              id="shuffleQueue"
-              aria-label="Shuffle queue"
-              title="Shuffle queue"
-            >
-              <i class="fas fa-random"></i>
-            </button>
-            <button
-              class="control-btn queue-action-btn"
-              id="clearQueue"
-              aria-label="Clear queue"
-              title="Clear queue"
-            >
-              <i class="fas fa-trash"></i>
-            </button>
-          </div>
+        <!-- Tabs for Queue and Library -->
+        <div class="queue-tabs">
+          <button
+            class="queue-tab active"
+            data-tab="queue"
+            aria-label="Show queue"
+          >
+            <i class="fas fa-list"></i>
+            Queue <span class="queue-count" id="queueCount">(0)</span>
+          </button>
+          <button
+            class="queue-tab"
+            data-tab="library"
+            aria-label="Show library"
+          >
+            <i class="fas fa-folder-open"></i>
+            Library <span class="library-count" id="libraryCount">(0)</span>
+          </button>
+        </div>
+
+        <!-- Queue Actions -->
+        <div class="queue-actions-bar" id="queueActionsBar">
+          <button
+            class="control-btn queue-action-btn"
+            id="shuffleQueue"
+            aria-label="Shuffle queue"
+            title="Shuffle queue"
+          >
+            <i class="fas fa-random"></i>
+          </button>
+          <button
+            class="control-btn queue-action-btn"
+            id="clearQueue"
+            aria-label="Shuffle queue"
+            title="Clear queue"
+          >
+            <i class="fas fa-trash"></i>
+          </button>
+        </div>
+
+        <!-- Library Actions -->
+        <div
+          class="queue-actions-bar"
+          id="libraryActionsBar"
+          style="display: none"
+        >
+          <button
+            class="control-btn queue-action-btn"
+            id="refreshLibrary"
+            aria-label="Refresh library"
+            title="Refresh library"
+          >
+            <i class="fas fa-sync-alt"></i>
+          </button>
+          <button
+            class="control-btn queue-action-btn"
+            id="addAllToQueue"
+            aria-label="Add all to queue"
+            title="Add all to queue"
+          >
+            <i class="fas fa-plus-circle"></i>
+          </button>
         </div>
 
         <!-- Song Queue -->
-        <div id="songQueue" role="list" aria-label="Song queue"></div>
+        <div
+          id="songQueue"
+          class="tab-content active"
+          role="list"
+          aria-label="Song queue"
+        ></div>
+
+        <!-- Library -->
+        <div
+          id="libraryContent"
+          class="tab-content"
+          role="list"
+          aria-label="Song library"
+        >
+          <div class="library-loading">
+            <i class="fas fa-circle-notch fa-spin"></i>
+            <p>Loading library...</p>
+          </div>
+        </div>
       </aside>
 
       <!-- Lyrics Section -->
@@ -334,5 +391,6 @@
     </div>
 
     <script src="/js/player.js"></script>
+    <script src="/js/library.js"></script>
   </body>
 </html>

@@ -480,14 +480,14 @@ class KaraokePlayer {
                 <div class="queue-item-controls">
                     ${
                       song.error
-                        ? `<button class="queue-control-btn retry-btn" title="Retry" onclick="karaokePlayer.retrySong(${index})">
+                        ? `<button class="queue-control-btn retry-btn" title="Retry" onclick="window.karaokePlayer.retrySong(${index})">
                         <i class="fas fa-redo"></i>
                        </button>`
                         : ''
                     }
                     ${
                       index !== this.currentSongIndex
-                        ? `<button class="queue-control-btn remove-btn" title="Remove" onclick="karaokePlayer.removeSong(${index})">
+                        ? `<button class="queue-control-btn remove-btn" title="Remove" onclick="window.karaokePlayer.removeSong(${index})">
                         <i class="fas fa-times"></i>
                        </button>`
                         : ''
@@ -500,6 +500,13 @@ class KaraokePlayer {
         `
       )
       .join('')
+
+    // Update queue count
+    const queueCountEl = document.getElementById('queueCount')
+    if (queueCountEl) {
+      queueCountEl.textContent = `(${this.songQueue.length})`
+    }
+
     this.updateQueue()
   }
 
@@ -603,10 +610,29 @@ class KaraokePlayer {
 
     document.getElementById('vocalsVolume').addEventListener('input', (e) => {
       this.vocalsGain.gain.value = e.target.value
+      // Update volume display
+      const volumeValue = document.getElementById('vocalsVolumeValue')
+      if (volumeValue) {
+        volumeValue.textContent = `${Math.round(e.target.value * 100)}%`
+      }
     })
 
     document.getElementById('musicVolume').addEventListener('input', (e) => {
       this.musicGain.gain.value = e.target.value
+      // Update volume display
+      const volumeValue = document.getElementById('musicVolumeValue')
+      if (volumeValue) {
+        volumeValue.textContent = `${Math.round(e.target.value * 100)}%`
+      }
+    })
+
+    // Setup queue management buttons
+    document.getElementById('shuffleQueue')?.addEventListener('click', () => {
+      this.shuffleQueue()
+    })
+
+    document.getElementById('clearQueue')?.addEventListener('click', () => {
+      this.clearQueue()
     })
 
     // Setup initial audio event listeners
@@ -648,16 +674,41 @@ class KaraokePlayer {
     // Search functionality
     const searchInput = document.querySelector('.search-input')
     const searchDropdown = document.getElementById('searchDropdown')
+    const searchClear = document.getElementById('searchClear')
+    const searchIcon = document.getElementById('searchIcon')
+    const searchSpinner = document.getElementById('searchSpinner')
     let searchTimeout
+
+    // Search clear button
+    if (searchClear) {
+      searchClear.addEventListener('click', () => {
+        searchInput.value = ''
+        searchClear.style.display = 'none'
+        searchDropdown.classList.remove('active')
+        searchInput.focus()
+      })
+    }
 
     searchInput.addEventListener('input', (e) => {
       clearTimeout(searchTimeout)
       const query = e.target.value.trim()
 
+      // Show/hide clear button
+      if (searchClear) {
+        searchClear.style.display = query.length > 0 ? 'block' : 'none'
+      }
+
       if (query.length < 2) {
         searchDropdown.classList.remove('active')
+        // Hide spinner, show search icon
+        if (searchSpinner) searchSpinner.style.display = 'none'
+        if (searchIcon) searchIcon.style.display = 'block'
         return
       }
+
+      // Show spinner, hide search icon
+      if (searchSpinner) searchSpinner.style.display = 'block'
+      if (searchIcon) searchIcon.style.display = 'none'
 
       searchTimeout = setTimeout(async () => {
         try {
@@ -666,6 +717,10 @@ class KaraokePlayer {
             throw new Error('Search failed')
           }
           const results = await response.json()
+
+          // Hide spinner, show search icon
+          if (searchSpinner) searchSpinner.style.display = 'none'
+          if (searchIcon) searchIcon.style.display = 'block'
 
           searchDropdown.innerHTML = results
             .map(
@@ -702,7 +757,7 @@ class KaraokePlayer {
                 }
 
                 // Add to queue
-                await karaokePlayer.addToQueue(song)
+                await window.karaokePlayer.addToQueue(song)
 
                 // Clear search
                 searchInput.value = ''
@@ -713,6 +768,9 @@ class KaraokePlayer {
           searchDropdown.classList.add('active')
         } catch (error) {
           console.error('Search error:', error)
+          // Hide spinner, show search icon
+          if (searchSpinner) searchSpinner.style.display = 'none'
+          if (searchIcon) searchIcon.style.display = 'block'
           searchDropdown.innerHTML =
             '<div class="search-error">Search failed. Please try again.</div>'
           searchDropdown.classList.add('active')
@@ -770,12 +828,27 @@ class KaraokePlayer {
     }
   }
 
-  async addToQueue(song) {
+  async addToQueue(song, skipProcessing = false) {
     try {
       // First check if the song is already being processed
       const existingSong = this.songQueue.find((s) => s.id === song.id)
       if (existingSong) {
         console.log('Song is already in queue')
+        return
+      }
+
+      // If skipProcessing is true, add as ready (for library songs)
+      if (skipProcessing) {
+        const queueItem = {
+          ...song,
+          ready: true,
+          status: 'ready',
+          progress: 100,
+          error: false,
+        }
+        this.songQueue.push(queueItem)
+        this.updateQueue()
+        this.renderQueue()
         return
       }
 
@@ -982,6 +1055,96 @@ class KaraokePlayer {
     this.renderQueue()
   }
 
+  shuffleQueue() {
+    if (this.songQueue.length <= 1) return
+
+    // Save the currently playing song
+    const currentSong =
+      this.currentSongIndex !== -1
+        ? this.songQueue[this.currentSongIndex]
+        : null
+
+    // Remove current song from shuffle
+    let songsToShuffle = this.songQueue.filter(
+      (_, index) => index !== this.currentSongIndex
+    )
+
+    // Fisher-Yates shuffle
+    for (let i = songsToShuffle.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[songsToShuffle[i], songsToShuffle[j]] = [
+        songsToShuffle[j],
+        songsToShuffle[i],
+      ]
+    }
+
+    // Rebuild queue with current song at the same position
+    if (currentSong) {
+      songsToShuffle.splice(this.currentSongIndex, 0, currentSong)
+      this.songQueue = songsToShuffle
+    } else {
+      this.songQueue = songsToShuffle
+      this.currentSongIndex = -1
+    }
+
+    this.renderQueue()
+    this.showToast('Queue shuffled', 'success')
+  }
+
+  clearQueue() {
+    if (this.songQueue.length === 0) return
+
+    // Confirm before clearing
+    if (!confirm('Are you sure you want to clear the queue?')) return
+
+    // Keep only the currently playing song
+    if (this.currentSongIndex !== -1) {
+      const currentSong = this.songQueue[this.currentSongIndex]
+      this.songQueue = [currentSong]
+      this.currentSongIndex = 0
+    } else {
+      this.songQueue = []
+      this.currentSongIndex = -1
+    }
+
+    this.renderQueue()
+    this.showToast('Queue cleared', 'success')
+  }
+
+  showToast(message, type = 'success') {
+    const toastContainer = document.getElementById('toastContainer')
+    if (!toastContainer) return
+
+    const toast = document.createElement('div')
+    toast.className = `toast ${type}`
+
+    const icon =
+      type === 'success'
+        ? 'fa-check-circle'
+        : type === 'error'
+        ? 'fa-exclamation-circle'
+        : 'fa-exclamation-triangle'
+
+    toast.innerHTML = `
+      <i class="fas ${icon}"></i>
+      <span>${this.escapeHtml(message)}</span>
+    `
+
+    toastContainer.appendChild(toast)
+
+    // Auto remove after 3 seconds
+    setTimeout(() => {
+      toast.style.animation = 'fadeOut 0.3s ease forwards'
+      setTimeout(() => toast.remove(), 300)
+    }, 3000)
+  }
+
+  escapeHtml(text) {
+    const div = document.createElement('div')
+    div.textContent = text
+    return div.innerHTML
+  }
+
   formatTime(seconds) {
     if (isNaN(seconds)) return '0:00'
     const minutes = Math.floor(seconds / 60)
@@ -991,9 +1154,8 @@ class KaraokePlayer {
 }
 
 // Initialize the player when the page loads
-let karaokePlayer
 window.addEventListener('DOMContentLoaded', () => {
-  karaokePlayer = new KaraokePlayer()
+  window.karaokePlayer = new KaraokePlayer()
 
   // Setup profile dropdown
   const profileButton = document.getElementById('profileButton')
@@ -1047,7 +1209,7 @@ window.addEventListener('DOMContentLoaded', () => {
           musicUrl: `songs/${songId}/no_vocals.mp3`,
           lyricsUrl: `songs/${songId}/lyrics.json`,
         }
-        karaokePlayer.addToQueue(song)
+        window.karaokePlayer.addToQueue(song)
       })
       .catch((error) => console.error('Error loading song from URL:', error))
   }

@@ -363,6 +363,67 @@ def random_song():
         return jsonify({"error": str(e)}), 500
 
 
+@track_bp.route("/track/library", methods=["GET"])
+@login_required
+def get_library():
+    """Get all available songs from the library."""
+    songs_dir = Path("src/songs")
+    if not songs_dir.exists():
+        return jsonify({"songs": [], "count": 0}), 200
+
+    songs = []
+
+    # Get all song directories that have the required files
+    for song_dir in songs_dir.iterdir():
+        if not song_dir.is_dir():
+            continue
+
+        metadata_file = song_dir / "metadata.json"
+        lyrics_file = song_dir / "lyrics.json"
+
+        # Check if song has all required files
+        has_metadata = metadata_file.exists()
+        has_lyrics = lyrics_file.exists()
+        has_vocals = (song_dir / "vocals.mp3").exists()
+        has_no_vocals = (song_dir / "no_vocals.mp3").exists()
+
+        if has_metadata:
+            try:
+                with open(metadata_file, "r") as f:
+                    metadata = json.load(f)
+
+                # Calculate completion status
+                completion = 0
+                if has_metadata:
+                    completion += 25
+                if has_lyrics:
+                    completion += 25
+                if has_vocals:
+                    completion += 25
+                if has_no_vocals:
+                    completion += 25
+
+                songs.append(
+                    {
+                        "id": song_dir.name,
+                        "title": metadata.get("title", "Unknown"),
+                        "artist": metadata.get("artist", "Unknown"),
+                        "duration": metadata.get("duration", 0),
+                        "cover": metadata.get("cover", ""),
+                        "completion": completion,
+                        "ready": completion == 100,
+                    }
+                )
+            except Exception as e:
+                print(f"Error reading metadata for {song_dir.name}: {e}")
+                continue
+
+    # Sort by title
+    songs.sort(key=lambda x: x["title"].lower())
+
+    return jsonify({"songs": songs, "count": len(songs)})
+
+
 @track_bp.route("/track/<track_id>", methods=["GET"])
 def get_track_metadata(track_id):
     try:
