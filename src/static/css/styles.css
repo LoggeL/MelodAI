@@ -1125,23 +1125,96 @@ body.collapsed .main-container {
 .progress-bar {
   width: calc(100% - 60px); /* Leave space for play button */
   height: 100%;
-  background: var(--background);
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--primary), transparent 90%) 0%,
+    color-mix(in srgb, var(--primary), transparent 95%) 100%
+  );
   cursor: pointer;
   position: relative;
-  border-radius: 4px;
-  outline: 1px solid var(--border);
+  border-radius: 8px;
+  border: 1px solid var(--border);
   box-sizing: border-box;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.progress-bar:hover {
+  transform: scaleY(1.1);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+}
+
+[data-theme='dark'] .progress-bar {
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--surface), transparent 20%) 0%,
+    color-mix(in srgb, var(--surface), transparent 40%) 100%
+  );
+  border-color: var(--border);
+}
+
+[data-theme='dark'] .progress-bar:hover {
+  box-shadow: 0 2px 8px rgba(129, 140, 248, 0.4);
 }
 
 .progress {
   height: 100%;
-  background: var(--primary);
+  background: linear-gradient(
+    90deg,
+    var(--primary) 0%,
+    var(--primary-dark) 50%,
+    var(--primary) 100%
+  );
+  background-size: 200% 100%;
   width: 0;
-  transition: width 0.1s;
+  transition: width 0.1s linear;
   position: absolute;
   left: 0;
   top: 0;
-  border-radius: 4px;
+  border-radius: 8px;
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.4);
+  animation: shimmer 3s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0%,
+  100% {
+    background-position: 0% 0%;
+  }
+  50% {
+    background-position: 100% 0%;
+  }
+}
+
+/* Progress bar thumb/indicator */
+.progress::after {
+  content: '';
+  position: absolute;
+  right: -2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 12px;
+  height: 12px;
+  background: white;
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.progress-bar:hover .progress::after {
+  opacity: 1;
+}
+
+[data-theme='dark'] .progress {
+  background: linear-gradient(
+    90deg,
+    var(--primary) 0%,
+    #818cf8 50%,
+    var(--primary) 100%
+  );
+  background-size: 200% 100%;
+  box-shadow: 0 0 15px rgba(129, 140, 248, 0.5);
 }
 
 /* Update time display inside progress bar */
@@ -1150,14 +1223,33 @@ body.collapsed .main-container {
   left: 12px;
   top: 50%;
   transform: translateY(-50%);
-  color: white;
-  font-size: 0.8em;
+  color: var(--text);
+  font-size: 0.85em;
   font-variant-numeric: tabular-nums;
   z-index: 2;
-  mix-blend-mode: difference;
   pointer-events: none; /* Prevent text from interfering with clicks */
   font-weight: 600;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  padding: 4px 10px;
+  border-radius: 20px;
+  transition: all 0.3s ease;
+}
+
+.progress-bar:hover .progress-text {
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateY(-50%) scale(1.05);
+}
+
+[data-theme='dark'] .progress-text {
+  color: var(--text);
+  background: rgba(30, 41, 59, 0.6);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme='dark'] .progress-bar:hover .progress-text {
+  background: rgba(30, 41, 59, 0.8);
 }
 
 /* Update play button position */
