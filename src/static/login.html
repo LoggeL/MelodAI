@@ -518,60 +518,6 @@
           registerButton.disabled = true
         }
       }
-
-      async function logout() {
-        try {
-          await fetch('/auth/logout', {
-            method: 'POST',
-            credentials: 'include',
-          })
-          window.location.href = '/login.html'
-        } catch (error) {
-          console.error('Error logging out:', error)
-        }
-      }
-
-      // Modify the handleUnauthorized function to allow promise chain to continue
-      function handleUnauthorized(response) {
-        if (response.status === 401) {
-          // Clone the response so we can both read it for redirect and pass it along
-          const clone = response.clone()
-          clone
-            .json()
-            .then((data) => {
-              if (data.redirect) {
-                window.location.href = data.redirect
-              }
-            })
-            .catch((err) =>
-              console.error('Error parsing unauthorized response:', err)
-            )
-          // Return false to allow the promise chain to continue
-          return false
-        }
-        return false
-      }
-
-      // Modify the addAuthHandling function to allow promise chain to continue
-      function addAuthHandling() {
-        const originalFetch = window.fetch
-        window.fetch = async function () {
-          try {
-            const response = await originalFetch.apply(this, arguments)
-            // Only prevent further processing if we handle the unauthorized case AND want to stop processing
-            // For now, always let the promise chain continue
-            handleUnauthorized(response)
-            return response
-          } catch (error) {
-            throw error
-          }
-        }
-      }
-
-      // Call this when the page loads
-      document.addEventListener('DOMContentLoaded', () => {
-        addAuthHandling()
-      })
     </script>
   </body>
 </html>

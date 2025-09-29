@@ -398,11 +398,6 @@ class KaraokePlayer {
 
     this.updateQueueHighlight()
 
-    // Update lyrics info
-    document.querySelector('.lyrics-cover').src = song.thumbnail
-    document.querySelector('.lyrics-artist').textContent = song.artist
-    document.querySelector('.lyrics-title').textContent = song.title
-
     // Reset player state
     this.playing = false
 
@@ -775,74 +770,6 @@ class KaraokePlayer {
     }
   }
 
-  handleSearch(e) {
-    // check if enter key is pressed
-    if (e.key !== 'Enter') return
-
-    const query = e.target.value.trim()
-
-    const dropdown = document.getElementById('searchDropdown')
-    if (query.length < 2) {
-      dropdown.classList.remove('active')
-      return
-    }
-    fetch('/search?q=' + encodeURIComponent(query))
-      .then((response) => response.json())
-      .then((results) => {
-        // Show results
-        dropdown.innerHTML = results
-          .map(
-            (result) => `
-              <div class="search-result">
-                <img src="${result.thumb}" alt="${result.title}">
-                <div class="search-result-info">
-                  <div class="search-result-title">${result.title}</div>
-                  <div class="search-result-artist">${result.artist}</div>
-                </div>
-              </div>
-            `
-          )
-          .join('')
-
-        // Add click handlers after creating the elements
-        dropdown
-          .querySelectorAll('.search-result')
-          .forEach((element, index) => {
-            element.addEventListener('click', async () => {
-              const result = results[index]
-              // Prepare song object with necessary information
-              const song = {
-                id: result.id,
-                title: result.title,
-                artist: result.artist,
-                thumbnail: result.thumb,
-                vocalsUrl: `songs/${result.id}/vocals.mp3`,
-                musicUrl: `songs/${result.id}/no_vocals.mp3`,
-                lyricsUrl: `songs/${result.id}/lyrics.json`,
-                ready: false,
-                progress: 0,
-                status: 'processing',
-              }
-
-              // Add to queue
-              await karaokePlayer.addToQueue(song)
-
-              // Clear search
-              document.querySelector('.search-input').value = ''
-              dropdown.classList.remove('active')
-            })
-          })
-
-        dropdown.classList.add('active')
-      })
-      .catch((error) => {
-        console.error('Search error:', error)
-        dropdown.innerHTML =
-          '<div class="search-error">Search failed. Please try again.</div>'
-        dropdown.classList.add('active')
-      })
-  }
-
   async addToQueue(song) {
     try {
       // First check if the song is already being processed
@@ -1067,12 +994,6 @@ class KaraokePlayer {
 let karaokePlayer
 window.addEventListener('DOMContentLoaded', () => {
   karaokePlayer = new KaraokePlayer()
-  document
-    .querySelector('.progress-bar')
-    .addEventListener('click', (e) => karaokePlayer.clickProgressBar(e))
-  document
-    .querySelector('.search-input')
-    .addEventListener('keyup', karaokePlayer.handleSearch)
 
   // Setup profile dropdown
   const profileButton = document.getElementById('profileButton')
@@ -1131,14 +1052,6 @@ window.addEventListener('DOMContentLoaded', () => {
       .catch((error) => console.error('Error loading song from URL:', error))
   }
 })
-
-function debounce(func, wait) {
-  let timeout
-  return function (...args) {
-    clearTimeout(timeout)
-    timeout = setTimeout(() => func.apply(this, args), wait)
-  }
-}
 
 // Theme management
 function getTheme() {

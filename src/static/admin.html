@@ -651,7 +651,7 @@
             method: 'POST',
             credentials: 'include',
           })
-          window.location.href = '/login.html'
+          window.location.href = '/login'
         } catch (error) {
           console.error('Error logging out:', error)
         }
@@ -795,11 +795,19 @@
         navigator.clipboard
           .writeText(text)
           .then(() => {
-            // You could add a visual feedback here
-            alert('Copied to clipboard!')
+            const notification = document.createElement('div')
+            notification.className = 'notification success'
+            notification.textContent = 'Invite key copied to clipboard!'
+            document.body.appendChild(notification)
+            setTimeout(() => notification.remove(), 3000)
           })
           .catch((err) => {
             console.error('Failed to copy text: ', err)
+            const errorDiv = document.createElement('div')
+            errorDiv.className = 'notification error'
+            errorDiv.textContent = 'Failed to copy to clipboard'
+            document.body.appendChild(errorDiv)
+            setTimeout(() => errorDiv.remove(), 3000)
           })
       }
 
