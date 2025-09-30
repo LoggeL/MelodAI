@@ -1174,6 +1174,7 @@ body.collapsed .main-container {
   border-radius: 8px;
   box-shadow: 0 0 10px rgba(99, 102, 241, 0.4);
   animation: shimmer 3s ease-in-out infinite;
+  pointer-events: none; /* Allow clicks to pass through to progress-bar */
 }
 
 @keyframes shimmer {
