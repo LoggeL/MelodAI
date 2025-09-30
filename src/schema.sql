@@ -46,4 +46,13 @@ CREATE TABLE IF NOT EXISTS system_status (
     last_checked TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     checked_by INTEGER,
     FOREIGN KEY (checked_by) REFERENCES users (id)
+);
+
+CREATE TABLE IF NOT EXISTS processing_failures (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    track_id TEXT NOT NULL,
+    failure_count INTEGER DEFAULT 1,
+    last_failure TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    error_message TEXT,
+    UNIQUE(track_id)
 ); 

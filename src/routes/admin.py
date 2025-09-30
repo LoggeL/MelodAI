@@ -6,6 +6,8 @@ from flask import (
     send_from_directory,
 )
 import secrets
+import shutil
+import os
 from ..models.db import get_db
 from ..utils.decorators import admin_required
 from ..models.db import create_invite_key
@@ -358,10 +360,18 @@ def get_track_queue():
 @admin_required
 def get_unfinished_songs_list():
     """Get the list of unfinished songs that can be reprocessed"""
+    db = get_db()
     unfinished_songs = get_unfinished_songs()
 
-    # Format timestamps to readable format
+    # Add failure count information to each song
     for song in unfinished_songs:
+        failure_info = db.execute(
+            "SELECT failure_count, error_message FROM processing_failures WHERE track_id = ?",
+            (song["track_id"],)
+        ).fetchone()
+        
+        song["failure_count"] = failure_info["failure_count"] if failure_info else 0
+        song["error_message"] = failure_info["error_message"] if failure_info else None
         song["last_modified"] = time.strftime(
             "%Y-%m-%d %H:%M:%S", time.localtime(song["last_modified"])
         )
@@ -436,6 +446,21 @@ def reprocess_track():
                     user_id,
                 )
 
+                # Track the failure in database
+                db = get_db()
+                db.execute(
+                    """
+                    INSERT INTO processing_failures (track_id, failure_count, error_message)
+                    VALUES (?, 1, ?)
+                    ON CONFLICT(track_id) DO UPDATE SET
+                        failure_count = failure_count + 1,
+                        last_failure = CURRENT_TIMESTAMP,
+                        error_message = ?
+                    """,
+                    (track_id, str(e), str(e))
+                )
+                db.commit()
+
                 # Ensure cleanup on error
                 remove_from_processing_queue(track_id)
 
@@ -450,3 +475,40 @@ def reprocess_track():
     return jsonify(
         {"success": True, "message": f"Track {track_id} reprocessing started"}
     )
+
+
+@admin_bp.route("/admin/track/<track_id>", methods=["DELETE"])
+@admin_required
+def delete_track(track_id):
+    """Delete a failed track and all its associated files"""
+    db = get_db()
+    
+    # Get failure count to verify this track has failed
+    failure_info = db.execute(
+        "SELECT failure_count FROM processing_failures WHERE track_id = ?",
+        (track_id,)
+    ).fetchone()
+    
+    if not failure_info:
+        return jsonify({"error": "Track has no failure record"}), 400
+    
+    try:
+        # Delete the track directory if it exists
+        track_dir = f"src/songs/{track_id}"
+        if os.path.exists(track_dir):
+            shutil.rmtree(track_dir)
+        
+        # Remove from processing failures table
+        db.execute("DELETE FROM processing_failures WHERE track_id = ?", (track_id,))
+        
+        # Remove any usage logs for this track
+        db.execute("DELETE FROM usage_logs WHERE track_id = ?", (track_id,))
+        
+        db.commit()
+        
+        return jsonify({
+            "success": True, 
+            "message": f"Track {track_id} deleted successfully"
+        })
+    except Exception as e:
+        return jsonify({"error": f"Failed to delete track: {str(e)}"}), 500

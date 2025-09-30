@@ -526,6 +526,29 @@
         transform: none;
       }
 
+      .delete-btn {
+        padding: 0.375rem 0.875rem;
+        background: var(--danger);
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      .delete-btn:hover {
+        background: #dc2626;
+        transform: translateY(-1px);
+      }
+
+      .delete-btn:disabled {
+        background: var(--text-light);
+        cursor: not-allowed;
+        transform: none;
+      }
+
       .filter-group {
         margin-bottom: 1.5rem;
         background: white;
@@ -1037,6 +1060,7 @@
               <th>Track</th>
               <th>Last Modified</th>
               <th>Completion</th>
+              <th>Failures</th>
               <th>Missing Components</th>
               <th>Actions</th>
             </tr>
@@ -1056,6 +1080,9 @@
                     ? missingItems.join(', ')
                     : 'None'
 
+                const failureCount = song.failure_count || 0
+                const failureBadgeClass = failureCount >= 3 ? 'low' : failureCount >= 2 ? 'medium' : 'high'
+                
                 return `
                 <tr>
                   <td>${song.title || 'Unknown'} - ${
@@ -1065,13 +1092,19 @@
                   <td><span class="completion-badge ${badgeClass}">${
                   song.completion_status || 0
                 }%</span></td>
+                  <td><span class="completion-badge ${failureBadgeClass}" title="${song.error_message || 'No error message'}">${failureCount}x</span></td>
                   <td>${missingText}</td>
                   <td>
                     <button class="reprocess-btn" data-track-id="${
                       song.track_id
-                    }">
+                    }" style="margin-right: 0.5rem;">
                       <i class="fas fa-redo"></i> Reprocess
                     </button>
+                    ${failureCount >= 2 ? `
+                      <button class="delete-btn" data-track-id="${song.track_id}" title="Delete this track permanently">
+                        <i class="fas fa-trash"></i> Delete
+                      </button>
+                    ` : ''}
                   </td>
           </tr>
               `
@@ -1109,6 +1142,41 @@
               showNotification(error.message, true)
               btn.disabled = false
               btn.innerHTML = '<i class="fas fa-redo"></i> Reprocess'
+            }
+          })
+        })
+
+        // Add event listeners to delete buttons
+        document.querySelectorAll('.delete-btn').forEach((btn) => {
+          btn.addEventListener('click', async () => {
+            const trackId = btn.dataset.trackId
+            
+            if (!confirm(`Are you sure you want to permanently delete track ${trackId}? This action cannot be undone.`)) {
+              return
+            }
+
+            btn.disabled = true
+            btn.innerHTML =
+              '<i class="fas fa-spinner fa-spin"></i> Deleting...'
+
+            try {
+              const response = await fetch(`/admin/track/${trackId}`, {
+                method: 'DELETE',
+                credentials: 'include',
+              })
+
+              const data = await response.json()
+
+              if (response.ok) {
+                showNotification('Track deleted successfully')
+                fetchUnfinishedSongs()
+              } else {
+                throw new Error(data.error || 'Failed to delete track')
+              }
+            } catch (error) {
+              showNotification(error.message, true)
+              btn.disabled = false
+              btn.innerHTML = '<i class="fas fa-trash"></i> Delete'
             }
           })
         })
