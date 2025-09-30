@@ -1,10 +1,12 @@
 // Library Management
 let libraryData = []
+let filteredLibraryData = []
 
 // Initialize library when page loads
 document.addEventListener('DOMContentLoaded', () => {
   setupLibraryTabs()
   setupLibraryActions()
+  setupLibrarySearch()
 })
 
 // Setup tab switching
@@ -34,10 +36,12 @@ function switchTab(tabName) {
     document.getElementById('songQueue').classList.add('active')
     document.getElementById('queueActionsBar').style.display = 'flex'
     document.getElementById('libraryActionsBar').style.display = 'none'
+    document.getElementById('librarySearchContainer').style.display = 'none'
   } else if (tabName === 'library') {
     document.getElementById('libraryContent').classList.add('active')
     document.getElementById('queueActionsBar').style.display = 'none'
     document.getElementById('libraryActionsBar').style.display = 'flex'
+    document.getElementById('librarySearchContainer').style.display = 'block'
 
     // Load library if not already loaded
     if (libraryData.length === 0) {
@@ -55,6 +59,61 @@ function setupLibraryActions() {
   document.getElementById('addAllToQueue')?.addEventListener('click', () => {
     addAllToQueue()
   })
+}
+
+// Setup library search
+function setupLibrarySearch() {
+  const searchInput = document.getElementById('librarySearchInput')
+  const searchClear = document.getElementById('librarySearchClear')
+
+  if (!searchInput || !searchClear) return
+
+  // Handle search input
+  searchInput.addEventListener('input', (e) => {
+    const query = e.target.value.trim()
+
+    // Show/hide clear button
+    searchClear.style.display = query ? 'block' : 'none'
+
+    // Filter library
+    filterLibrary(query)
+  })
+
+  // Handle clear button
+  searchClear.addEventListener('click', () => {
+    searchInput.value = ''
+    searchClear.style.display = 'none'
+    filterLibrary('')
+    searchInput.focus()
+  })
+
+  // Clear search on Escape key
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      searchInput.value = ''
+      searchClear.style.display = 'none'
+      filterLibrary('')
+    }
+  })
+}
+
+// Filter library based on search query
+function filterLibrary(query) {
+  if (!query) {
+    // No search query, show all songs
+    filteredLibraryData = libraryData
+  } else {
+    // Filter songs by title or artist (case-insensitive)
+    const lowerQuery = query.toLowerCase()
+    filteredLibraryData = libraryData.filter(
+      (song) =>
+        song.title.toLowerCase().includes(lowerQuery) ||
+        song.artist.toLowerCase().includes(lowerQuery)
+    )
+  }
+
+  // Update display
+  displayLibrary(filteredLibraryData)
 }
 
 // Load library from backend
@@ -80,12 +139,13 @@ async function loadLibrary(force = false) {
 
     const data = await response.json()
     libraryData = data.songs
+    filteredLibraryData = libraryData
 
     // Update library count
     document.getElementById('libraryCount').textContent = `(${data.count})`
 
     // Display library
-    displayLibrary(libraryData)
+    displayLibrary(filteredLibraryData)
 
     // Show toast notification
     if (force) {
@@ -107,15 +167,29 @@ async function loadLibrary(force = false) {
 // Display library items
 function displayLibrary(songs) {
   const libraryContent = document.getElementById('libraryContent')
+  const searchInput = document.getElementById('librarySearchInput')
+  const hasSearchQuery = searchInput && searchInput.value.trim()
 
   if (songs.length === 0) {
-    libraryContent.innerHTML = `
-      <div class="library-empty">
-        <i class="fas fa-folder-open"></i>
-        <h3>Library is empty</h3>
-        <p>Search and add songs to build your library</p>
-      </div>
-    `
+    if (hasSearchQuery) {
+      // No results found for search query
+      libraryContent.innerHTML = `
+        <div class="library-empty">
+          <i class="fas fa-search"></i>
+          <h3>No results found</h3>
+          <p>Try a different search term</p>
+        </div>
+      `
+    } else {
+      // Library is empty
+      libraryContent.innerHTML = `
+        <div class="library-empty">
+          <i class="fas fa-folder-open"></i>
+          <h3>Library is empty</h3>
+          <p>Search and add songs to build your library</p>
+        </div>
+      `
+    }
     return
   }
 
