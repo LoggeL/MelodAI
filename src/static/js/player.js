@@ -273,6 +273,11 @@ class KaraokePlayer {
   }
 
   jumpToTime(time) {
+    if (isNaN(time) || time < 0) {
+      console.warn('Invalid time value:', time)
+      return
+    }
+    
     this.vocalsAudio.currentTime = time
     this.musicAudio.currentTime = time
 
@@ -293,8 +298,14 @@ class KaraokePlayer {
 
     // Update progress and seek to position
     const duration = this.vocalsAudio.duration
-    this.vocalsAudio.currentTime = duration * progress
-    this.musicAudio.currentTime = duration * progress
+    if (isNaN(duration) || duration === 0) {
+      console.warn('Audio duration not available yet')
+      return
+    }
+    
+    const seekTime = duration * progress
+    this.vocalsAudio.currentTime = seekTime
+    this.musicAudio.currentTime = seekTime
   }
 
   startLyricsSync() {
