@@ -129,6 +129,25 @@ def migrate_db():
         except sqlite3.OperationalError as e:
             print(f"Migration error when creating system_status table: {e}")
 
+        try:
+            # Add processing_failures table if it doesn't exist
+            db.execute(
+                """
+                CREATE TABLE IF NOT EXISTS processing_failures (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    track_id TEXT NOT NULL,
+                    failure_count INTEGER DEFAULT 1,
+                    last_failure TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    error_message TEXT,
+                    UNIQUE(track_id)
+                )
+            """
+            )
+            db.commit()
+            print("Added processing_failures table")
+        except sqlite3.OperationalError as e:
+            print(f"Migration error when creating processing_failures table: {e}")
+
 
 def create_invite_key(created_by, key):
     """Create a new invite key."""

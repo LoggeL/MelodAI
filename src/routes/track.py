@@ -225,6 +225,22 @@ def de_add_track(track_id):
                 STATUS_ERROR,
                 f"Error processing track {track_id}: {str(e)}",
             )
+            
+            # Track the failure in database
+            db = get_db()
+            db.execute(
+                """
+                INSERT INTO processing_failures (track_id, failure_count, error_message)
+                VALUES (?, 1, ?)
+                ON CONFLICT(track_id) DO UPDATE SET
+                    failure_count = failure_count + 1,
+                    last_failure = CURRENT_TIMESTAMP,
+                    error_message = ?
+                """,
+                (track_id, str(e), str(e))
+            )
+            db.commit()
+            
             raise
 
 
@@ -296,6 +312,21 @@ def add():
                     STATUS_ERROR,
                     f"Failed to process track {track_id}: {str(e)}",
                 )
+
+                # Track the failure in database
+                db = get_db()
+                db.execute(
+                    """
+                    INSERT INTO processing_failures (track_id, failure_count, error_message)
+                    VALUES (?, 1, ?)
+                    ON CONFLICT(track_id) DO UPDATE SET
+                        failure_count = failure_count + 1,
+                        last_failure = CURRENT_TIMESTAMP,
+                        error_message = ?
+                    """,
+                    (track_id, str(e), str(e))
+                )
+                db.commit()
 
                 # Ensure cleanup on error
                 remove_from_processing_queue(track_id)
