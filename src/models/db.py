@@ -108,6 +108,24 @@ def migrate_db():
         except sqlite3.OperationalError as e:
             print(f"Migration error: {e}")
 
+        try:
+            # Add track_failures table if it doesn't exist
+            db.execute(
+                """
+                CREATE TABLE IF NOT EXISTS track_failures (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    track_id TEXT NOT NULL,
+                    error_message TEXT,
+                    failure_count INTEGER DEFAULT 1,
+                    last_attempt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """
+            )
+            db.commit()
+        except sqlite3.OperationalError as e:
+            print(f"Migration error: {e}")
+
 
 def create_invite_key(created_by, key):
     """Create a new invite key."""

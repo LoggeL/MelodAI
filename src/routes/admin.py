@@ -142,3 +142,44 @@ def list_invite_keys():
         ORDER BY ik.created_at DESC
     """).fetchall()
     return jsonify([dict(key) for key in keys])
+
+
+@admin_bp.route("/admin/failed-tracks", methods=["GET"])
+@admin_required
+def list_failed_tracks():
+    db = get_db()
+    failed_tracks = db.execute("""
+        SELECT 
+            id,
+            track_id, 
+            error_message,
+            failure_count,
+            last_attempt,
+            created_at
+        FROM track_failures
+        ORDER BY failure_count DESC, last_attempt DESC
+    """).fetchall()
+    return jsonify([dict(track) for track in failed_tracks])
+
+
+@admin_bp.route("/admin/failed-tracks/<track_id>", methods=["DELETE"])
+@admin_required
+def delete_failed_track(track_id):
+    import shutil
+    import os
+    
+    db = get_db()
+    
+    # Delete from database
+    db.execute("DELETE FROM track_failures WHERE track_id = ?", (track_id,))
+    db.commit()
+    
+    # Delete track folder if it exists
+    track_path = f"src/songs/{track_id}"
+    if os.path.exists(track_path):
+        try:
+            shutil.rmtree(track_path)
+        except Exception as e:
+            print(f"Error deleting track folder: {e}")
+    
+    return jsonify({"message": "Track deleted successfully"})

@@ -190,6 +190,31 @@ def add():
             except Exception as e:
                 print("Error processing track", e)
                 socketio.emit("track_error", {"track_id": track_id, "error": str(e)})
+                
+                # Log the failure to database
+                db = get_db()
+                existing_failure = db.execute(
+                    "SELECT * FROM track_failures WHERE track_id = ?", (track_id,)
+                ).fetchone()
+                
+                if existing_failure:
+                    # Increment failure count
+                    db.execute(
+                        """UPDATE track_failures 
+                           SET failure_count = failure_count + 1, 
+                               error_message = ?, 
+                               last_attempt = CURRENT_TIMESTAMP 
+                           WHERE track_id = ?""",
+                        (str(e), track_id)
+                    )
+                else:
+                    # Create new failure record
+                    db.execute(
+                        """INSERT INTO track_failures (track_id, error_message) 
+                           VALUES (?, ?)""",
+                        (track_id, str(e))
+                    )
+                db.commit()
 
     # Log the download
     db = get_db()
