@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Song Management - MelodAI Admin</title>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+    />
+    <link rel="icon" href="/logo.svg" />
+    <style>
+      :root {
+        --primary: #6366f1;
+        --primary-dark: #4f46e5;
+        --secondary: #0ea5e9;
+        --success: #22c55e;
+        --danger: #ef4444;
+        --warning: #f59e0b;
+        --background: #f8fafc;
+        --surface: #ffffff;
+        --text: #1e293b;
+        --text-light: #64748b;
+        --border: #e2e8f0;
+        --hover: #f1f5f9;
+        --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+        --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: system-ui, -apple-system, sans-serif;
+        background: var(--background);
+        margin: 0;
+        padding: 0;
+        color: var(--text);
+        min-height: 100vh;
+      }
+
+      .container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+        padding: 1.5rem;
+        background: var(--surface);
+        border-radius: 12px;
+        box-shadow: var(--shadow);
+        flex-wrap: wrap;
+        gap: 1rem;
+      }
+
+      .header h1 {
+        margin: 0;
+        font-size: 1.875rem;
+        color: var(--primary);
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+      }
+
+      .header h1 i {
+        font-size: 1.5rem;
+      }
+
+      .btn-container {
+        display: flex;
+        gap: 0.75rem;
+      }
+
+      button,
+      .btn {
+        padding: 0.625rem 1.25rem;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        font-weight: 500;
+        transition: all 0.2s;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        text-decoration: none;
+      }
+
+      .home-btn {
+        background: var(--primary);
+        color: white;
+      }
+
+      .home-btn:hover {
+        background: var(--primary-dark);
+        transform: translateY(-1px);
+        box-shadow: var(--shadow-lg);
+      }
+
+      .admin-btn {
+        background: var(--secondary);
+        color: white;
+      }
+
+      .admin-btn:hover {
+        background: #0284c7;
+        transform: translateY(-1px);
+        box-shadow: var(--shadow-lg);
+      }
+
+      .card {
+        background: var(--surface);
+        padding: 1.5rem;
+        border-radius: 12px;
+        box-shadow: var(--shadow);
+        margin-bottom: 1.5rem;
+      }
+
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1.25rem;
+        margin-bottom: 2rem;
+      }
+
+      .stat-card {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        padding: 1.5rem;
+        border-radius: 12px;
+        color: white;
+        box-shadow: var(--shadow-lg);
+        transition: transform 0.2s;
+      }
+
+      .stat-card:hover {
+        transform: translateY(-4px);
+      }
+
+      .stat-card i {
+        font-size: 2rem;
+        opacity: 0.8;
+        margin-bottom: 0.75rem;
+      }
+
+      .stat-card h3 {
+        margin: 0 0 0.5rem 0;
+        font-size: 0.9rem;
+        font-weight: 500;
+        opacity: 0.9;
+        color: white;
+      }
+
+      .stat-card p {
+        margin: 0;
+        font-size: 2rem;
+        font-weight: bold;
+        color: white;
+      }
+
+      .stat-card:nth-child(1) {
+        background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+      }
+
+      .stat-card:nth-child(2) {
+        background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+      }
+
+      .stat-card:nth-child(3) {
+        background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+      }
+
+      .controls {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+
+      .search-box {
+        flex: 1;
+        min-width: 250px;
+      }
+
+      .search-box input {
+        width: 100%;
+        padding: 0.75rem 1rem;
+        border: 2px solid var(--border);
+        border-radius: 8px;
+        font-size: 0.9rem;
+        background: var(--surface);
+        color: var(--text);
+        transition: border-color 0.2s;
+      }
+
+      .search-box input:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+      }
+
+      .filter-select {
+        padding: 0.75rem 1rem;
+        border: 2px solid var(--border);
+        border-radius: 8px;
+        font-size: 0.9rem;
+        background: var(--surface);
+        color: var(--text);
+        cursor: pointer;
+        transition: border-color 0.2s;
+      }
+
+      .filter-select:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+      }
+
+      .refresh-btn {
+        background: var(--success);
+        color: white;
+        padding: 0.75rem 1rem;
+      }
+
+      .refresh-btn:hover {
+        background: #16a34a;
+        transform: translateY(-1px);
+      }
+
+      .table-wrapper {
+        overflow-x: auto;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        min-width: 800px;
+      }
+
+      th,
+      td {
+        padding: 1rem;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+      }
+
+      th {
+        background: var(--hover);
+        font-weight: 600;
+        color: var(--text);
+        cursor: pointer;
+        user-select: none;
+        transition: background 0.2s;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+      }
+
+      th:hover {
+        background: var(--border);
+      }
+
+      tbody tr {
+        transition: background 0.2s;
+      }
+
+      tbody tr:hover {
+        background: var(--hover);
+      }
+
+      .song-info {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+      }
+
+      .song-cover {
+        width: 50px;
+        height: 50px;
+        border-radius: 6px;
+        object-fit: cover;
+        background: var(--border);
+      }
+
+      .song-details h4 {
+        margin: 0 0 0.25rem 0;
+        font-size: 0.95rem;
+        color: var(--text);
+      }
+
+      .song-details p {
+        margin: 0;
+        font-size: 0.85rem;
+        color: var(--text-light);
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 500;
+      }
+
+      .badge-success {
+        background: #d1fae5;
+        color: #065f46;
+      }
+
+      .badge-danger {
+        background: #fee2e2;
+        color: #991b1b;
+      }
+
+      .badge-warning {
+        background: #fef3c7;
+        color: #92400e;
+      }
+
+      .delete-btn {
+        background: var(--danger);
+        color: white;
+        padding: 0.5rem 1rem;
+        font-size: 0.875rem;
+      }
+
+      .delete-btn:hover {
+        background: #dc2626;
+        transform: translateY(-1px);
+      }
+
+      .delete-btn:disabled {
+        background: var(--border);
+        color: var(--text-light);
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      .notification {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 1rem 1.5rem;
+        border-radius: 12px;
+        animation: slideIn 0.3s ease-out;
+        z-index: 1000;
+        box-shadow: var(--shadow-lg);
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        max-width: 400px;
+      }
+
+      .notification i {
+        font-size: 1.25rem;
+      }
+
+      .notification.success {
+        background: #d1fae5;
+        color: #065f46;
+        border: 2px solid #10b981;
+      }
+
+      .notification.success i {
+        color: #10b981;
+      }
+
+      .notification.error {
+        background: #fee2e2;
+        color: #991b1b;
+        border: 2px solid #ef4444;
+      }
+
+      .notification.error i {
+        color: #ef4444;
+      }
+
+      @keyframes slideIn {
+        from {
+          transform: translateX(100%);
+          opacity: 0;
+        }
+        to {
+          transform: translateX(0);
+          opacity: 1;
+        }
+      }
+
+      .loading {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 4rem;
+      }
+
+      .spinner {
+        border: 3px solid var(--border);
+        border-top-color: var(--primary);
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 0.8s linear infinite;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      .empty-state {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: var(--text-light);
+      }
+
+      .empty-state i {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+        opacity: 0.3;
+      }
+
+      .empty-state h3 {
+        margin: 0 0 0.5rem 0;
+        color: var(--text);
+      }
+
+      .empty-state p {
+        margin: 0;
+      }
+
+      .sort-asc::after {
+        content: ' ↑';
+        color: var(--primary);
+      }
+
+      .sort-desc::after {
+        content: ' ↓';
+        color: var(--primary);
+      }
+
+      @media (max-width: 768px) {
+        .container {
+          padding: 10px;
+        }
+
+        .header {
+          flex-direction: column;
+          align-items: stretch;
+        }
+
+        .header h1 {
+          font-size: 1.5rem;
+        }
+
+        .btn-container {
+          flex-direction: column;
+        }
+
+        .stats-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .controls {
+          flex-direction: column;
+        }
+
+        .search-box {
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>
+          <i class="fas fa-music"></i>
+          Song Management
+        </h1>
+        <div class="btn-container">
+          <a href="/admin" class="admin-btn">
+            <i class="fas fa-shield-alt"></i>
+            Admin Dashboard
+          </a>
+          <a href="/" class="home-btn">
+            <i class="fas fa-home"></i>
+            Home
+          </a>
+        </div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <i class="fas fa-music"></i>
+          <h3>Total Songs</h3>
+          <p id="totalSongs">0</p>
+        </div>
+        <div class="stat-card">
+          <i class="fas fa-check-circle"></i>
+          <h3>Complete Songs</h3>
+          <p id="completeSongs">0</p>
+        </div>
+        <div class="stat-card">
+          <i class="fas fa-hdd"></i>
+          <h3>Total Storage</h3>
+          <p id="totalStorage">0 MB</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="controls">
+          <div class="search-box">
+            <input
+              type="text"
+              id="searchInput"
+              placeholder="🔍 Search by title, artist, or album..."
+              onkeyup="filterSongs()"
+            />
+          </div>
+          <select id="filterSelect" class="filter-select" onchange="filterSongs()">
+            <option value="all">All Songs</option>
+            <option value="complete">Complete Only</option>
+            <option value="incomplete">Incomplete Only</option>
+          </select>
+          <button class="refresh-btn" onclick="loadSongs()">
+            <i class="fas fa-sync-alt" id="refreshIcon"></i>
+            Refresh
+          </button>
+        </div>
+
+        <div class="table-wrapper">
+          <table id="songsTable">
+            <thead>
+              <tr>
+                <th onclick="sortTable(0)">Song</th>
+                <th onclick="sortTable(1)">Album</th>
+                <th onclick="sortTable(2)">Duration</th>
+                <th onclick="sortTable(3)">Size</th>
+                <th onclick="sortTable(4)">Status</th>
+                <th onclick="sortTable(5)">Track ID</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="songsTableBody">
+              <tr>
+                <td colspan="7">
+                  <div class="loading">
+                    <div class="spinner"></div>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let allSongs = []
+      let currentSort = {
+        column: null,
+        direction: 'asc',
+      }
+
+      async function loadSongs() {
+        const refreshIcon = document.getElementById('refreshIcon')
+        refreshIcon.style.animation = 'spin 0.8s linear infinite'
+
+        try {
+          const response = await fetch('/admin/songs/list', {
+            credentials: 'include',
+          })
+          const data = await response.json()
+          allSongs = data.songs
+
+          updateStats()
+          displaySongs(allSongs)
+        } catch (error) {
+          console.error('Error loading songs:', error)
+          document.getElementById('songsTableBody').innerHTML = `
+            <tr>
+              <td colspan="7">
+                <div class="empty-state">
+                  <i class="fas fa-exclamation-triangle"></i>
+                  <h3>Error loading songs</h3>
+                  <p>${error.message}</p>
+                </div>
+              </td>
+            </tr>
+          `
+        } finally {
+          refreshIcon.style.animation = ''
+        }
+      }
+
+      function updateStats() {
+        const totalSongs = allSongs.length
+        const completeSongs = allSongs.filter(
+          (s) => s.has_song && s.has_vocals && s.has_no_vocals && s.has_lyrics
+        ).length
+        const totalStorage = allSongs.reduce((sum, s) => sum + s.size_mb, 0)
+
+        document.getElementById('totalSongs').textContent = totalSongs
+        document.getElementById('completeSongs').textContent = completeSongs
+        document.getElementById('totalStorage').textContent = totalStorage.toFixed(2) + ' MB'
+      }
+
+      function displaySongs(songs) {
+        const tbody = document.getElementById('songsTableBody')
+
+        if (songs.length === 0) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="7">
+                <div class="empty-state">
+                  <i class="fas fa-music"></i>
+                  <h3>No songs found</h3>
+                  <p>No songs match your search criteria.</p>
+                </div>
+              </td>
+            </tr>
+          `
+          return
+        }
+
+        tbody.innerHTML = songs
+          .map((song) => {
+            const isComplete =
+              song.has_song && song.has_vocals && song.has_no_vocals && song.has_lyrics
+            const coverUrl = song.cover
+              ? `https://e-cdns-images.dzcdn.net/images/cover/${song.cover}/250x250-000000-80-0-0.jpg`
+              : ''
+
+            const statusBadges = []
+            if (!song.has_song) statusBadges.push('<span class="badge badge-danger"><i class="fas fa-times"></i> Song</span>')
+            if (!song.has_vocals) statusBadges.push('<span class="badge badge-danger"><i class="fas fa-times"></i> Vocals</span>')
+            if (!song.has_no_vocals) statusBadges.push('<span class="badge badge-danger"><i class="fas fa-times"></i> Instrumental</span>')
+            if (!song.has_lyrics) statusBadges.push('<span class="badge badge-danger"><i class="fas fa-times"></i> Lyrics</span>')
+
+            const statusDisplay = isComplete
+              ? '<span class="badge badge-success"><i class="fas fa-check"></i> Complete</span>'
+              : statusBadges.join(' ')
+
+            return `
+              <tr>
+                <td>
+                  <div class="song-info">
+                    ${coverUrl ? `<img src="${coverUrl}" alt="${song.title}" class="song-cover" />` : '<div class="song-cover"></div>'}
+                    <div class="song-details">
+                      <h4>${song.title}</h4>
+                      <p>${song.artist}</p>
+                    </div>
+                  </div>
+                </td>
+                <td>${song.album}</td>
+                <td>${formatDuration(song.duration)}</td>
+                <td>${song.size_mb} MB</td>
+                <td>${statusDisplay}</td>
+                <td><code>${song.track_id}</code></td>
+                <td>
+                  <button 
+                    class="delete-btn" 
+                    onclick="deleteSong('${song.track_id}')"
+                    title="Delete this song permanently"
+                  >
+                    <i class="fas fa-trash"></i> Delete
+                  </button>
+                </td>
+              </tr>
+            `
+          })
+          .join('')
+      }
+
+      function formatDuration(seconds) {
+        const mins = Math.floor(seconds / 60)
+        const secs = seconds % 60
+        return `${mins}:${secs.toString().padStart(2, '0')}`
+      }
+
+      function filterSongs() {
+        const searchTerm = document.getElementById('searchInput').value.toLowerCase()
+        const filter = document.getElementById('filterSelect').value
+
+        let filtered = allSongs
+
+        // Apply search filter
+        if (searchTerm) {
+          filtered = filtered.filter(
+            (s) =>
+              s.title.toLowerCase().includes(searchTerm) ||
+              s.artist.toLowerCase().includes(searchTerm) ||
+              s.album.toLowerCase().includes(searchTerm) ||
+              s.track_id.includes(searchTerm)
+          )
+        }
+
+        // Apply status filter
+        if (filter === 'complete') {
+          filtered = filtered.filter(
+            (s) => s.has_song && s.has_vocals && s.has_no_vocals && s.has_lyrics
+          )
+        } else if (filter === 'incomplete') {
+          filtered = filtered.filter(
+            (s) => !s.has_song || !s.has_vocals || !s.has_no_vocals || !s.has_lyrics
+          )
+        }
+
+        displaySongs(filtered)
+      }
+
+      function sortTable(column) {
+        const headers = document.querySelectorAll('#songsTable th')
+
+        if (currentSort.column === column) {
+          currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc'
+        } else {
+          currentSort.column = column
+          currentSort.direction = 'asc'
+        }
+
+        // Remove sort classes
+        headers.forEach((h) => h.classList.remove('sort-asc', 'sort-desc'))
+        headers[column].classList.add(`sort-${currentSort.direction}`)
+
+        // Sort the songs
+        const sortedSongs = [...allSongs].sort((a, b) => {
+          let aVal, bVal
+
+          switch (column) {
+            case 0: // Song
+              aVal = a.title.toLowerCase()
+              bVal = b.title.toLowerCase()
+              break
+            case 1: // Album
+              aVal = a.album.toLowerCase()
+              bVal = b.album.toLowerCase()
+              break
+            case 2: // Duration
+              aVal = a.duration
+              bVal = b.duration
+              break
+            case 3: // Size
+              aVal = a.size_mb
+              bVal = b.size_mb
+              break
+            case 4: // Status
+              aVal = (a.has_song && a.has_vocals && a.has_no_vocals && a.has_lyrics) ? 1 : 0
+              bVal = (b.has_song && b.has_vocals && b.has_no_vocals && b.has_lyrics) ? 1 : 0
+              break
+            case 5: // Track ID
+              aVal = a.track_id
+              bVal = b.track_id
+              break
+            default:
+              return 0
+          }
+
+          if (aVal < bVal) return currentSort.direction === 'asc' ? -1 : 1
+          if (aVal > bVal) return currentSort.direction === 'asc' ? 1 : -1
+          return 0
+        })
+
+        allSongs = sortedSongs
+        filterSongs()
+      }
+
+      async function deleteSong(trackId) {
+        if (
+          !confirm(
+            `Are you sure you want to permanently delete this song?\n\nTrack ID: ${trackId}\n\nThis action cannot be undone and will delete all associated files.`
+          )
+        ) {
+          return
+        }
+
+        try {
+          const response = await fetch(`/admin/songs/${trackId}`, {
+            method: 'DELETE',
+            credentials: 'include',
+          })
+
+          const data = await response.json()
+
+          if (response.ok) {
+            showNotification('Song deleted successfully!', 'success')
+            // Remove from local array
+            allSongs = allSongs.filter((s) => s.track_id !== trackId)
+            updateStats()
+            filterSongs()
+          } else {
+            throw new Error(data.error || 'Failed to delete song')
+          }
+        } catch (error) {
+          console.error('Error deleting song:', error)
+          showNotification(error.message, 'error')
+        }
+      }
+
+      function showNotification(message, type) {
+        const notification = document.createElement('div')
+        notification.className = `notification ${type}`
+        notification.innerHTML = `
+          <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i>
+          ${message}
+        `
+        document.body.appendChild(notification)
+        setTimeout(() => notification.remove(), 3000)
+      }
+
+      // Load songs on page load
+      document.addEventListener('DOMContentLoaded', loadSongs)
+    </script>
+  </body>
+</html>

@@ -512,3 +512,104 @@ def delete_track(track_id):
         })
     except Exception as e:
         return jsonify({"error": f"Failed to delete track: {str(e)}"}), 500
+
+
+@admin_bp.route("/admin/songs", methods=["GET"])
+@admin_required
+def show_songs_page():
+    """Render the songs management page for admins"""
+    return send_from_directory("static", "admin_songs.html")
+
+
+@admin_bp.route("/admin/songs/list", methods=["GET"])
+@admin_required
+def list_all_songs():
+    """Get all songs in the library with metadata"""
+    import json
+    from pathlib import Path
+    
+    songs_dir = Path("src/songs")
+    if not songs_dir.exists():
+        return jsonify({"songs": [], "count": 0})
+    
+    songs = []
+    
+    # Get all song directories
+    for song_dir in songs_dir.iterdir():
+        if not song_dir.is_dir():
+            continue
+        
+        track_id = song_dir.name
+        metadata_file = song_dir / "metadata.json"
+        
+        # Check if song has metadata
+        if metadata_file.exists():
+            try:
+                with open(metadata_file, "r") as f:
+                    metadata = json.load(f)
+                
+                # Check file existence
+                has_song = (song_dir / "song.mp3").exists()
+                has_vocals = (song_dir / "vocals.mp3").exists()
+                has_no_vocals = (song_dir / "no_vocals.mp3").exists()
+                has_lyrics = (song_dir / "lyrics.json").exists()
+                
+                # Calculate total size
+                total_size = 0
+                for file in song_dir.glob("*"):
+                    if file.is_file():
+                        total_size += file.stat().st_size
+                
+                songs.append({
+                    "track_id": track_id,
+                    "title": metadata.get("title", "Unknown"),
+                    "artist": metadata.get("artist", "Unknown"),
+                    "album": metadata.get("album", "Unknown"),
+                    "duration": metadata.get("duration", 0),
+                    "cover": metadata.get("cover", ""),
+                    "has_song": has_song,
+                    "has_vocals": has_vocals,
+                    "has_no_vocals": has_no_vocals,
+                    "has_lyrics": has_lyrics,
+                    "size_mb": round(total_size / (1024 * 1024), 2),
+                    "last_modified": song_dir.stat().st_mtime,
+                })
+            except Exception as e:
+                print(f"Error reading metadata for {track_id}: {e}")
+                continue
+    
+    # Sort by title
+    songs.sort(key=lambda x: x["title"].lower())
+    
+    return jsonify({"songs": songs, "count": len(songs)})
+
+
+@admin_bp.route("/admin/songs/<track_id>", methods=["DELETE"])
+@admin_required
+def delete_any_song(track_id):
+    """Delete any song and all its associated files (admin only)"""
+    db = get_db()
+    
+    try:
+        # Check if the track directory exists
+        track_dir = f"src/songs/{track_id}"
+        if not os.path.exists(track_dir):
+            return jsonify({"error": "Track not found"}), 404
+        
+        # Delete the track directory
+        shutil.rmtree(track_dir)
+        
+        # Remove from processing failures table if exists
+        db.execute("DELETE FROM processing_failures WHERE track_id = ?", (track_id,))
+        
+        # Remove any usage logs for this track
+        db.execute("DELETE FROM usage_logs WHERE track_id = ?", (track_id,))
+        
+        db.commit()
+        
+        return jsonify({
+            "success": True, 
+            "message": f"Track {track_id} deleted successfully"
+        })
+    except Exception as e:
+        return jsonify({"error": f"Failed to delete track: {str(e)}"}), 500
