@@ -481,7 +481,10 @@ class KaraokePlayer {
             <div id="queue-${song.id}"
                  class="queue-item ${
                    index === this.currentSongIndex ? 'active' : ''
-                 }">
+                 }"
+                 draggable="true"
+                 data-index="${index}">
+                <i class="fas fa-grip-vertical queue-drag-handle"></i>
                 <img src="${song.thumbnail}" alt="${song.title}">
                 <div class="queue-item-content">
                     <div>${song.title}</div>
@@ -519,6 +522,7 @@ class KaraokePlayer {
     }
 
     this.updateQueue()
+    this.attachDragAndDropListeners()
   }
 
   getStatus(song) {
@@ -1120,6 +1124,104 @@ class KaraokePlayer {
 
     this.renderQueue()
     this.showToast('Queue cleared', 'success')
+  }
+
+  attachDragAndDropListeners() {
+    const queueItems = document.querySelectorAll('.queue-item')
+    
+    queueItems.forEach((item) => {
+      item.addEventListener('dragstart', (e) => this.handleDragStart(e))
+      item.addEventListener('dragover', (e) => this.handleDragOver(e))
+      item.addEventListener('drop', (e) => this.handleDrop(e))
+      item.addEventListener('dragenter', (e) => this.handleDragEnter(e))
+      item.addEventListener('dragleave', (e) => this.handleDragLeave(e))
+      item.addEventListener('dragend', (e) => this.handleDragEnd(e))
+    })
+  }
+
+  handleDragStart(e) {
+    const item = e.currentTarget
+    const index = parseInt(item.dataset.index)
+    
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/html', item.innerHTML)
+    e.dataTransfer.setData('text/plain', index.toString())
+    
+    item.classList.add('dragging')
+    this.draggedIndex = index
+  }
+
+  handleDragOver(e) {
+    if (e.preventDefault) {
+      e.preventDefault()
+    }
+    
+    e.dataTransfer.dropEffect = 'move'
+    return false
+  }
+
+  handleDragEnter(e) {
+    const item = e.currentTarget
+    if (!item.classList.contains('dragging')) {
+      item.classList.add('drag-over')
+    }
+  }
+
+  handleDragLeave(e) {
+    const item = e.currentTarget
+    item.classList.remove('drag-over')
+  }
+
+  handleDrop(e) {
+    if (e.stopPropagation) {
+      e.stopPropagation()
+    }
+    
+    e.preventDefault()
+    
+    const dropTarget = e.currentTarget
+    const dropIndex = parseInt(dropTarget.dataset.index)
+    
+    if (this.draggedIndex !== dropIndex && this.draggedIndex !== undefined) {
+      this.reorderQueue(this.draggedIndex, dropIndex)
+    }
+    
+    dropTarget.classList.remove('drag-over')
+    return false
+  }
+
+  handleDragEnd(e) {
+    const item = e.currentTarget
+    item.classList.remove('dragging')
+    
+    // Remove drag-over class from all items
+    document.querySelectorAll('.queue-item').forEach((item) => {
+      item.classList.remove('drag-over')
+    })
+    
+    this.draggedIndex = undefined
+  }
+
+  reorderQueue(fromIndex, toIndex) {
+    // Remove the item from the old position
+    const [movedSong] = this.songQueue.splice(fromIndex, 1)
+    
+    // Insert it at the new position
+    this.songQueue.splice(toIndex, 0, movedSong)
+    
+    // Update currentSongIndex if necessary
+    if (fromIndex === this.currentSongIndex) {
+      // The currently playing song was moved
+      this.currentSongIndex = toIndex
+    } else if (fromIndex < this.currentSongIndex && toIndex >= this.currentSongIndex) {
+      // A song before the current song was moved to after it
+      this.currentSongIndex--
+    } else if (fromIndex > this.currentSongIndex && toIndex <= this.currentSongIndex) {
+      // A song after the current song was moved to before it
+      this.currentSongIndex++
+    }
+    
+    this.renderQueue()
   }
 
   showToast(message, type = 'success') {

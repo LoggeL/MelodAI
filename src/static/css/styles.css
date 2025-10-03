@@ -318,6 +318,32 @@ body.collapsed .side-container {
   background: var(--hover);
 }
 
+.queue-drag-handle {
+  color: var(--text-light);
+  margin-right: 8px;
+  cursor: grab;
+  opacity: 0.5;
+  transition: opacity 0.2s ease;
+}
+
+.queue-item:hover .queue-drag-handle {
+  opacity: 1;
+}
+
+.queue-item.dragging {
+  opacity: 0.5;
+  cursor: grabbing;
+}
+
+.queue-item.drag-over {
+  border-top: 2px solid var(--primary);
+  margin-top: 6px;
+}
+
+.queue-item.active .queue-drag-handle {
+  color: white;
+}
+
 .controls {
   background: var(--surface);
   padding: 20px;
