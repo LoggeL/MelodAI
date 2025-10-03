@@ -203,17 +203,19 @@ def split_long_lyrics_lines(lyrics_id):
         if old_count == new_count + new_offset:
             start_times = [
                 old_words[i]["start"] for i in range(new_offset, new_offset + new_count)
+                if "start" in old_words[i]
             ]
             end_times = [
                 old_words[i]["end"] for i in range(new_offset, new_offset + new_count)
+                if "end" in old_words[i]
             ]
             new_segments.append(
                 {
                     "words": old_words[new_offset : new_offset + new_count],
                     "text": split_lines[new_idx],
                     "speaker": lyrics["segments"][old_idx]["speaker"],
-                    "start": min(start_times),
-                    "end": max(end_times),
+                    "start": min(start_times) if start_times else 0,
+                    "end": max(end_times) if end_times else 0,
                 }
             )
             new_idx += 1
@@ -222,17 +224,19 @@ def split_long_lyrics_lines(lyrics_id):
         elif old_count > new_count + new_offset:
             start_times = [
                 old_words[i]["start"] for i in range(new_offset, new_offset + new_count)
+                if "start" in old_words[i]
             ]
             end_times = [
                 old_words[i]["end"] for i in range(new_offset, new_offset + new_count)
+                if "end" in old_words[i]
             ]
             new_segments.append(
                 {
                     "words": old_words[new_offset : new_offset + new_count],
                     "text": split_lines[new_idx],
                     "speaker": lyrics["segments"][old_idx]["speaker"],
-                    "start": min(start_times),
-                    "end": max(end_times),
+                    "start": min(start_times) if start_times else 0,
+                    "end": max(end_times) if end_times else 0,
                 }
             )
             new_idx += 1
