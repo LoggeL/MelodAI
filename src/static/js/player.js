@@ -94,34 +94,50 @@ class KaraokePlayer {
       // Iterate through the segments / words and split if the speaker changes
       let segments = []
       data.segments.forEach((segment) => {
+        // Validate segment structure
+        if (!segment || !segment.words || !Array.isArray(segment.words) || segment.words.length === 0) {
+          console.warn('Skipping invalid segment:', segment)
+          return
+        }
+        
         let currentSegment = {
-          start: segment.start,
-          end: segment.end,
+          start: segment.start || 0,
+          end: segment.end || 0,
           words: [],
         }
-        let currentSpeaker = segment.words[0].speaker
+        let currentSpeaker = segment.words[0]?.speaker || 'SPEAKER_00'
         segment.words.forEach((word, i) => {
+          // Validate word structure
+          if (!word || typeof word.word !== 'string') {
+            console.warn('Skipping invalid word:', word)
+            return
+          }
+          
           let nextWord =
             i < segment.words.length - 1 ? segment.words[i + 1] : word
           if (
             word.speaker &&
             currentSpeaker &&
             word.speaker !== currentSpeaker &&
-            nextWord.speaker === word.speaker
+            nextWord?.speaker === word.speaker
           ) {
             segments.push(currentSegment)
             currentSegment = {
-              start: word.start,
-              end: word.end,
+              start: word.start || 0,
+              end: word.end || 0,
               words: [],
             }
             currentSpeaker = word.speaker
           } else {
-            currentSpeaker = word.speaker
+            currentSpeaker = word.speaker || currentSpeaker
           }
           currentSegment.words.push(word)
         })
-        segments.push(currentSegment)
+        
+        // Only add segment if it has words
+        if (currentSegment.words.length > 0) {
+          segments.push(currentSegment)
+        }
       })
 
       this.lyrics = segments
@@ -162,11 +178,16 @@ class KaraokePlayer {
       })
 
       segment.words.forEach((word, wordIndex) => {
+        // Validate word has required properties
+        if (!word || typeof word.word !== 'string') {
+          return
+        }
+        
         const wordSpan = document.createElement('span')
         wordSpan.classList.add('word')
         wordSpan.id = `word-${segmentIndex}-${wordIndex}`
-        wordSpan.dataset.start = word.start
-        wordSpan.dataset.end = word.end
+        wordSpan.dataset.start = word.start || 0
+        wordSpan.dataset.end = word.end || 0
         wordSpan.textContent = word.word
 
         // Add space after each word except the last one
@@ -256,7 +277,11 @@ class KaraokePlayer {
 
       // Find and highlight the current word
       this.lyrics.forEach((segment) => {
+        if (!segment || !segment.words) return
+        
         segment.words.forEach((word) => {
+          if (!word || typeof word.start === 'undefined' || typeof word.end === 'undefined') return
+          
           if (currentTime >= word.start && currentTime <= word.end) {
             const wordElement = document.querySelector(
               `[data-start="${word.start}"]`

@@ -144,7 +144,15 @@ def de_add_track(track_id):
 
         split_track(track_id)
 
-        process_lyrics(track_id)
+        lyrics_success = process_lyrics(track_id)
+        
+        if not lyrics_success:
+            print(f"Failed to process lyrics for track {track_id}")
+            socketio.emit(
+                "track_progress",
+                {"track_id": track_id, "status": "error", "progress": 100, "error": "Failed to process lyrics"},
+            )
+            return False
 
         print("Done")
         socketio.emit(

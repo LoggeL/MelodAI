@@ -2,10 +2,22 @@
 from flask import Flask, session
 from flask_cors import CORS
 import os
+import logging
 from datetime import timedelta
 from .models.db import init_app, update_last_online
 from .services.deezer import init_deezer_session, test_deezer_login
 from .utils.extensions import socketio
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler('app.log')
+    ]
+)
+logger = logging.getLogger(__name__)
 
 # Import and register blueprints
 from .routes.auth import auth_bp
@@ -27,7 +39,7 @@ with app.app_context():
     init_app(app)
 
 # Initialize Deezer session
-print("Starting Deezer")
+logger.info("Starting Deezer")
 init_deezer_session()
 test_deezer_login()
 
@@ -40,12 +52,12 @@ app.register_blueprint(static_bp)
 # WebSocket events
 @socketio.on("connect")
 def handle_connect():
-    print("Client connected")
+    logger.info("Client connected")
 
 
 @socketio.on("disconnect")
 def handle_disconnect():
-    print("Client disconnected")
+    logger.info("Client disconnected")
 
 
 # Before request handler
