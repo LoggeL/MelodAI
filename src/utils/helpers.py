@@ -145,8 +145,10 @@ def split_long_lyrics_lines(lyrics_id):
     Returns:
         A modified lyrics JSON with split lines and adjusted timestamps.
     """
-    # Load the lyrics
-    lyrics_path = f"src/songs/{lyrics_id}/lyrics_raw.json"
+    # Load the lyrics, prefer merged if available for better word alignment
+    merged_path = f"src/songs/{lyrics_id}/lyrics_merged.json"
+    raw_path = f"src/songs/{lyrics_id}/lyrics_raw.json"
+    lyrics_path = merged_path if os.path.isfile(merged_path) and os.path.getsize(merged_path) > 0 else raw_path
     with open(lyrics_path, "r") as f:
         lyrics = json.load(f)
 
@@ -158,37 +160,44 @@ def split_long_lyrics_lines(lyrics_id):
     # Join with line markers for easy splitting later
     lyrics_text = "\n".join(segments_text)
 
-    try:
-        # Initialize OpenAI client with OpenRouter
-        client = OpenAI(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=os.environ["OPENROUTER_API_KEY"],
-        )
+    # Default split: identity mapping of existing lines
+    split_lines = [line.strip() for line in lyrics_text.strip().split("\n") if line.strip()]
 
-        # Call OpenRouter API using OpenAI client
-        completion = client.chat.completions.create(
-            extra_headers={
-                "HTTP-Referer": "https://github.com/LoggeL/MelodAI",
-                "X-Title": "MelodAI",
-            },
-            model=os.environ["LLM_MODEL"],
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a lyrics formatting expert. Your task is to split long lyrics lines into shorter, more natural segments while preserving the meaning and flow. Split on natural breaks in the lyrics. Return only the split lyrics with no additional text. Preserve all original text exactly as provided. Do not modify any words.",
+    api_key = os.environ.get("OPENROUTER_API_KEY")
+    model = os.environ.get("LLM_MODEL")
+
+    # Attempt LLM-based splitting only if credentials are present
+    if api_key and model:
+        try:
+            # Initialize OpenAI client with OpenRouter
+            client = OpenAI(
+                base_url="https://openrouter.ai/api/v1",
+                api_key=api_key,
+            )
+
+            # Call OpenRouter API using OpenAI client
+            completion = client.chat.completions.create(
+                extra_headers={
+                    "HTTP-Referer": "https://github.com/LoggeL/MelodAI",
+                    "X-Title": "MelodAI",
                 },
-                {"role": "user", "content": lyrics_text},
-            ],
-        )
+                model=model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a lyrics formatting expert. Your task is to split long lyrics lines into shorter, more natural segments while preserving the meaning and flow. Split on natural breaks in the lyrics. Return only the split lyrics with no additional text. Preserve all original text exactly as provided. Do not modify any words.",
+                    },
+                    {"role": "user", "content": lyrics_text},
+                ],
+            )
 
-        split_lyrics = completion.choices[0].message.content
-        split_lines = [
-            line.strip() for line in split_lyrics.strip().split("\n") if line.strip()
-        ]
-
-    except Exception as e:
-        print(f"Error calling OpenRouter API: {str(e)}")
-        return lyrics
+            split_lyrics = completion.choices[0].message.content
+            split_lines = [
+                line.strip() for line in split_lyrics.strip().split("\n") if line.strip()
+            ]
+        except Exception as e:
+            # Fall back to identity split on any error
+            print(f"Error calling OpenRouter API: {str(e)}")
 
     # Create new segments based on the split lines
     new_segments = []
@@ -196,7 +205,24 @@ def split_long_lyrics_lines(lyrics_id):
     old_idx = 0
     new_offset = 0
 
+    def majority_speaker(words_list):
+        """Return the most frequent speaker label in a list of words.
+
+        Falls back to the segment-level speaker if present, otherwise 'SPEAKER_00'.
+        """
+        speaker_counts = {}
+        for w in words_list:
+            sp = w.get("speaker")
+            if sp:
+                speaker_counts[sp] = speaker_counts.get(sp, 0) + 1
+        if speaker_counts:
+            return max(speaker_counts, key=speaker_counts.get)
+        # Fallback to original segment speaker if available
+        return lyrics["segments"][old_idx].get("speaker", "SPEAKER_00")
+
     while old_idx < len(lyrics["segments"]):
+        if new_idx >= len(split_lines):
+            break
         old_count = len(lyrics["segments"][old_idx]["words"])
         new_count = len(split_lines[new_idx].split(" "))
         old_words = lyrics["segments"][old_idx]["words"]
@@ -209,11 +235,12 @@ def split_long_lyrics_lines(lyrics_id):
                 old_words[i]["end"] for i in range(new_offset, new_offset + new_count)
                 if "end" in old_words[i]
             ]
+            words_slice = old_words[new_offset : new_offset + new_count]
             new_segments.append(
                 {
-                    "words": old_words[new_offset : new_offset + new_count],
+                    "words": words_slice,
                     "text": split_lines[new_idx],
-                    "speaker": lyrics["segments"][old_idx]["speaker"],
+                    "speaker": majority_speaker(words_slice),
                     "start": min(start_times) if start_times else 0,
                     "end": max(end_times) if end_times else 0,
                 }
@@ -230,11 +257,12 @@ def split_long_lyrics_lines(lyrics_id):
                 old_words[i]["end"] for i in range(new_offset, new_offset + new_count)
                 if "end" in old_words[i]
             ]
+            words_slice = old_words[new_offset : new_offset + new_count]
             new_segments.append(
                 {
-                    "words": old_words[new_offset : new_offset + new_count],
+                    "words": words_slice,
                     "text": split_lines[new_idx],
-                    "speaker": lyrics["segments"][old_idx]["speaker"],
+                    "speaker": majority_speaker(words_slice),
                     "start": min(start_times) if start_times else 0,
                     "end": max(end_times) if end_times else 0,
                 }
