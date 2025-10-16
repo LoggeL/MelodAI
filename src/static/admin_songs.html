@@ -27,6 +27,21 @@
         --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
       }
 
+      [data-theme='dark'] {
+        --primary: #818cf8;
+        --primary-dark: #6366f1;
+        --secondary: #38bdf8;
+        --success: #4ade80;
+        --danger: #f87171;
+        --warning: #fbbf24;
+        --background: #0f172a;
+        --surface: #1e293b;
+        --text: #e2e8f0;
+        --text-light: #cbd5e1;
+        --border: #475569;
+        --hover: #334155;
+      }
+
       * {
         box-sizing: border-box;
       }
@@ -106,6 +121,15 @@
       .admin-btn {
         background: var(--secondary);
         color: white;
+      }
+      .theme-btn {
+        background: var(--surface);
+        color: var(--text);
+        border: 1px solid var(--border);
+      }
+
+      .theme-btn:hover {
+        background: var(--hover);
       }
 
       .admin-btn:hover {
@@ -494,6 +518,10 @@
             <i class="fas fa-shield-alt"></i>
             Admin Dashboard
           </a>
+          <button class="theme-btn" id="themeToggle" onclick="toggleTheme()">
+            <i class="fas fa-moon"></i>
+            <span id="themeToggleText">Dark Mode</span>
+          </button>
           <a href="/" class="home-btn">
             <i class="fas fa-home"></i>
             Home
@@ -568,6 +596,29 @@
     </div>
 
     <script>
+      function getTheme() {
+        return localStorage.getItem('theme') || 'light'
+      }
+      function setTheme(theme) {
+        localStorage.setItem('theme', theme)
+        document.documentElement.setAttribute('data-theme', theme)
+      }
+      function updateThemeButton() {
+        const btn = document.getElementById('themeToggle')
+        const label = document.getElementById('themeToggleText')
+        if (!btn || !label) return
+        const theme = getTheme()
+        btn.innerHTML =
+          theme === 'light'
+            ? '<i class="fas fa-moon"></i> <span id="themeToggleText">Dark Mode</span>'
+            : '<i class="fas fa-sun"></i> <span id="themeToggleText">Light Mode</span>'
+      }
+      function toggleTheme() {
+        const newTheme = getTheme() === 'light' ? 'dark' : 'light'
+        setTheme(newTheme)
+        updateThemeButton()
+      }
+
       let allSongs = []
       let currentSort = {
         column: null,
@@ -821,7 +872,11 @@
       }
 
       // Load songs on page load
-      document.addEventListener('DOMContentLoaded', loadSongs)
+      document.addEventListener('DOMContentLoaded', () => {
+        setTheme(getTheme())
+        updateThemeButton()
+        loadSongs()
+      })
     </script>
   </body>
 </html>

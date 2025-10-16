@@ -27,6 +27,21 @@
         --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
       }
 
+      [data-theme='dark'] {
+        --primary: #818cf8;
+        --primary-dark: #6366f1;
+        --secondary: #38bdf8;
+        --success: #4ade80;
+        --danger: #f87171;
+        --warning: #fbbf24;
+        --background: #0f172a;
+        --surface: #1e293b;
+        --text: #e2e8f0;
+        --text-light: #cbd5e1;
+        --border: #475569;
+        --hover: #334155;
+      }
+
       * {
         box-sizing: border-box;
       }
@@ -94,7 +109,7 @@
       }
 
       .btn-secondary {
-        background: white;
+        background: var(--surface);
         color: var(--text);
         border: 1px solid var(--border);
       }
@@ -152,7 +167,7 @@
       }
 
       .info-banner {
-        background: white;
+        background: var(--surface);
         border-left: 4px solid var(--secondary);
         padding: 1rem 1.25rem;
         border-radius: 8px;
@@ -190,7 +205,7 @@
 
       /* Status Bar Styles */
       .status-bar {
-        background: white;
+        background: var(--surface);
         border-radius: 12px;
         padding: 1.5rem;
         margin-bottom: 1rem;
@@ -333,7 +348,7 @@
       }
 
       .queue-item {
-        background: white;
+        background: var(--surface);
         border-radius: 12px;
         padding: 1.5rem;
         margin-bottom: 1rem;
@@ -415,7 +430,7 @@
       .empty-state {
         text-align: center;
         padding: 4rem 2rem;
-        background: white;
+        background: var(--surface);
         border-radius: 12px;
         box-shadow: var(--shadow);
       }
@@ -438,7 +453,7 @@
 
       /* Table Styles */
       .table-container {
-        background: white;
+        background: var(--surface);
         border-radius: 12px;
         box-shadow: var(--shadow);
         overflow: hidden;
@@ -551,7 +566,7 @@
 
       .filter-group {
         margin-bottom: 1.5rem;
-        background: white;
+        background: var(--surface);
         padding: 1rem;
         border-radius: 8px;
         box-shadow: var(--shadow);
@@ -572,7 +587,7 @@
         border-radius: 6px;
         font-size: 0.875rem;
         color: var(--text);
-        background: white;
+        background: var(--surface);
         cursor: pointer;
       }
 
@@ -580,7 +595,7 @@
         position: fixed;
         top: 2rem;
         right: 2rem;
-        background: white;
+        background: var(--surface);
         padding: 1rem 1.25rem;
         border-radius: 8px;
         box-shadow: var(--shadow-lg);
@@ -636,6 +651,10 @@
           System Status
         </h1>
         <div class="header-actions">
+          <button id="themeToggle" class="btn btn-secondary" onclick="toggleTheme()">
+            <i class="fas fa-moon"></i>
+            <span id="themeToggleText">Dark Mode</span>
+          </button>
           <a href="/admin" class="btn btn-secondary">
             <i class="fas fa-arrow-left"></i>
             Back to Admin
@@ -747,6 +766,29 @@
     </div>
 
     <script>
+      function getTheme() {
+        return localStorage.getItem('theme') || 'light'
+      }
+      function setTheme(theme) {
+        localStorage.setItem('theme', theme)
+        document.documentElement.setAttribute('data-theme', theme)
+      }
+      function updateThemeButton() {
+        const btn = document.getElementById('themeToggle')
+        const label = document.getElementById('themeToggleText')
+        if (!btn || !label) return
+        const theme = getTheme()
+        btn.innerHTML =
+          theme === 'light'
+            ? '<i class="fas fa-moon"></i> <span id="themeToggleText">Dark Mode</span>'
+            : '<i class="fas fa-sun"></i> <span id="themeToggleText">Light Mode</span>'
+      }
+      function toggleTheme() {
+        const newTheme = getTheme() === 'light' ? 'dark' : 'light'
+        setTheme(newTheme)
+        updateThemeButton()
+      }
+
       // Check authentication
       async function checkAuth() {
         try {
@@ -1273,6 +1315,8 @@
 
       // Initialize
       document.addEventListener('DOMContentLoaded', async () => {
+        setTheme(getTheme())
+        updateThemeButton()
         if (!(await checkAuth())) return
 
         // Load initial data
