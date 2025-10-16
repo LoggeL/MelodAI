@@ -9,640 +9,7 @@
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
     />
     <link rel="icon" href="/logo.svg" />
-    <style>
-      :root {
-        --primary: #6366f1;
-        --primary-dark: #4f46e5;
-        --secondary: #0ea5e9;
-        --success: #22c55e;
-        --danger: #ef4444;
-        --warning: #f59e0b;
-        --background: #f8fafc;
-        --surface: #ffffff;
-        --text: #1e293b;
-        --text-light: #64748b;
-        --border: #e2e8f0;
-        --hover: #f1f5f9;
-        --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
-        --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
-      }
-
-      * {
-        box-sizing: border-box;
-      }
-
-      body {
-        font-family: system-ui, -apple-system, sans-serif;
-        background: var(--background);
-        margin: 0;
-        padding: 0;
-        color: var(--text);
-        min-height: 100vh;
-      }
-
-      .container {
-        max-width: 1400px;
-        margin: 0 auto;
-        padding: 20px;
-      }
-
-      .header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 2rem;
-        padding: 1.5rem;
-        background: var(--surface);
-        border-radius: 12px;
-        box-shadow: var(--shadow);
-      }
-
-      .header h1 {
-        margin: 0;
-        font-size: 1.875rem;
-        color: var(--primary);
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-      }
-
-      .header h1 i {
-        font-size: 1.5rem;
-      }
-
-      .btn-container {
-        display: flex;
-        gap: 0.75rem;
-      }
-
-      button {
-        padding: 0.625rem 1.25rem;
-        border: none;
-        border-radius: 8px;
-        cursor: pointer;
-        font-size: 0.9rem;
-        font-weight: 500;
-        transition: all 0.2s;
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-      }
-
-      .home-btn {
-        background: var(--primary);
-        color: white;
-      }
-
-      .home-btn:hover {
-        background: var(--primary-dark);
-        transform: translateY(-1px);
-        box-shadow: var(--shadow-lg);
-      }
-
-      .logout-btn {
-        background: var(--danger);
-        color: white;
-      }
-
-      .logout-btn:hover {
-        background: #dc2626;
-        transform: translateY(-1px);
-        box-shadow: var(--shadow-lg);
-      }
-
-      .tab-container {
-        display: flex;
-        gap: 0.5rem;
-        margin-bottom: 1.5rem;
-        background: var(--surface);
-        padding: 0.5rem;
-        border-radius: 12px;
-        box-shadow: var(--shadow);
-      }
-
-      .tab {
-        padding: 0.75rem 1.5rem;
-        border: none;
-        background: transparent;
-        cursor: pointer;
-        font-size: 1rem;
-        color: var(--text-light);
-        border-radius: 8px;
-        transition: all 0.2s;
-        font-weight: 500;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-      }
-
-      .tab:hover {
-        background: var(--hover);
-        color: var(--text);
-      }
-
-      .tab.active {
-        background: var(--primary);
-        color: white;
-      }
-
-      .card {
-        background: var(--surface);
-        padding: 1.5rem;
-        border-radius: 12px;
-        box-shadow: var(--shadow);
-        margin-bottom: 1.5rem;
-      }
-
-      .card h2,
-      .card h3 {
-        margin: 0 0 1.5rem 0;
-        color: var(--text);
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-      }
-
-      .stats-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 1.25rem;
-        margin-bottom: 2rem;
-      }
-
-      .stat-card {
-        background: linear-gradient(
-          135deg,
-          var(--primary) 0%,
-          var(--primary-dark) 100%
-        );
-        padding: 1.5rem;
-        border-radius: 12px;
-        color: white;
-        box-shadow: var(--shadow-lg);
-        transition: transform 0.2s;
-      }
-
-      .stat-card:hover {
-        transform: translateY(-4px);
-      }
-
-      .stat-card i {
-        font-size: 2rem;
-        opacity: 0.8;
-        margin-bottom: 0.75rem;
-      }
-
-      .stat-card h3 {
-        margin: 0 0 0.5rem 0;
-        font-size: 0.9rem;
-        font-weight: 500;
-        opacity: 0.9;
-        color: white;
-      }
-
-      .stat-card p {
-        margin: 0;
-        font-size: 2rem;
-        font-weight: bold;
-        color: white;
-      }
-
-      .stat-card:nth-child(1) {
-        background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
-      }
-
-      .stat-card:nth-child(2) {
-        background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
-      }
-
-      .stat-card:nth-child(3) {
-        background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
-      }
-
-      .stat-card:nth-child(4) {
-        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-      }
-
-      .stat-card:nth-child(5) {
-        background: linear-gradient(135deg, #ec4899 0%, #db2777 100%);
-      }
-
-      table {
-        width: 100%;
-        border-collapse: separate;
-        border-spacing: 0;
-      }
-
-      th,
-      td {
-        padding: 1rem;
-        text-align: left;
-        border-bottom: 1px solid var(--border);
-      }
-
-      th {
-        background: var(--hover);
-        font-weight: 600;
-        color: var(--text);
-        cursor: pointer;
-        user-select: none;
-        transition: background 0.2s;
-        position: sticky;
-        top: 0;
-        z-index: 1;
-      }
-
-      th:first-child {
-        border-top-left-radius: 8px;
-      }
-
-      th:last-child {
-        border-top-right-radius: 8px;
-      }
-
-      th:hover {
-        background: var(--border);
-      }
-
-      tbody tr {
-        transition: background 0.2s;
-      }
-
-      tbody tr:hover {
-        background: var(--hover);
-      }
-
-      .sort-asc::after {
-        content: ' ↑';
-        color: var(--primary);
-      }
-
-      .sort-desc::after {
-        content: ' ↓';
-        color: var(--primary);
-      }
-
-      .status {
-        padding: 0.375rem 0.75rem;
-        border-radius: 6px;
-        font-size: 0.875rem;
-        font-weight: 500;
-        display: inline-flex;
-        align-items: center;
-        gap: 0.375rem;
-      }
-
-      .status-pending {
-        background: #fef3c7;
-        color: #92400e;
-      }
-
-      .status-approved {
-        background: #d1fae5;
-        color: #065f46;
-      }
-
-      .status-unused {
-        background: #d1fae5;
-        color: #065f46;
-      }
-
-      .status-used {
-        background: #fee2e2;
-        color: #991b1b;
-      }
-
-      .approve-btn {
-        background: var(--success);
-        color: white;
-        padding: 0.5rem 1rem;
-        font-size: 0.875rem;
-      }
-
-      .approve-btn:hover {
-        background: #16a34a;
-        transform: translateY(-1px);
-      }
-
-      .promote-btn {
-        background: var(--primary);
-        color: white;
-        padding: 0.5rem 1rem;
-        font-size: 0.875rem;
-      }
-
-      .promote-btn:hover {
-        background: var(--primary-dark);
-        transform: translateY(-1px);
-      }
-
-      .demote-btn {
-        background: var(--warning);
-        color: white;
-        padding: 0.5rem 1rem;
-        font-size: 0.875rem;
-      }
-
-      .demote-btn:hover {
-        background: #d97706;
-        transform: translateY(-1px);
-      }
-
-      .delete-btn {
-        background: var(--danger);
-        color: white;
-        padding: 0.5rem 1rem;
-        font-size: 0.875rem;
-      }
-
-      .delete-btn:hover {
-        background: #dc2626;
-        transform: translateY(-1px);
-      }
-
-      .status-admin {
-        background: color-mix(in srgb, var(--primary), white 85%);
-        color: var(--primary-dark);
-        border-color: var(--primary);
-      }
-
-      .status-user {
-        background: color-mix(in srgb, var(--text-light), white 90%);
-        color: var(--text);
-        border-color: var(--text-light);
-      }
-
-      .filters {
-        display: flex;
-        gap: 1rem;
-        margin-bottom: 1.5rem;
-        flex-wrap: wrap;
-      }
-
-      .filters input,
-      .filters select {
-        padding: 0.625rem 1rem;
-        border: 2px solid var(--border);
-        border-radius: 8px;
-        font-size: 0.9rem;
-        background: var(--surface);
-        color: var(--text);
-        transition: border-color 0.2s;
-        min-width: 200px;
-      }
-
-      .filters input:focus,
-      .filters select:focus {
-        outline: none;
-        border-color: var(--primary);
-        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-      }
-
-      .pagination {
-        margin-top: 1.5rem;
-        display: flex;
-        gap: 1rem;
-        align-items: center;
-        justify-content: center;
-        padding: 1rem;
-      }
-
-      .pagination button {
-        background: var(--primary);
-        color: white;
-        min-width: 100px;
-      }
-
-      .pagination button:hover:not(:disabled) {
-        background: var(--primary-dark);
-        transform: translateY(-1px);
-      }
-
-      .pagination button:disabled {
-        background: var(--border);
-        color: var(--text-light);
-        cursor: not-allowed;
-        transform: none;
-      }
-
-      .pagination span {
-        font-weight: 500;
-        color: var(--text);
-      }
-
-      .invite-key-section {
-        margin-bottom: 2rem;
-        padding: 1.5rem;
-        background: var(--hover);
-        border-radius: 12px;
-        border: 2px dashed var(--border);
-      }
-
-      .invite-key-section h3 {
-        margin: 0 0 1rem 0;
-      }
-
-      .invite-key-section button {
-        background: var(--primary);
-        color: white;
-        width: 100%;
-        margin-bottom: 1rem;
-      }
-
-      .invite-key-section button:hover {
-        background: var(--primary-dark);
-      }
-
-      .invite-key-section input {
-        width: 100%;
-        padding: 0.75rem;
-        border: 2px solid var(--border);
-        border-radius: 8px;
-        font-family: monospace;
-        font-size: 0.9rem;
-        background: var(--surface);
-        color: var(--text);
-      }
-
-      .copy-button,
-      .cancel-button {
-        padding: 0.375rem 0.75rem;
-        font-size: 0.875rem;
-        border-radius: 6px;
-      }
-
-      .copy-button {
-        background: var(--primary);
-        color: white;
-        font-family: monospace;
-        max-width: 200px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-
-      .copy-button:hover {
-        background: var(--primary-dark);
-        transform: translateY(-1px);
-      }
-
-      .cancel-button {
-        background: var(--danger);
-        color: white;
-        margin-left: 0.5rem;
-      }
-
-      .cancel-button:hover {
-        background: #dc2626;
-        transform: translateY(-1px);
-      }
-
-      .notification {
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        padding: 1rem 1.5rem;
-        border-radius: 12px;
-        animation: slideIn 0.3s ease-out;
-        z-index: 1000;
-        box-shadow: var(--shadow-lg);
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        max-width: 400px;
-      }
-
-      .notification i {
-        font-size: 1.25rem;
-      }
-
-      .notification.success {
-        background: #d1fae5;
-        color: #065f46;
-        border: 2px solid #10b981;
-      }
-
-      .notification.success i {
-        color: #10b981;
-      }
-
-      .notification.error {
-        background: #fee2e2;
-        color: #991b1b;
-        border: 2px solid #ef4444;
-      }
-
-      .notification.error i {
-        color: #ef4444;
-      }
-
-      @keyframes slideIn {
-        from {
-          transform: translateX(100%);
-          opacity: 0;
-        }
-        to {
-          transform: translateX(0);
-          opacity: 1;
-        }
-      }
-
-      .loading {
-        display: inline-block;
-        width: 16px;
-        height: 16px;
-        border: 3px solid rgba(255, 255, 255, 0.3);
-        border-radius: 50%;
-        border-top-color: white;
-        animation: spin 0.8s linear infinite;
-      }
-
-      @keyframes spin {
-        to {
-          transform: rotate(360deg);
-        }
-      }
-
-      .empty-state {
-        text-align: center;
-        padding: 3rem 1rem;
-        color: var(--text-light);
-      }
-
-      .empty-state i {
-        font-size: 4rem;
-        margin-bottom: 1rem;
-        opacity: 0.3;
-      }
-
-      .empty-state h3 {
-        margin: 0 0 0.5rem 0;
-        color: var(--text);
-      }
-
-      .empty-state p {
-        margin: 0;
-      }
-
-      @media (max-width: 768px) {
-        .container {
-          padding: 10px;
-        }
-
-        .header {
-          flex-direction: column;
-          gap: 1rem;
-          align-items: stretch;
-        }
-
-        .header h1 {
-          font-size: 1.5rem;
-        }
-
-        .btn-container {
-          flex-direction: column;
-        }
-
-        .tab-container {
-          overflow-x: auto;
-        }
-
-        .tab {
-          white-space: nowrap;
-          padding: 0.625rem 1rem;
-          font-size: 0.9rem;
-        }
-
-        .stats-grid {
-          grid-template-columns: 1fr;
-        }
-
-        .filters {
-          flex-direction: column;
-        }
-
-        .filters input,
-        .filters select {
-          width: 100%;
-          min-width: 0;
-        }
-
-        table {
-          font-size: 0.875rem;
-        }
-
-        th,
-        td {
-          padding: 0.75rem 0.5rem;
-        }
-      }
-
-      .table-wrapper {
-        overflow-x: auto;
-        border-radius: 8px;
-        border: 1px solid var(--border);
-      }
-    </style>
+    <link rel="stylesheet" href="/css/admin.css" />
   </head>
   <body>
     <div class="container">
@@ -672,11 +39,11 @@
           <i class="fas fa-chart-line"></i>
           Usage Logs
         </button>
-        <button class="tab" onclick="window.location.href='/admin/songs'">
+        <button class="tab" onclick="showTab('songs')">
           <i class="fas fa-music"></i>
           Songs
         </button>
-        <button class="tab" onclick="window.location.href='/admin/status'">
+        <button class="tab" onclick="showTab('status')">
           <i class="fas fa-heartbeat"></i>
           System Status
         </button>
@@ -811,6 +178,146 @@
               Next
               <i class="fas fa-chevron-right"></i>
             </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Songs Tab -->
+      <div id="songsTab" style="display: none">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <i class="fas fa-music"></i>
+            <h3>Total Songs</h3>
+            <p id="totalSongs">0</p>
+          </div>
+          <div class="stat-card">
+            <i class="fas fa-check-circle"></i>
+            <h3>Complete Songs</h3>
+            <p id="completeSongs">0</p>
+          </div>
+          <div class="stat-card">
+            <i class="fas fa-hdd"></i>
+            <h3>Total Storage</h3>
+            <p id="totalStorage">0 MB</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="controls">
+            <div class="search-box">
+              <input
+                type="text"
+                id="searchInput"
+                placeholder="🔍 Search by title, artist, or album..."
+                onkeyup="filterSongs()"
+              />
+            </div>
+            <select
+              id="filterSelect"
+              class="filter-select"
+              onchange="filterSongs()"
+            >
+              <option value="all">All Songs</option>
+              <option value="complete">Complete Only</option>
+              <option value="incomplete">Incomplete Only</option>
+            </select>
+            <button class="refresh-btn" onclick="loadSongs()">
+              <i class="fas fa-sync-alt" id="refreshSongsIcon"></i>
+              Refresh
+            </button>
+          </div>
+
+          <div class="table-wrapper">
+            <table id="songsTable">
+              <thead>
+                <tr>
+                  <th onclick="sortSongsTable(0)">Song</th>
+                  <th onclick="sortSongsTable(1)">Album</th>
+                  <th onclick="sortSongsTable(2)">Duration</th>
+                  <th onclick="sortSongsTable(3)">Size</th>
+                  <th onclick="sortSongsTable(4)">Status</th>
+                  <th onclick="sortSongsTable(5)">Track ID</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="songsTableBody">
+                <tr>
+                  <td colspan="7">
+                    <div class="loading">
+                      <div class="spinner"></div>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Status Tab -->
+      <div id="statusTab" style="display: none">
+        <div class="info-banner">
+          <p>
+            <i class="fas fa-info-circle"></i>
+            Last updated: <strong id="statusLastUpdated">Never</strong>
+          </p>
+        </div>
+
+        <div class="tabs">
+          <button class="tab active" data-subtab="current-status">
+            <i class="fas fa-heartbeat"></i>
+            Current Status
+          </button>
+          <button class="tab" data-subtab="processing-queue">
+            <i class="fas fa-list"></i>
+            Processing Queue
+          </button>
+          <button class="tab" data-subtab="unfinished-tracks">
+            <i class="fas fa-exclamation-triangle"></i>
+            Unfinished Tracks
+          </button>
+        </div>
+
+        <!-- Current Status Sub-tab -->
+        <div id="current-status" class="tab-content active">
+          <div id="currentStatus">
+            <div class="loading">
+              <div class="spinner"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Processing Queue Sub-tab -->
+        <div id="processing-queue" class="tab-content">
+          <div class="queue-header">
+            <div class="queue-count" id="queueCount">0 tracks in queue</div>
+            <button class="btn-secondary" onclick="fetchProcessingQueue()">
+              <i class="fas fa-sync-alt" id="refreshQueueIcon"></i>
+              Refresh Queue
+            </button>
+          </div>
+          <div id="processingQueue">
+            <div class="loading">
+              <div class="spinner"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Unfinished Tracks Sub-tab -->
+        <div id="unfinished-tracks" class="tab-content">
+          <div class="queue-header">
+            <div class="queue-count" id="unfinishedCount">
+              Loading unfinished tracks...
+            </div>
+            <button class="btn-secondary" onclick="fetchUnfinishedSongs()">
+              <i class="fas fa-sync-alt" id="refreshUnfinishedIcon"></i>
+              Refresh List
+            </button>
+          </div>
+          <div id="unfinishedSongs">
+            <div class="loading">
+              <div class="spinner"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -1156,17 +663,23 @@
       }
 
       function showTab(tabName) {
-        document.querySelectorAll('.tab').forEach((tab) => {
+        document.querySelectorAll('.tab-container > .tab').forEach((tab) => {
           tab.classList.remove('active')
         })
         document
-          .querySelector(`.tab[onclick="showTab('${tabName}')"]`)
+          .querySelector(
+            `.tab-container > .tab[onclick="showTab('${tabName}')"]`
+          )
           .classList.add('active')
 
         document.getElementById('usersTab').style.display =
           tabName === 'users' ? 'block' : 'none'
         document.getElementById('usageTab').style.display =
           tabName === 'usage' ? 'block' : 'none'
+        document.getElementById('songsTab').style.display =
+          tabName === 'songs' ? 'block' : 'none'
+        document.getElementById('statusTab').style.display =
+          tabName === 'status' ? 'block' : 'none'
 
         if (tabName === 'users') {
           loadUsers()
@@ -1174,8 +687,38 @@
         } else if (tabName === 'usage') {
           loadUsageLogs()
           loadStats()
+        } else if (tabName === 'songs') {
+          loadSongs()
+        } else if (tabName === 'status') {
+          fetchCurrentStatus()
         }
       }
+
+      // Status Sub-tab handling
+      document.addEventListener('DOMContentLoaded', () => {
+        // Handle status sub-tabs
+        document.querySelectorAll('.tabs .tab[data-subtab]').forEach((tab) => {
+          tab.addEventListener('click', () => {
+            const subtabName = tab.dataset.subtab
+
+            // Update active tab
+            document
+              .querySelectorAll('.tabs .tab')
+              .forEach((t) => t.classList.remove('active'))
+            tab.classList.add('active')
+
+            // Update active content
+            document
+              .querySelectorAll('#statusTab .tab-content')
+              .forEach((content) => content.classList.remove('active'))
+            document.getElementById(subtabName).classList.add('active')
+
+            // Load data if needed
+            if (subtabName === 'processing-queue') fetchProcessingQueue()
+            if (subtabName === 'unfinished-tracks') fetchUnfinishedSongs()
+          })
+        })
+      })
 
       async function loadStats() {
         try {
@@ -1303,6 +846,635 @@
         `
         document.body.appendChild(notification)
         setTimeout(() => notification.remove(), 3000)
+      }
+
+      // === SONGS TAB FUNCTIONS ===
+      let allSongs = []
+      let currentSongsSort = {
+        column: null,
+        direction: 'asc',
+      }
+
+      async function loadSongs() {
+        const refreshIcon = document.getElementById('refreshSongsIcon')
+        if (refreshIcon)
+          refreshIcon.style.animation = 'spin 0.8s linear infinite'
+
+        try {
+          const response = await fetch('/admin/songs/list', {
+            credentials: 'include',
+          })
+          const data = await response.json()
+          allSongs = data.songs
+
+          updateSongsStats()
+          displaySongs(allSongs)
+        } catch (error) {
+          console.error('Error loading songs:', error)
+          const tbody = document.getElementById('songsTableBody')
+          if (tbody) {
+            tbody.innerHTML = `
+              <tr>
+                <td colspan="7">
+                  <div class="empty-state">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <h3>Error loading songs</h3>
+                    <p>${error.message}</p>
+                  </div>
+                </td>
+              </tr>
+            `
+          }
+        } finally {
+          if (refreshIcon) refreshIcon.style.animation = ''
+        }
+      }
+
+      function updateSongsStats() {
+        const totalSongs = allSongs.length
+        const completeSongs = allSongs.filter(
+          (s) => s.has_song && s.has_vocals && s.has_no_vocals && s.has_lyrics
+        ).length
+        const totalStorage = allSongs.reduce((sum, s) => sum + s.size_mb, 0)
+
+        const totalEl = document.getElementById('totalSongs')
+        const completeEl = document.getElementById('completeSongs')
+        const storageEl = document.getElementById('totalStorage')
+
+        if (totalEl) totalEl.textContent = totalSongs
+        if (completeEl) completeEl.textContent = completeSongs
+        if (storageEl) storageEl.textContent = totalStorage.toFixed(2) + ' MB'
+      }
+
+      function displaySongs(songs) {
+        const tbody = document.getElementById('songsTableBody')
+        if (!tbody) return
+
+        if (songs.length === 0) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="7">
+                <div class="empty-state">
+                  <i class="fas fa-music"></i>
+                  <h3>No songs found</h3>
+                  <p>No songs match your search criteria.</p>
+                </div>
+              </td>
+            </tr>
+          `
+          return
+        }
+
+        tbody.innerHTML = songs
+          .map((song) => {
+            const isComplete =
+              song.has_song &&
+              song.has_vocals &&
+              song.has_no_vocals &&
+              song.has_lyrics
+            const coverUrl = song.cover
+              ? `https://e-cdns-images.dzcdn.net/images/cover/${song.cover}/250x250-000000-80-0-0.jpg`
+              : ''
+
+            const statusBadges = []
+            if (!song.has_song)
+              statusBadges.push(
+                '<span class="badge badge-danger"><i class="fas fa-times"></i> Song</span>'
+              )
+            if (!song.has_vocals)
+              statusBadges.push(
+                '<span class="badge badge-danger"><i class="fas fa-times"></i> Vocals</span>'
+              )
+            if (!song.has_no_vocals)
+              statusBadges.push(
+                '<span class="badge badge-danger"><i class="fas fa-times"></i> Instrumental</span>'
+              )
+            if (!song.has_lyrics)
+              statusBadges.push(
+                '<span class="badge badge-danger"><i class="fas fa-times"></i> Lyrics</span>'
+              )
+
+            const statusDisplay = isComplete
+              ? '<span class="badge badge-success"><i class="fas fa-check"></i> Complete</span>'
+              : statusBadges.join(' ')
+
+            return `
+              <tr>
+                <td>
+                  <div class="song-info">
+                    ${
+                      coverUrl
+                        ? `<img src="${coverUrl}" alt="${song.title}" class="song-cover" />`
+                        : '<div class="song-cover"></div>'
+                    }
+                    <div class="song-details">
+                      <h4>${song.title}</h4>
+                      <p>${song.artist}</p>
+                    </div>
+                  </div>
+                </td>
+                <td>${song.album}</td>
+                <td>${formatDuration(song.duration)}</td>
+                <td>${song.size_mb} MB</td>
+                <td>${statusDisplay}</td>
+                <td><code>${song.track_id}</code></td>
+                <td>
+                  <button 
+                    class="delete-btn" 
+                    onclick="deleteSong('${song.track_id}')"
+                    title="Delete this song permanently"
+                  >
+                    <i class="fas fa-trash"></i> Delete
+                  </button>
+                </td>
+              </tr>
+            `
+          })
+          .join('')
+      }
+
+      function formatDuration(seconds) {
+        const mins = Math.floor(seconds / 60)
+        const secs = seconds % 60
+        return `${mins}:${secs.toString().padStart(2, '0')}`
+      }
+
+      function filterSongs() {
+        const searchInput = document.getElementById('searchInput')
+        const filterSelect = document.getElementById('filterSelect')
+        if (!searchInput || !filterSelect) return
+
+        const searchTerm = searchInput.value.toLowerCase()
+        const filter = filterSelect.value
+
+        let filtered = allSongs
+
+        // Apply search filter
+        if (searchTerm) {
+          filtered = filtered.filter(
+            (s) =>
+              s.title.toLowerCase().includes(searchTerm) ||
+              s.artist.toLowerCase().includes(searchTerm) ||
+              s.album.toLowerCase().includes(searchTerm) ||
+              s.track_id.includes(searchTerm)
+          )
+        }
+
+        // Apply status filter
+        if (filter === 'complete') {
+          filtered = filtered.filter(
+            (s) => s.has_song && s.has_vocals && s.has_no_vocals && s.has_lyrics
+          )
+        } else if (filter === 'incomplete') {
+          filtered = filtered.filter(
+            (s) =>
+              !s.has_song || !s.has_vocals || !s.has_no_vocals || !s.has_lyrics
+          )
+        }
+
+        displaySongs(filtered)
+      }
+
+      function sortSongsTable(column) {
+        const headers = document.querySelectorAll('#songsTable th')
+
+        if (currentSongsSort.column === column) {
+          currentSongsSort.direction =
+            currentSongsSort.direction === 'asc' ? 'desc' : 'asc'
+        } else {
+          currentSongsSort.column = column
+          currentSongsSort.direction = 'asc'
+        }
+
+        // Remove sort classes
+        headers.forEach((h) => h.classList.remove('sort-asc', 'sort-desc'))
+        headers[column].classList.add(`sort-${currentSongsSort.direction}`)
+
+        // Sort the songs
+        const sortedSongs = [...allSongs].sort((a, b) => {
+          let aVal, bVal
+
+          switch (column) {
+            case 0: // Song
+              aVal = a.title.toLowerCase()
+              bVal = b.title.toLowerCase()
+              break
+            case 1: // Album
+              aVal = a.album.toLowerCase()
+              bVal = b.album.toLowerCase()
+              break
+            case 2: // Duration
+              aVal = a.duration
+              bVal = b.duration
+              break
+            case 3: // Size
+              aVal = a.size_mb
+              bVal = b.size_mb
+              break
+            case 4: // Status
+              aVal =
+                a.has_song && a.has_vocals && a.has_no_vocals && a.has_lyrics
+                  ? 1
+                  : 0
+              bVal =
+                b.has_song && b.has_vocals && b.has_no_vocals && b.has_lyrics
+                  ? 1
+                  : 0
+              break
+            case 5: // Track ID
+              aVal = a.track_id
+              bVal = b.track_id
+              break
+            default:
+              return 0
+          }
+
+          if (aVal < bVal) return currentSongsSort.direction === 'asc' ? -1 : 1
+          if (aVal > bVal) return currentSongsSort.direction === 'asc' ? 1 : -1
+          return 0
+        })
+
+        allSongs = sortedSongs
+        filterSongs()
+      }
+
+      async function deleteSong(trackId) {
+        if (
+          !confirm(
+            `Are you sure you want to permanently delete this song?\n\nTrack ID: ${trackId}\n\nThis action cannot be undone and will delete all associated files.`
+          )
+        ) {
+          return
+        }
+
+        try {
+          const response = await fetch(`/admin/songs/${trackId}`, {
+            method: 'DELETE',
+            credentials: 'include',
+          })
+
+          const data = await response.json()
+
+          if (response.ok) {
+            showNotification('Song deleted successfully!', 'success')
+            // Remove from local array
+            allSongs = allSongs.filter((s) => s.track_id !== trackId)
+            updateSongsStats()
+            filterSongs()
+          } else {
+            throw new Error(data.error || 'Failed to delete song')
+          }
+        } catch (error) {
+          console.error('Error deleting song:', error)
+          showNotification(error.message, 'error')
+        }
+      }
+
+      // === STATUS TAB FUNCTIONS ===
+      function formatDateTime(dateStr) {
+        if (!dateStr) return 'Unknown'
+        try {
+          const date = new Date(dateStr)
+          if (isNaN(date.getTime())) throw new Error('Invalid date')
+          return date.toLocaleString()
+        } catch (error) {
+          return dateStr
+        }
+      }
+
+      async function fetchCurrentStatus() {
+        const refreshIcon = document.getElementById('refreshIcon')
+        const container = document.getElementById('currentStatus')
+        if (!container) return
+
+        try {
+          const response = await fetch(
+            `/admin/status/check?timestamp=${Date.now()}`,
+            {
+              credentials: 'include',
+            }
+          )
+          const data = await response.json()
+          displayCurrentStatus(data.checks)
+          const updateEl = document.getElementById('statusLastUpdated')
+          if (updateEl) updateEl.textContent = new Date().toLocaleString()
+        } catch (error) {
+          console.error('Error fetching status:', error)
+          container.innerHTML = `
+            <div class="empty-state">
+              <i class="fas fa-exclamation-triangle"></i>
+              <h3>Error loading status</h3>
+              <p>${error.message}</p>
+            </div>
+          `
+        }
+      }
+
+      function displayCurrentStatus(checks) {
+        const container = document.getElementById('currentStatus')
+        if (!container) return
+
+        container.innerHTML = ''
+
+        checks.forEach((check) => {
+          const statusBar = document.createElement('div')
+          statusBar.className = 'status-bar'
+
+          const statusClass = check.status.toLowerCase()
+
+          statusBar.innerHTML = `
+            <div class="status-bar-header">
+              <div class="status-bar-title">${check.component}</div>
+              <div class="status-badge ${statusClass}">
+                ${check.status === 'OK' ? '✓ Operational' : check.status}
+              </div>
+            </div>
+            <div class="status-details">
+              ${check.details}
+            </div>
+          `
+
+          container.appendChild(statusBar)
+        })
+      }
+
+      async function fetchProcessingQueue(showSpinner = true) {
+        const icon = document.getElementById('refreshQueueIcon')
+        const container = document.getElementById('processingQueue')
+        if (!container) return
+
+        if (showSpinner && icon) {
+          icon.style.animation = 'spin 0.8s linear infinite'
+        }
+
+        try {
+          const response = await fetch(
+            `/admin/status/queue?timestamp=${Date.now()}`,
+            {
+              credentials: 'include',
+            }
+          )
+          const data = await response.json()
+          displayProcessingQueue(data.queue)
+          const countEl = document.getElementById('queueCount')
+          if (countEl) {
+            countEl.textContent = `${data.queue.length} track${
+              data.queue.length !== 1 ? 's' : ''
+            } in queue`
+          }
+        } catch (error) {
+          console.error('Error fetching queue:', error)
+          container.innerHTML = `
+            <div class="empty-state">
+              <i class="fas fa-exclamation-triangle"></i>
+              <h3>Error loading queue</h3>
+              <p>${error.message}</p>
+            </div>
+          `
+        } finally {
+          if (showSpinner && icon) {
+            icon.style.animation = ''
+          }
+        }
+      }
+
+      function displayProcessingQueue(queue) {
+        const container = document.getElementById('processingQueue')
+        if (!container) return
+
+        if (queue.length === 0) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <i class="fas fa-check-circle"></i>
+              <h3>No tracks in queue</h3>
+              <p>The processing queue is empty.</p>
+            </div>
+          `
+          return
+        }
+
+        container.innerHTML = queue
+          .map((item) => {
+            let itemClass = 'queue-item'
+            if (item.status.includes('error')) itemClass += ' error'
+            else if (item.progress >= 50) itemClass += ' success'
+
+            return `
+              <div class="${itemClass}">
+                <div class="queue-item-header">
+                  <div class="queue-item-info">
+                    <h3>${item.title || 'Unknown Track'}</h3>
+                    <p>${item.artist || 'Unknown Artist'} • Track ID: ${
+              item.track_id
+            }</p>
+                  </div>
+                  <div class="queue-status">${formatStatus(item.status)}</div>
+                </div>
+                <div class="progress-bar-container">
+                  <div class="progress-info">
+                    <span>${item.progress}% complete</span>
+                    <span>Time elapsed: ${item.elapsed_time}</span>
+                  </div>
+                  <div class="progress-bar">
+                    <div class="progress-fill" style="width: ${
+                      item.progress
+                    }%"></div>
+                  </div>
+                </div>
+              </div>
+            `
+          })
+          .join('')
+      }
+
+      function formatStatus(status) {
+        return status
+          .split('_')
+          .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ')
+      }
+
+      async function fetchUnfinishedSongs(showSpinner = true) {
+        const icon = document.getElementById('refreshUnfinishedIcon')
+        const container = document.getElementById('unfinishedSongs')
+        if (!container) return
+
+        if (showSpinner && icon) {
+          icon.style.animation = 'spin 0.8s linear infinite'
+        }
+
+        try {
+          const response = await fetch(
+            `/admin/status/unfinished?timestamp=${Date.now()}`,
+            {
+              credentials: 'include',
+            }
+          )
+          const data = await response.json()
+          displayUnfinishedSongs(data.unfinished_songs)
+          const countEl = document.getElementById('unfinishedCount')
+          if (countEl) {
+            countEl.textContent = `${
+              data.unfinished_songs.length
+            } unfinished track${
+              data.unfinished_songs.length !== 1 ? 's' : ''
+            } found`
+          }
+        } catch (error) {
+          console.error('Error fetching unfinished songs:', error)
+          container.innerHTML = `
+            <div class="empty-state">
+              <i class="fas fa-exclamation-triangle"></i>
+              <h3>Error loading unfinished tracks</h3>
+              <p>${error.message}</p>
+            </div>
+          `
+        } finally {
+          if (showSpinner && icon) {
+            icon.style.animation = ''
+          }
+        }
+      }
+
+      function displayUnfinishedSongs(songs) {
+        const container = document.getElementById('unfinishedSongs')
+        if (!container) return
+
+        if (songs.length === 0) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <i class="fas fa-check-circle"></i>
+              <h3>No unfinished tracks</h3>
+              <p>All tracks have been processed successfully.</p>
+            </div>
+          `
+          return
+        }
+
+        const tableHTML = `
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Track</th>
+                  <th>Last Modified</th>
+                  <th>Completion</th>
+                  <th>Failures</th>
+                  <th>Missing Components</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${songs
+                  .map((song) => {
+                    let badgeClass = 'low'
+                    if (song.completion_status >= 75) badgeClass = 'high'
+                    else if (song.completion_status >= 50) badgeClass = 'medium'
+
+                    const missingItems =
+                      song.missing_items || song.missing_components || []
+                    const missingText =
+                      Array.isArray(missingItems) && missingItems.length > 0
+                        ? missingItems.join(', ')
+                        : 'None'
+
+                    const failureCount = song.failure_count || 0
+                    const failureBadgeClass =
+                      failureCount >= 3
+                        ? 'low'
+                        : failureCount >= 2
+                        ? 'medium'
+                        : 'high'
+
+                    return `
+                      <tr>
+                        <td>${song.title || 'Unknown'} - ${
+                      song.artist || 'Unknown'
+                    }</td>
+                        <td>${new Date(
+                          song.last_modified
+                        ).toLocaleString()}</td>
+                        <td><span class="completion-badge ${badgeClass}">${
+                      song.completion_status || 0
+                    }%</span></td>
+                        <td><span class="completion-badge ${failureBadgeClass}" title="${
+                      song.error_message || 'No error message'
+                    }">${failureCount}x</span></td>
+                        <td>${missingText}</td>
+                        <td>
+                          <button class="reprocess-btn" onclick="reprocessTrack('${
+                            song.track_id
+                          }')" style="margin-right: 0.5rem;">
+                            <i class="fas fa-redo"></i> Reprocess
+                          </button>
+                          ${
+                            failureCount >= 2
+                              ? `
+                            <button class="delete-btn" onclick="deleteFailedTrack('${song.track_id}')" title="Delete this track permanently">
+                              <i class="fas fa-trash"></i> Delete
+                            </button>
+                          `
+                              : ''
+                          }
+                        </td>
+                      </tr>
+                    `
+                  })
+                  .join('')}
+              </tbody>
+            </table>
+          </div>
+        `
+
+        container.innerHTML = tableHTML
+      }
+
+      async function reprocessTrack(trackId) {
+        try {
+          const response = await fetch('/admin/status/reprocess', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ track_id: trackId }),
+          })
+
+          if (response.ok) {
+            showNotification('Track reprocessing started', 'success')
+            fetchUnfinishedSongs()
+          } else {
+            throw new Error('Failed to reprocess track')
+          }
+        } catch (error) {
+          showNotification(error.message, 'error')
+        }
+      }
+
+      async function deleteFailedTrack(trackId) {
+        if (
+          !confirm(
+            `Are you sure you want to permanently delete track ${trackId}? This action cannot be undone.`
+          )
+        ) {
+          return
+        }
+
+        try {
+          const response = await fetch(`/admin/track/${trackId}`, {
+            method: 'DELETE',
+            credentials: 'include',
+          })
+
+          const data = await response.json()
+
+          if (response.ok) {
+            showNotification('Track deleted successfully', 'success')
+            fetchUnfinishedSongs()
+          } else {
+            throw new Error(data.error || 'Failed to delete track')
+          }
+        } catch (error) {
+          showNotification(error.message, 'error')
+        }
       }
 
       document.addEventListener('DOMContentLoaded', () => {
