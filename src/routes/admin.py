@@ -178,6 +178,9 @@ def get_usage_stats():
         "total_downloads": db.execute(
             "SELECT COUNT(*) FROM usage_logs WHERE action = 'download'"
         ).fetchone()[0],
+        "total_plays": db.execute(
+            "SELECT COUNT(*) FROM usage_logs WHERE action = 'play'"
+        ).fetchone()[0],
         "total_searches": db.execute(
             "SELECT COUNT(*) FROM usage_logs WHERE action = 'search'"
         ).fetchone()[0],
@@ -430,7 +433,7 @@ def reprocess_track():
                     f"Started reprocessing track {track_id} manually",
                     user_id,
                 )
-                de_add_track(track_id)
+                de_add_track(track_id, user_id)
                 # Status updates are stored in database instead of socket emit
                 update_queue_item_status(track_id, "complete", 100)
             except Exception as e:
