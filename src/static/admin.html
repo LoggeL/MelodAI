@@ -115,6 +115,11 @@
             <h3>Total Downloads</h3>
             <p id="totalDownloads">-</p>
           </div>
+            <div class="stat-card">
+              <i class="fas fa-play"></i>
+              <h3>Total Plays</h3>
+              <p id="totalPlays">-</p>
+            </div>
           <div class="stat-card">
             <i class="fas fa-search"></i>
             <h3>Total Searches</h3>
@@ -144,6 +149,7 @@
             <select id="actionFilter" onchange="loadUsageLogs(1)">
               <option value="">All actions</option>
               <option value="download">Download</option>
+              <option value="play">Play</option>
               <option value="search">Search</option>
               <option value="random_play">Random Play</option>
             </select>
@@ -523,6 +529,8 @@
                         ? 'download'
                         : log.action === 'search'
                         ? 'search'
+                        : log.action === 'play'
+                        ? 'play'
                         : 'random'
                     }"></i> ${log.action}</td>
                     <td><code>${log.track_id}</code></td>
@@ -730,6 +738,8 @@
           document.getElementById('totalUsers').textContent = stats.total_users
           document.getElementById('totalDownloads').textContent =
             stats.total_downloads
+          document.getElementById('totalPlays').textContent =
+            stats.total_plays
           document.getElementById('totalSearches').textContent =
             stats.total_searches
           document.getElementById('totalRandomPlays').textContent =

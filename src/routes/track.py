@@ -128,7 +128,7 @@ def split_track(track_id):
             raise
 
 
-def download_track(track_id):
+def download_track(track_id, user_id=None):
     # Download song
     if (
         not os.path.isfile(f"src/songs/{track_id}/song.mp3")
@@ -144,12 +144,21 @@ def download_track(track_id):
 
             update_queue_item_status(track_id, "downloaded", 20)
 
-            # Log successful download
+            # Log successful download to system status
             save_status_check(
                 "Track Download",
                 STATUS_OK,
                 f"Successfully downloaded track {track_id}: {track_info.get('SNG_TITLE', 'Unknown')} by {track_info.get('ART_NAME', 'Unknown')}",
             )
+
+            # Record usage only when an actual download happened
+            if user_id is not None:
+                db = get_db()
+                db.execute(
+                    "INSERT INTO usage_logs (user_id, track_id, action) VALUES (?, ?, ?)",
+                    (user_id, track_id, "download"),
+                )
+                db.commit()
 
         except Exception as e:
             # Update queue status on error
@@ -164,7 +173,7 @@ def download_track(track_id):
             raise
 
 
-def de_add_track(track_id):
+def de_add_track(track_id, user_id=None):
     with current_app.app_context():
         try:
             os.makedirs(f"src/songs/{track_id}", exist_ok=True)
@@ -193,7 +202,7 @@ def de_add_track(track_id):
 
                 update_queue_item_status(track_id, "metadata_complete", 10)
 
-            download_track(track_id)
+            download_track(track_id, user_id)
 
             split_track(track_id)
 
@@ -295,11 +304,14 @@ def add():
     # Add to processing queue BEFORE starting the thread
     add_to_processing_queue(track_id, metadata)
 
+    # Capture user_id for usage logging in background thread
+    user_id = session["user_id"]
+
     # Start processing in background
-    def process_track(app):
+    def process_track(app, user_id):
         with app.app_context():
             try:
-                de_add_track(track_id)
+                de_add_track(track_id, user_id)
                 # Status updates are stored in database instead of socket emit
             except Exception as e:
                 print("Error processing track", e)
@@ -331,20 +343,30 @@ def add():
                 # Ensure cleanup on error
                 remove_from_processing_queue(track_id)
 
-    # Log the download
-    db = get_db()
-    db.execute(
-        "INSERT INTO usage_logs (user_id, track_id, action) VALUES (?, ?, ?)",
-        (session["user_id"], track_id, "download"),
-    )
-    db.commit()
-
     # Start processing in a new thread with app instance
     thread = threading.Thread(
-        target=process_track, args=(current_app._get_current_object(),)
+        target=process_track, args=(current_app._get_current_object(), user_id)
     )
     thread.daemon = True  # Make thread daemon so it doesn't prevent app shutdown
     thread.start()
+
+    return jsonify({"success": True})
+
+
+@track_bp.route("/play", methods=["POST"])
+@login_required
+def log_play():
+    data = request.get_json(silent=True) or {}
+    track_id = data.get("track_id")
+    if not track_id:
+        return jsonify({"error": "Missing track ID"}), 400
+
+    db = get_db()
+    db.execute(
+        "INSERT INTO usage_logs (user_id, track_id, action) VALUES (?, ?, ?)",
+        (session["user_id"], track_id, "play"),
+    )
+    db.commit()
 
     return jsonify({"success": True})
 

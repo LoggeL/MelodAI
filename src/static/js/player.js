@@ -27,6 +27,7 @@ class KaraokePlayer {
     this.currentSongIndex = -1
     this.hasUserInteracted = false
     this.pollingInterval = null
+    this.playedTrackIds = new Set()
 
     // Add event listener for first interaction
     document.addEventListener(
@@ -824,6 +825,18 @@ class KaraokePlayer {
           document
             .querySelector('#playButton i')
             .classList.replace('fa-play', 'fa-pause')
+
+          // Log first play for this track (once per track)
+          const currentSong = this.songQueue[this.currentSongIndex]
+          if (currentSong && !this.playedTrackIds.has(currentSong.id)) {
+            fetch('/play', {
+              method: 'POST',
+              credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ track_id: currentSong.id }),
+            }).catch((err) => console.error('Error logging play:', err))
+            this.playedTrackIds.add(currentSong.id)
+          }
         })
         .catch((error) => {
           console.error('Error playing audio:', error)
