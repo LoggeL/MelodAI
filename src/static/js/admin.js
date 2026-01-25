@@ -6,7 +6,7 @@
 // Dark Mode Management
 class ThemeManager {
   constructor() {
-    this.theme = localStorage.getItem('admin-theme') || 'light'
+    this.theme = localStorage.getItem('theme') || 'light'
     this.init()
   }
 
@@ -23,7 +23,7 @@ class ThemeManager {
   applyTheme(theme) {
     this.theme = theme
     document.documentElement.setAttribute('data-theme', theme)
-    localStorage.setItem('admin-theme', theme)
+    localStorage.setItem('theme', theme)
     this.updateToggleButton()
   }
 
