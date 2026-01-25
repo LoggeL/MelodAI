@@ -278,9 +278,8 @@ class KaraokePlayer {
       console.warn('Invalid time value:', time)
       return
     }
-    
-    this.vocalsAudio.currentTime = time
-    this.musicAudio.currentTime = time
+
+    this.seekToTime(time)
 
     // Start playing if not already playing
     if (!this.playing) {
@@ -303,10 +302,33 @@ class KaraokePlayer {
       console.warn('Audio duration not available yet')
       return
     }
-    
+
     const seekTime = duration * progress
-    this.vocalsAudio.currentTime = seekTime
-    this.musicAudio.currentTime = seekTime
+    this.seekToTime(seekTime)
+  }
+
+  seekToTime(time) {
+    // Pause both tracks to ensure sync
+    const wasPlaying = this.playing
+    if (wasPlaying) {
+      this.vocalsAudio.pause()
+      this.musicAudio.pause()
+    }
+
+    // Set the time on both tracks
+    this.vocalsAudio.currentTime = time
+    this.musicAudio.currentTime = time
+
+    // Resume playback if it was playing, ensuring both start together
+    if (wasPlaying) {
+      // Use Promise.all to start both at the same time
+      Promise.all([
+        this.vocalsAudio.play(),
+        this.musicAudio.play()
+      ]).catch(error => {
+        console.error('Error resuming playback after seek:', error)
+      })
+    }
   }
 
   startLyricsSync() {
