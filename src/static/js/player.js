@@ -29,6 +29,7 @@ class KaraokePlayer {
     this.pollingInterval = null
     this.playedTrackIds = new Set()
 
+
     // Add event listener for first interaction
     document.addEventListener(
       'click',
@@ -308,26 +309,44 @@ class KaraokePlayer {
   }
 
   seekToTime(time) {
-    // Pause both tracks to ensure sync
     const wasPlaying = this.playing
-    if (wasPlaying) {
-      this.vocalsAudio.pause()
-      this.musicAudio.pause()
-    }
+
+    // Pause both tracks
+    this.vocalsAudio.pause()
+    this.musicAudio.pause()
 
     // Set the time on both tracks
     this.vocalsAudio.currentTime = time
     this.musicAudio.currentTime = time
 
-    // Resume playback if it was playing, ensuring both start together
+    // Wait for both to be seeked before resuming
     if (wasPlaying) {
-      // Use Promise.all to start both at the same time
-      Promise.all([
-        this.vocalsAudio.play(),
-        this.musicAudio.play()
-      ]).catch(error => {
-        console.error('Error resuming playback after seek:', error)
-      })
+      let vocalsReady = false
+      let musicReady = false
+
+      const tryResume = () => {
+        if (vocalsReady && musicReady) {
+          // Force exact sync before playing
+          this.musicAudio.currentTime = this.vocalsAudio.currentTime
+          // Start both simultaneously
+          Promise.all([
+            this.vocalsAudio.play(),
+            this.musicAudio.play()
+          ]).catch(error => {
+            console.error('Error resuming playback after seek:', error)
+          })
+        }
+      }
+
+      this.vocalsAudio.addEventListener('seeked', () => {
+        vocalsReady = true
+        tryResume()
+      }, { once: true })
+
+      this.musicAudio.addEventListener('seeked', () => {
+        musicReady = true
+        tryResume()
+      }, { once: true })
     }
   }
 
@@ -623,10 +642,20 @@ class KaraokePlayer {
   }
 
   setupAudioEventListeners() {
-    // Keep audio tracks synchronized
-    this.vocalsAudio.addEventListener('play', () => this.musicAudio.play())
-    this.vocalsAudio.addEventListener('pause', () => this.musicAudio.pause())
+    // Handle song ending
     this.vocalsAudio.addEventListener('ended', () => this.nextSong())
+
+    // Handle unexpected pauses (e.g., buffering) - resync when ready
+    this.vocalsAudio.addEventListener('waiting', () => {
+      this.musicAudio.pause()
+    })
+
+    this.vocalsAudio.addEventListener('playing', () => {
+      if (this.playing && this.musicAudio.paused) {
+        this.musicAudio.currentTime = this.vocalsAudio.currentTime
+        this.musicAudio.play()
+      }
+    })
   }
 
   setupControls() {
@@ -840,6 +869,9 @@ class KaraokePlayer {
         .querySelector('#playButton i')
         .classList.replace('fa-pause', 'fa-play')
     } else {
+      // Ensure both tracks are synced before playing
+      this.musicAudio.currentTime = this.vocalsAudio.currentTime
+
       Promise.all([this.vocalsAudio.play(), this.musicAudio.play()])
         .then(() => {
           this.playing = true
