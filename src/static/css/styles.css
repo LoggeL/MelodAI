@@ -1,40 +1,8 @@
-:root {
-  --primary: #6366f1;
-  --primary-dark: #4f46e5;
-  --secondary: #0ea5e9;
-  --success: #22c55e;
-  --danger: #ef4444;
-  --warning: #f59e0b;
-  --background: #f8fafc;
-  --surface: #ffffff;
-  --text: #1e293b;
-  --text-light: #64748b;
-  --border: #e2e8f0;
-  --hover: #f1f5f9;
-}
-
-/* Dark theme */
-[data-theme='dark'] {
-  --primary: #818cf8;
-  --primary-dark: #6366f1;
-  --secondary: #38bdf8;
-  --success: #4ade80;
-  --danger: #f87171;
-  --warning: #fbbf24;
-  --background: #0f172a;
-  --surface: #1e293b;
-  --text: #e2e8f0;
-  --text-light: #cbd5e1;
-  --border: #475569;
-  --hover: #334155;
-}
+/* MelodAI Player Styles - Extends base.css */
+/* Player-specific styles only */
 
 body {
-  font-family: system-ui, -apple-system, sans-serif;
-  margin: 0;
   padding: 20px 20px 100px;
-  background: var(--background);
-  color: var(--text);
   height: 100vh;
   overflow: hidden;
 }
