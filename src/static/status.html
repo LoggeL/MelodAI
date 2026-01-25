@@ -3,32 +3,33 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>System Status - MelodAI Admin</title>
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
-    />
+    <title>System Status - MelodAI</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
     <link rel="icon" href="/logo.svg" />
+    <link rel="stylesheet" href="/css/base.css" />
     <link rel="stylesheet" href="/css/admin.css" />
   </head>
-  <body>
+  <body class="admin-page">
     <div class="container">
-      <div class="header">
+      <header class="page-header">
         <h1>
           <i class="fas fa-heartbeat"></i>
-          System Status & Monitoring
+          System Status
         </h1>
         <div class="header-actions">
+          <button class="btn btn-primary" onclick="toggleTheme()">
+            <i class="fas fa-moon" id="themeIcon"></i>
+          </button>
           <a href="/admin" class="btn btn-secondary">
             <i class="fas fa-arrow-left"></i>
-            Back to Admin
+            Admin
           </a>
-          <button id="refreshBtn" class="btn btn-primary">
+          <button id="refreshBtn" class="btn btn-success">
             <i class="fas fa-sync-alt" id="refreshIcon"></i>
-            Refresh All
+            Refresh
           </button>
         </div>
-      </div>
+      </header>
 
       <!-- System Health Overview -->
       <div class="stats-grid" id="systemHealthStats">
@@ -54,24 +55,24 @@
         </div>
       </div>
 
-      <div class="tabs">
+      <nav class="tabs">
         <button class="tab active" data-tab="current">
           <i class="fas fa-heartbeat"></i>
-          Current Status
+          Status
         </button>
         <button class="tab" data-tab="queue">
           <i class="fas fa-list"></i>
-          Processing Queue
+          Queue
         </button>
         <button class="tab" data-tab="unfinished">
           <i class="fas fa-exclamation-triangle"></i>
-          Unfinished Tracks
+          Unfinished
         </button>
         <button class="tab" data-tab="history">
           <i class="fas fa-history"></i>
           History
         </button>
-      </div>
+      </nav>
 
       <!-- Current Status Tab -->
       <div class="tab-content active" id="current-tab">
@@ -154,6 +155,26 @@
     </div>
 
     <script>
+      // Theme Management
+      function getTheme() {
+        return localStorage.getItem('theme') || 'light';
+      }
+
+      function setTheme(theme) {
+        localStorage.setItem('theme', theme);
+        document.documentElement.setAttribute('data-theme', theme);
+        const icon = document.getElementById('themeIcon');
+        if (icon) icon.className = theme === 'light' ? 'fas fa-moon' : 'fas fa-sun';
+      }
+
+      function toggleTheme() {
+        const newTheme = getTheme() === 'light' ? 'dark' : 'light';
+        setTheme(newTheme);
+      }
+
+      // Initialize theme on load
+      setTheme(getTheme());
+
       // Check authentication
       async function checkAuth() {
         try {
