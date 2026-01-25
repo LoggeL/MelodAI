@@ -3,41 +3,42 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MelodAI Admin</title>
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
-    />
+    <title>Admin - MelodAI</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
     <link rel="icon" href="/logo.svg" />
+    <link rel="stylesheet" href="/css/base.css" />
     <link rel="stylesheet" href="/css/admin.css" />
   </head>
-  <body>
+  <body class="admin-page">
     <div class="container">
-      <div class="header">
+      <header class="page-header">
         <h1>
           <i class="fas fa-shield-alt"></i>
           Admin Dashboard
         </h1>
-        <div class="btn-container">
-          <button class="home-btn" onclick="window.location.href = '/'">
+        <div class="header-actions">
+          <button class="btn btn-primary" onclick="toggleTheme()">
+            <i class="fas fa-moon" id="themeIcon"></i>
+          </button>
+          <a href="/" class="btn btn-primary">
             <i class="fas fa-home"></i>
             Home
-          </button>
-          <button class="logout-btn" onclick="logout()">
+          </a>
+          <button class="btn btn-danger" onclick="logout()">
             <i class="fas fa-sign-out-alt"></i>
             Logout
           </button>
         </div>
-      </div>
+      </header>
 
-      <div class="tab-container">
+      <nav class="tabs">
         <button class="tab active" onclick="showTab('users')">
           <i class="fas fa-users"></i>
           Users
         </button>
         <button class="tab" onclick="showTab('usage')">
           <i class="fas fa-chart-line"></i>
-          Usage Logs
+          Usage
         </button>
         <button class="tab" onclick="showTab('songs')">
           <i class="fas fa-music"></i>
@@ -45,23 +46,18 @@
         </button>
         <button class="tab" onclick="showTab('status')">
           <i class="fas fa-heartbeat"></i>
-          System Status
+          Status
         </button>
-      </div>
+      </nav>
 
-      <div id="usersTab">
-        <div class="card invite-key-section">
+      <div id="usersTab" class="tab-content active">
+        <div class="invite-section">
           <h3><i class="fas fa-key"></i> Generate Invite Key</h3>
-          <button onclick="generateInviteKey()">
+          <button class="btn btn-primary" onclick="generateInviteKey()">
             <i class="fas fa-plus-circle"></i>
             Generate New Key
           </button>
-          <input
-            type="text"
-            id="inviteKeyDisplay"
-            readonly
-            placeholder="Generated key will appear here"
-          />
+          <input type="text" id="inviteKeyDisplay" class="invite-display" readonly placeholder="Generated key will appear here" />
         </div>
 
         <div class="card">
@@ -103,7 +99,7 @@
         </div>
       </div>
 
-      <div id="usageTab" style="display: none">
+      <div id="usageTab" class="tab-content">
         <div class="stats-grid">
           <div class="stat-card">
             <i class="fas fa-users"></i>
@@ -189,7 +185,7 @@
       </div>
 
       <!-- Songs Tab -->
-      <div id="songsTab" style="display: none">
+      <div id="songsTab" class="tab-content">
         <div class="stats-grid">
           <div class="stat-card">
             <i class="fas fa-music"></i>
@@ -261,7 +257,7 @@
       </div>
 
       <!-- Status Tab -->
-      <div id="statusTab" style="display: none">
+      <div id="statusTab" class="tab-content">
         <div class="info-banner">
           <p>
             <i class="fas fa-info-circle"></i>
@@ -330,6 +326,27 @@
     </div>
 
     <script src="/js/admin.js"></script>
+    <script>
+      // Theme Management
+      function getTheme() {
+        return localStorage.getItem('theme') || 'light';
+      }
+
+      function setTheme(theme) {
+        localStorage.setItem('theme', theme);
+        document.documentElement.setAttribute('data-theme', theme);
+        const icon = document.getElementById('themeIcon');
+        if (icon) icon.className = theme === 'light' ? 'fas fa-moon' : 'fas fa-sun';
+      }
+
+      function toggleTheme() {
+        const newTheme = getTheme() === 'light' ? 'dark' : 'light';
+        setTheme(newTheme);
+      }
+
+      // Initialize theme on load
+      setTheme(getTheme());
+    </script>
     <script>
       function formatTimeAgo(dateString) {
         const date = new Date(dateString)
@@ -671,23 +688,17 @@
       }
 
       function showTab(tabName) {
-        document.querySelectorAll('.tab-container > .tab').forEach((tab) => {
+        // Update tab buttons
+        document.querySelectorAll('.tabs > .tab').forEach((tab) => {
           tab.classList.remove('active')
         })
-        document
-          .querySelector(
-            `.tab-container > .tab[onclick="showTab('${tabName}')"]`
-          )
-          .classList.add('active')
+        document.querySelector(`.tabs > .tab[onclick="showTab('${tabName}')"]`).classList.add('active')
 
-        document.getElementById('usersTab').style.display =
-          tabName === 'users' ? 'block' : 'none'
-        document.getElementById('usageTab').style.display =
-          tabName === 'usage' ? 'block' : 'none'
-        document.getElementById('songsTab').style.display =
-          tabName === 'songs' ? 'block' : 'none'
-        document.getElementById('statusTab').style.display =
-          tabName === 'status' ? 'block' : 'none'
+        // Update tab content
+        document.querySelectorAll('.tab-content').forEach(content => {
+          content.classList.remove('active')
+        })
+        document.getElementById(tabName + 'Tab').classList.add('active')
 
         if (tabName === 'users') {
           loadUsers()
