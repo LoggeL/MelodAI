@@ -4,3 +4,7 @@ python-dotenv
 pycryptodome
 requests
 flask-cors
+groq
+openai
+librosa
+soundfile
