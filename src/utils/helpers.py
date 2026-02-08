@@ -355,6 +355,34 @@ def _extract_line_breaks_from_alignment(alignment, provider_tokens, quality):
     return line_breaks
 
 
+def _context_supports_rewrite(alignment, align_idx, quality, window=3, min_quality=0.55, min_ratio=0.6):
+    """Check if surrounding alignment context supports trusting a low-similarity rewrite.
+
+    When ASR produces a word that is textually very different from the provider
+    word (e.g. "Pläne" vs "Fans"), the text similarity is too low for a direct
+    match. But if the overall alignment quality is decent and surrounding words
+    match well, we can trust that the alignment is correct and the provider word
+    should replace the ASR word.
+    """
+    if quality < min_quality:
+        return False
+
+    good = 0
+    total = 0
+    for offset in range(-window, window + 1):
+        if offset == 0:
+            continue
+        idx = align_idx + offset
+        if 0 <= idx < len(alignment):
+            a, p, s = alignment[idx]
+            if a is not None and p is not None:
+                total += 1
+                if s >= 0.6:
+                    good += 1
+
+    return total >= 2 and good / total >= min_ratio
+
+
 def _rewrite_with_provider(raw_segments, asr_words, alignment, provider_tokens, quality):
     """Rewrite ASR words with provider text (aggressive policy).
 
@@ -368,7 +396,8 @@ def _rewrite_with_provider(raw_segments, asr_words, alignment, provider_tokens, 
         return raw_segments
 
     corrections = 0
-    for asr_idx, prov_idx, sim in alignment:
+    context_corrections = 0
+    for align_idx, (asr_idx, prov_idx, sim) in enumerate(alignment):
         if asr_idx is None or prov_idx is None:
             continue  # gap — nothing to rewrite
 
@@ -379,8 +408,11 @@ def _rewrite_with_provider(raw_segments, asr_words, alignment, provider_tokens, 
         # Only rewrite if similarity is decent (avoid wild mismatches)
         # For exact normalized matches (sim=1.0), always apply (fixes casing/spelling)
         # For fuzzy matches (sim>=0.6), apply the provider's version
+        # For low-similarity pairs, trust the provider if surrounding context matches well
         if sim < 0.6:
-            continue
+            if not _context_supports_rewrite(alignment, align_idx, quality):
+                continue
+            context_corrections += 1
 
         # Transfer trailing punctuation from ASR to provider text
         asr_stripped = original.rstrip(string.punctuation)
@@ -407,7 +439,7 @@ def _rewrite_with_provider(raw_segments, asr_words, alignment, provider_tokens, 
             corrections += 1
 
     print(f"Genius correction: {corrections} words corrected out of {len(asr_words)} "
-          f"(alignment quality: {quality:.2f})")
+          f"({context_corrections} context-trusted, alignment quality: {quality:.2f})")
 
     # Update segment-level text field if present
     for seg in raw_segments:
@@ -418,6 +450,100 @@ def _rewrite_with_provider(raw_segments, asr_words, alignment, provider_tokens, 
     return raw_segments
 
 
+def _remove_compound_fragments(raw_segments, asr_words, asr_normalized, alignment, provider_tokens):
+    """Remove ASR word fragments from incorrectly split compound words.
+
+    When WhisperX splits a compound word like 'Gleitsichtbrille' into
+    'Kleid, Schicht, Brille', alignment matches 'Brille' to 'Gleitsichtbrille'
+    and leaves 'Kleid', 'Schicht' as unmatched gaps. This function detects
+    such cases by checking if the concatenation of gap fragments + the matched
+    ASR word approximates the provider word, and removes the fragments.
+
+    Returns (modified_segments, set_of_removed_flat_indices).
+    """
+    # Build gap set and match map from alignment
+    gap_indices = set()
+    match_map = {}
+    for asr_idx, prov_idx, sim in alignment:
+        if asr_idx is not None and prov_idx is None:
+            gap_indices.add(asr_idx)
+        elif asr_idx is not None and prov_idx is not None:
+            match_map[asr_idx] = prov_idx
+
+    to_remove = set()
+
+    for asr_idx in sorted(match_map.keys()):
+        prov_idx = match_map[asr_idx]
+        prov_norm = _normalize_word(provider_tokens[prov_idx][1])
+        matched_norm = asr_normalized[asr_idx]
+
+        # Target must be a long word (compound candidate)
+        target = max(prov_norm, matched_norm, key=len)
+        if len(target) < 8:
+            continue
+
+        # Collect consecutive gap words immediately before this match
+        before = []
+        i = asr_idx - 1
+        while i >= 0 and i in gap_indices:
+            before.insert(0, i)
+            i -= 1
+
+        if not before:
+            continue
+
+        # Use the shorter form as the "root" (handles both first-run and re-run)
+        root = min(prov_norm, matched_norm, key=len)
+        gap_concat = "".join(asr_normalized[idx] for idx in before)
+        concat = gap_concat + root
+
+        # The concatenation should be longer than the root alone
+        if len(concat) < len(root) + 3:
+            continue
+
+        # Check if gap fragments + root ≈ the compound target word
+        if SequenceMatcher(None, concat, target).ratio() >= 0.55:
+            to_remove.update(before)
+
+    if not to_remove:
+        return raw_segments, set()
+
+    # Delete words from segments (reverse order to preserve indices)
+    by_seg = {}
+    for flat_idx in to_remove:
+        seg_idx, word_idx, _ = asr_words[flat_idx]
+        by_seg.setdefault(seg_idx, []).append(word_idx)
+
+    for seg_idx in by_seg:
+        for word_idx in sorted(by_seg[seg_idx], reverse=True):
+            del raw_segments[seg_idx]["words"][word_idx]
+        # Update text field
+        words = raw_segments[seg_idx].get("words", [])
+        if "text" in raw_segments[seg_idx]:
+            raw_segments[seg_idx]["text"] = " ".join(w.get("word", "") for w in words)
+
+    # Remove empty segments
+    raw_segments[:] = [s for s in raw_segments if s.get("words")]
+
+    print(f"Genius compound fix: removed {len(to_remove)} fragment words")
+    return raw_segments, to_remove
+
+
+def _adjust_line_breaks(line_breaks, removed_indices):
+    """Adjust line break ASR indices after removing compound fragment words."""
+    if not removed_indices:
+        return line_breaks
+
+    removed_sorted = sorted(removed_indices)
+    adjusted = []
+    for lb in line_breaks:
+        if lb in removed_indices:
+            continue
+        shift = sum(1 for r in removed_sorted if r < lb)
+        adjusted.append(lb - shift)
+    return adjusted
+
+
 def correct_lyrics_with_genius(raw_segments, genius_lines):
     """Correct WhisperX transcription using Genius lyrics as ground truth.
 
@@ -426,6 +552,7 @@ def correct_lyrics_with_genius(raw_segments, genius_lines):
       2. Align provider tokens to ASR words using Needleman-Wunsch
       3. Score alignment quality
       4. Rewrite ASR words with provider text (aggressive) while keeping timing
+      4b. Remove compound word fragments left behind by rewrite
       5. Extract line break positions from Genius alignment
 
     Returns (corrected_segments, line_breaks) where line_breaks is a sorted
@@ -458,8 +585,16 @@ def correct_lyrics_with_genius(raw_segments, genius_lines):
     # Step 4: Rewrite
     corrected = _rewrite_with_provider(raw_segments, asr_words, alignment, provider_tokens, quality)
 
+    # Step 4b: Remove compound word fragments
+    corrected, removed_indices = _remove_compound_fragments(
+        corrected, asr_words, asr_normalized, alignment, provider_tokens)
+
     # Step 5: Extract line breaks from alignment
     line_breaks = _extract_line_breaks_from_alignment(alignment, provider_tokens, quality)
+
+    # Adjust line breaks for removed fragment words
+    line_breaks = _adjust_line_breaks(line_breaks, removed_indices)
+
     if line_breaks:
         print(f"Genius line breaks: {len(line_breaks)} break points extracted")
 

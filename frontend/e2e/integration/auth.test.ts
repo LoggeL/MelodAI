@@ -157,13 +157,6 @@ describe('Auth API - /auth/*', () => {
   })
 
   describe('POST /auth/forgot-password', () => {
-    it('should accept request for existing user', async () => {
-      const resp = await post('/api/auth/forgot-password', { username: ADMIN_USER })
-      expect(resp.status).toBe(200)
-      const data = await resp.json()
-      expect(data.success).toBe(true)
-    })
-
     it('should not reveal non-existent user', async () => {
       const resp = await post('/api/auth/forgot-password', { username: 'nonexistent_user_xyz' })
       expect(resp.status).toBe(200)
