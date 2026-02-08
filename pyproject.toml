@@ -13,7 +13,7 @@ dependencies = [
     "openai>=1.12",
     "resend>=0.8",
     "werkzeug>=3.0",
-    "lyricsgenius>=3.0",
+    "beautifulsoup4>=4.12",
 ]
 
 [build-system]

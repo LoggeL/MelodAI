@@ -273,19 +273,6 @@ wheels = [
 ]
 
 [[package]]
-name = "lyricsgenius"
-version = "3.7.5"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "beautifulsoup4" },
-    { name = "requests" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/39/ab/376c50e3e8f31501c5067e71f79dfbd0f6e4883265c4473b39bf654550dc/lyricsgenius-3.7.5.tar.gz", hash = "sha256:c4f10c14f7980455c65c87d0cfd1086be0966daecaf99693032d36b65a38aa16", size = 511198, upload-time = "2025-10-26T06:35:16.109Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/e2/db/039ba03085212d7597b3b41da622e5a3ed931a8ea335f31d930aa968eba3/lyricsgenius-3.7.5-py3-none-any.whl", hash = "sha256:0c11f864cbd735c46171b5d5bc970edcc3815d9f1aa5caf5e546bddb51bc531b", size = 48691, upload-time = "2025-10-26T06:35:14.548Z" },
-]
-
-[[package]]
 name = "markupsafe"
 version = "3.0.2"
 source = { registry = "https://pypi.org/simple" }
@@ -328,9 +315,9 @@ name = "melodai"
 version = "1.0.0"
 source = { editable = "." }
 dependencies = [
+    { name = "beautifulsoup4" },
     { name = "flask" },
     { name = "flask-cors" },
-    { name = "lyricsgenius" },
     { name = "openai" },
     { name = "pycryptodome" },
     { name = "python-dotenv" },
@@ -342,9 +329,9 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "beautifulsoup4", specifier = ">=4.12" },
     { name = "flask", specifier = ">=3.0" },
     { name = "flask-cors", specifier = ">=4.0" },
-    { name = "lyricsgenius", specifier = ">=3.0" },
     { name = "openai", specifier = ">=1.12" },
     { name = "pycryptodome", specifier = ">=3.20" },
     { name = "python-dotenv", specifier = ">=1.0" },
