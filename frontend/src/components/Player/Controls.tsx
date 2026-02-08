@@ -10,6 +10,8 @@ interface Props {
   karaokeMode: boolean
   analyserRef: React.RefObject<AnalyserNode | null>
   thumbnail?: string
+  initialVocalsVolume?: number
+  initialInstrumentalVolume?: number
   onTogglePlay: () => void
   onSeek: (time: number) => void
   onPrev: () => void
@@ -34,12 +36,13 @@ function sliderTrackStyle(value: number): React.CSSProperties {
 
 export function Controls({
   isPlaying, currentTime, duration, karaokeMode, analyserRef, thumbnail,
+  initialVocalsVolume, initialInstrumentalVolume,
   onTogglePlay, onSeek, onPrev, onNext,
   onVocalsVolume, onInstrumentalVolume, onToggleKaraoke,
 }: Props) {
   const pct = duration > 0 ? (currentTime / duration) * 100 : 0
-  const [vocalsVol, setVocalsVol] = useState(50)
-  const [instrumentalVol, setInstrumentalVol] = useState(50)
+  const [vocalsVol, setVocalsVol] = useState(initialVocalsVolume ?? 50)
+  const [instrumentalVol, setInstrumentalVol] = useState(initialInstrumentalVolume ?? 50)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const vizAnimRef = useRef<number | null>(null)

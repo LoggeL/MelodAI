@@ -186,6 +186,8 @@ export function PlayerPage() {
           karaokeMode={player.karaokeMode}
           analyserRef={player.analyserRef}
           thumbnail={player.currentTrack?.thumbnail}
+          initialVocalsVolume={player.initialVocalsVolume}
+          initialInstrumentalVolume={player.initialInstrumentalVolume}
           onTogglePlay={player.togglePlay}
           onSeek={player.seek}
           onPrev={player.prev}

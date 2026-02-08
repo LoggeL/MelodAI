@@ -8,15 +8,70 @@ interface UsePlayerOptions {
   onCreditsUpdate?: (credits: number) => void
 }
 
+// localStorage keys
+const QUEUE_STORAGE_KEY = 'melodai_queue'
+const PLAYER_STORAGE_KEY = 'melodai_player'
+
+interface StoredQueueData {
+  items: { id: string; title: string; artist: string; thumbnail: string }[]
+  currentIndex: number
+}
+
+interface StoredPlayerData {
+  vocalsVolume: number
+  instrumentalVolume: number
+  karaokeMode: boolean
+}
+
+function loadStoredQueue(): { queue: QueueItem[]; currentIndex: number } {
+  try {
+    const raw = localStorage.getItem(QUEUE_STORAGE_KEY)
+    if (!raw) return { queue: [], currentIndex: -1 }
+    const data: StoredQueueData = JSON.parse(raw)
+    if (!data.items?.length) return { queue: [], currentIndex: -1 }
+    const queue: QueueItem[] = data.items.map(item => ({
+      id: item.id,
+      title: item.title,
+      artist: item.artist,
+      thumbnail: item.thumbnail,
+      vocalsUrl: `/songs/${item.id}/vocals.mp3`,
+      musicUrl: `/songs/${item.id}/no_vocals.mp3`,
+      lyricsUrl: `/api/track/${item.id}/lyrics`,
+      ready: true,
+      progress: 100,
+      status: 'ready',
+      error: false,
+    }))
+    const currentIndex = Math.max(-1, Math.min(data.currentIndex, queue.length - 1))
+    return { queue, currentIndex }
+  } catch {
+    return { queue: [], currentIndex: -1 }
+  }
+}
+
+function loadStoredPlayer(): StoredPlayerData | null {
+  try {
+    const raw = localStorage.getItem(PLAYER_STORAGE_KEY)
+    if (!raw) return null
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
+}
+
 export function usePlayer(options: UsePlayerOptions = {}) {
-  const [queue, setQueue] = useState<QueueItem[]>([])
-  const [currentIndex, setCurrentIndex] = useState(-1)
+  const [storedQueue] = useState(loadStoredQueue)
+  const [queue, setQueue] = useState<QueueItem[]>(storedQueue.queue)
+  const [currentIndex, setCurrentIndex] = useState(storedQueue.currentIndex)
   const [isPlaying, setIsPlaying] = useState(false)
   const [lyrics, setLyrics] = useState<LyricsData | null>(null)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [lyricsLoading, setLyricsLoading] = useState(false)
-  const [karaokeMode, setKaraokeMode] = useState(false)
+  const [karaokeMode, setKaraokeMode] = useState(() => {
+    const stored = loadStoredPlayer()
+    return stored?.karaokeMode ?? false
+  })
   const [favorites, setFavorites] = useState<Set<string>>(new Set())
 
   // Audio context and gain nodes
@@ -49,6 +104,9 @@ export function usePlayer(options: UsePlayerOptions = {}) {
   const animRef = useRef<number | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const savedVocalsVolRef = useRef(0.5)
+  const saveQueueTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const savePlayerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const storedPlayerData = useRef(loadStoredPlayer())
 
   // Refs tracking latest state for use in callbacks
   const queueRef = useRef(queue)
@@ -71,6 +129,55 @@ export function usePlayer(options: UsePlayerOptions = {}) {
     tracks.favorites().then(ids => setFavorites(new Set(ids))).catch(() => {})
   }, [])
 
+  // Debounced save queue to localStorage
+  useEffect(() => {
+    if (saveQueueTimerRef.current) clearTimeout(saveQueueTimerRef.current)
+    saveQueueTimerRef.current = setTimeout(() => {
+      const readyItems = queue.filter(q => q.ready)
+      if (readyItems.length === 0) {
+        localStorage.removeItem(QUEUE_STORAGE_KEY)
+        return
+      }
+      localStorage.setItem(QUEUE_STORAGE_KEY, JSON.stringify({
+        items: readyItems.map(q => ({
+          id: q.id, title: q.title, artist: q.artist, thumbnail: q.thumbnail,
+        })),
+        currentIndex,
+      }))
+    }, 500)
+    return () => { if (saveQueueTimerRef.current) clearTimeout(saveQueueTimerRef.current) }
+  }, [queue, currentIndex])
+
+  // Validate restored queue items against server
+  useEffect(() => {
+    if (storedQueue.queue.length === 0) return
+    const validateQueue = async () => {
+      const validItems: QueueItem[] = []
+      for (const item of storedQueue.queue) {
+        try {
+          const info = await tracks.info(item.id)
+          if (info.metadata) {
+            item.title = info.metadata.title || item.title
+            item.artist = info.metadata.artist || item.artist
+            item.thumbnail = info.metadata.img_url || item.thumbnail
+            validItems.push(item)
+          }
+        } catch {
+          // Track no longer exists, skip it
+        }
+      }
+      if (validItems.length !== storedQueue.queue.length) {
+        const newIndex = storedQueue.currentIndex >= validItems.length
+          ? Math.max(validItems.length - 1, -1)
+          : storedQueue.currentIndex
+        setQueue(validItems)
+        setCurrentIndex(validItems.length > 0 ? newIndex : -1)
+      }
+    }
+    validateQueue()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // Initialize Web Audio context and gain nodes
   const initAudio = useCallback(() => {
     if (initedRef.current) return
@@ -79,12 +186,16 @@ export function usePlayer(options: UsePlayerOptions = {}) {
     const ctx = new AudioContext()
     audioCtxRef.current = ctx
 
+    const stored = storedPlayerData.current
     const vGain = ctx.createGain()
     const iGain = ctx.createGain()
     vGain.connect(ctx.destination)
     iGain.connect(ctx.destination)
-    vGain.gain.value = 0.5
-    iGain.gain.value = 0.5
+    const vVol = stored ? stored.vocalsVolume / 100 : 0.5
+    const iVol = stored ? stored.instrumentalVolume / 100 : 0.5
+    vGain.gain.value = stored?.karaokeMode ? 0 : vVol
+    iGain.gain.value = iVol
+    savedVocalsVolRef.current = vVol
 
     const analyser = ctx.createAnalyser()
     analyser.fftSize = 256
@@ -455,16 +566,29 @@ export function usePlayer(options: UsePlayerOptions = {}) {
     }
   }, [])
 
+  const savePlayerState = useCallback(() => {
+    if (savePlayerTimerRef.current) clearTimeout(savePlayerTimerRef.current)
+    savePlayerTimerRef.current = setTimeout(() => {
+      localStorage.setItem(PLAYER_STORAGE_KEY, JSON.stringify({
+        vocalsVolume: Math.round(savedVocalsVolRef.current * 100),
+        instrumentalVolume: Math.round((instrumentalGainRef.current?.gain.value ?? 0.5) * 100),
+        karaokeMode: karaokeModeRef.current,
+      }))
+    }, 500)
+  }, [])
+
   const setVocalsVolume = useCallback((v: number) => {
     savedVocalsVolRef.current = v / 100
     if (vocalsGainRef.current && !karaokeModeRef.current) {
       vocalsGainRef.current.gain.value = v / 100
     }
-  }, [])
+    savePlayerState()
+  }, [savePlayerState])
 
   const setInstrumentalVolume = useCallback((v: number) => {
     if (instrumentalGainRef.current) instrumentalGainRef.current.gain.value = v / 100
-  }, [])
+    savePlayerState()
+  }, [savePlayerState])
 
   const toggleKaraokeMode = useCallback(() => {
     setKaraokeMode(prev => {
@@ -480,7 +604,8 @@ export function usePlayer(options: UsePlayerOptions = {}) {
       showToast(newMode ? 'Karaoke mode: vocals muted' : 'Vocals restored', 'success')
       return newMode
     })
-  }, [])
+    savePlayerState()
+  }, [savePlayerState])
 
   const toggleFavorite = useCallback(async (trackId: string) => {
     const isFav = favorites.has(trackId)
@@ -531,6 +656,7 @@ export function usePlayer(options: UsePlayerOptions = {}) {
     const current = currentIndexRef.current >= 0 ? queueRef.current[currentIndexRef.current] : null
     setQueue(current ? [current] : [])
     setCurrentIndex(current ? 0 : -1)
+    if (!current) localStorage.removeItem(QUEUE_STORAGE_KEY)
     showToast('Queue cleared', 'success')
   }, [])
 
@@ -562,10 +688,13 @@ export function usePlayer(options: UsePlayerOptions = {}) {
   }, [])
 
   const currentTrack = currentIndex >= 0 ? queue[currentIndex] : null
+  const initialVocalsVolume = storedPlayerData.current ? storedPlayerData.current.vocalsVolume : 50
+  const initialInstrumentalVolume = storedPlayerData.current ? storedPlayerData.current.instrumentalVolume : 50
 
   return {
     queue, currentIndex, currentTrack, isPlaying, lyrics, lyricsLoading,
     currentTime, duration, karaokeMode, favorites, analyserRef,
+    initialVocalsVolume, initialInstrumentalVolume,
     addToQueue, playIndex, togglePlay, seek, prev, next,
     removeFromQueue, setVocalsVolume, setInstrumentalVolume,
     toggleKaraokeMode, toggleFavorite, editWord,
