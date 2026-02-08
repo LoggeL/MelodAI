@@ -259,6 +259,37 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
           <FontAwesomeIcon icon={faMusic} className={styles.sectionIcon} /> Lyrics
         </div>
 
+        {/* Lyrics source indicator */}
+        {data.lyrics && (
+          <div className={`${styles.lyricsSourceBanner} ${
+            data.lyrics.lyrics_source === 'genius' ? styles.lyricsSourceGenius : styles.lyricsSourceHeuristic
+          }`}>
+            <div className={styles.lyricsSourceHeader}>
+              <FontAwesomeIcon icon={data.lyrics.lyrics_source === 'genius' ? faCheck : faExclamationTriangle} />
+              <span className={styles.lyricsSourceLabel}>
+                {data.lyrics.lyrics_source === 'genius' ? 'Lyrics corrected' : 'Heuristic fallback'}
+              </span>
+            </div>
+            <span className={styles.lyricsSourceDetail}>
+              {data.lyrics.lyrics_source === 'genius' && data.lyrics.genius_stats ? (
+                <>Alignment quality: {((data.lyrics.genius_stats.quality ?? 0) * 100).toFixed(1)}% &middot; {data.lyrics.genius_stats.total_words} words matched</>
+              ) : data.lyrics.genius_stats?.reason === 'not_found' ? (
+                <>No lyrics found on Genius for this track</>
+              ) : data.lyrics.genius_stats?.reason === 'fetch_error' ? (
+                <>Genius fetch failed: {data.lyrics.genius_stats.error}</>
+              ) : data.lyrics.genius_stats?.reason === 'low_quality' ? (
+                <>Genius match too low ({((data.lyrics.genius_stats.quality ?? 0) * 100).toFixed(1)}%), fell back to timing-based splitting</>
+              ) : data.lyrics.genius_stats?.reason === 'missing_metadata' ? (
+                <>Missing title/artist metadata for Genius lookup</>
+              ) : !data.lyrics.lyrics_source ? (
+                <>Processed before correction tracking was added</>
+              ) : (
+                <>Lyrics split using timing gaps instead of Genius line breaks</>
+              )}
+            </span>
+          </div>
+        )}
+
         {data.lyrics ? (
           <div className={styles.collapsible}>
             <div className={styles.collapsibleHeader} onClick={() => toggle('lyrics')}>

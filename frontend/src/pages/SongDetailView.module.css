@@ -305,6 +305,59 @@
   overflow: auto;
 }
 
+/* ─── Lyrics Source Banner ─── */
+
+.lyricsSourceBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  padding: 8px var(--spacing-md);
+  border-radius: var(--radius-sm);
+  border: 1px solid;
+  margin-bottom: var(--spacing-md);
+  font-size: 0.8rem;
+}
+
+.lyricsSourceGenius {
+  border-color: var(--success);
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.lyricsSourceHeuristic {
+  border-color: var(--warning);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.lyricsSourceHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.lyricsSourceGenius .lyricsSourceHeader {
+  color: var(--success);
+}
+
+.lyricsSourceHeuristic .lyricsSourceHeader {
+  color: var(--warning);
+}
+
+.lyricsSourceLabel {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.75rem;
+}
+
+.lyricsSourceDetail {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  text-align: right;
+}
+
 /* ─── Lyrics Display ─── */
 
 .lyricsBlock {

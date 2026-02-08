@@ -38,9 +38,20 @@ export interface LyricsSegment {
   speaker: string
 }
 
+export interface GeniusStats {
+  quality?: number
+  total_words?: number
+  applied?: boolean
+  skipped?: boolean
+  reason?: string
+  error?: string
+}
+
 export interface LyricsData {
   segments: LyricsSegment[]
   avg_confidence?: number
+  lyrics_source?: 'genius' | 'heuristic'
+  genius_stats?: GeniusStats
 }
 
 export interface TrackMetadata {

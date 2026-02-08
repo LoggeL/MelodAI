@@ -601,6 +601,7 @@ def _stage_process_lyrics(track_id):
 
     # Correct WhisperX transcription with Genius reference lyrics
     genius_line_breaks = []
+    genius_stats = None
     meta = load_metadata(track_id)
     if meta:
         title = meta.get("title", "")
@@ -615,17 +616,24 @@ def _stage_process_lyrics(track_id):
                     with open(genius_path, "w") as gf:
                         json.dump({"lines": genius_lines}, gf, indent=2)
                     segments = raw_data.get("segments", raw_data if isinstance(raw_data, list) else [])
-                    corrected, genius_line_breaks = correct_lyrics_with_genius(segments, genius_lines)
+                    corrected, genius_line_breaks, genius_stats = correct_lyrics_with_genius(segments, genius_lines)
                     raw_data["segments"] = corrected
                     # Save corrected raw data back
                     save_lyrics_raw(track_id, raw_data)
+                else:
+                    genius_stats = {"skipped": True, "reason": "not_found"}
             except Exception as e:
                 print(f"WARNING: Genius lyrics correction failed for {track_id}: {e}")
+                genius_stats = {"skipped": True, "reason": "fetch_error", "error": str(e)}
+        else:
+            genius_stats = {"skipped": True, "reason": "missing_metadata"}
+    else:
+        genius_stats = {"skipped": True, "reason": "no_metadata"}
 
     set_processing_status(track_id, STATUS_PROCESSING, 89, "Processing lyrics...")
 
     # Split into karaoke lines using Genius line breaks or heuristic fallback
-    processed = postprocess_lyrics_heuristic(raw_data, genius_line_breaks=genius_line_breaks)
+    processed = postprocess_lyrics_heuristic(raw_data, genius_line_breaks=genius_line_breaks, genius_stats=genius_stats)
 
     save_lyrics(track_id, processed)
     set_processing_status(track_id, STATUS_PROCESSING, PROGRESS[STATUS_PROCESSING], "Lyrics synced")
