@@ -16,8 +16,8 @@ services:
       - DEBUG=False
       - BASE_URL=${BASE_URL:-https://melodai.logge.top}
     volumes:
-      - melodai-songs:/app/src/songs
-      - melodai-db:/app/src
+      - melodai-songs:/data/songs
+      - melodai-db:/data/db
     deploy:
       replicas: 1
       labels:
