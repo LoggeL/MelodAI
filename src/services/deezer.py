@@ -688,7 +688,7 @@ def get_deezer_favorites(user_id: str) -> Optional[Sequence[int]]:
 def test_deezer_login():
     print("Let's check if the deezer login is still working")
     try:
-        song = get_song_infos_from_deezer_website(TYPE_TRACK, "917265")
+        song = get_song_infos_from_deezer_website(TYPE_TRACK, "3135556")
     except (Deezer403Exception, Deezer404Exception) as msg:
         print(msg)
         print("Login is not working anymore.")

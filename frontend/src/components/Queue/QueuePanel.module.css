@@ -1,0 +1,258 @@
+.list { padding: var(--spacing-xs) 0; }
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-md);
+  color: var(--text-muted);
+  padding: var(--spacing-2xl) var(--spacing-md);
+  text-align: center;
+}
+
+.emptyIcon { font-size: 2rem; opacity: 0.15; }
+.emptyState h3 { font-size: 0.9rem; color: var(--text-secondary); font-weight: 500; }
+.emptyState p { font-size: 0.78rem; }
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition);
+  position: relative;
+  border: 1px solid transparent;
+}
+
+.item:hover { background: var(--surface-hover); }
+
+.active {
+  background: var(--primary-glow);
+  border-color: rgba(255, 45, 85, 0.15);
+}
+
+.processing { opacity: 0.6; }
+.error { border-color: rgba(239, 68, 68, 0.3); opacity: 0.7; }
+
+.grip {
+  cursor: grab;
+  color: var(--text-muted);
+  font-size: 0.6rem;
+  padding: 2px;
+  user-select: none;
+  opacity: 0;
+  transition: opacity var(--transition);
+  flex-shrink: 0;
+}
+
+.item:hover .grip { opacity: 0.5; }
+.grip:active { cursor: grabbing; }
+
+.thumb {
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.active .thumb {
+  box-shadow: 0 0 10px var(--primary-glow);
+}
+
+.info { flex: 1; min-width: 0; overflow: hidden; }
+
+.title {
+  font-weight: 600;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.artist {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status {
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.progressBar {
+  height: 2px;
+  background: var(--border);
+  border-radius: 1px;
+  margin-top: 3px;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--gradient);
+  border-radius: 1px;
+  transition: width 0.5s ease;
+}
+
+.actions {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--transition);
+  flex-shrink: 0;
+}
+
+.item:hover .actions { opacity: 1; }
+
+.removeBtn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 5px;
+  font-size: 0.7rem;
+  border-radius: 4px;
+  transition: all var(--transition);
+  line-height: 1;
+  display: flex;
+  align-items: center;
+}
+
+.removeBtn:hover {
+  color: var(--danger);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.dragging { opacity: 0.3; transform: scale(0.97); }
+.dragOver { border-top: 2px solid var(--primary); }
+
+.queueActions {
+  padding: 6px 10px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+}
+
+.actionBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: all var(--transition);
+  padding: 0;
+}
+
+.actionBtn:hover {
+  background: var(--surface-hover);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+/* Confirmation modal */
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.15s ease;
+}
+
+.modal {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  padding: 28px 32px;
+  max-width: 360px;
+  width: 90%;
+  text-align: center;
+  box-shadow: var(--shadow-lg);
+  animation: scaleIn 0.2s ease;
+}
+
+.modalIcon {
+  font-size: 1.5rem;
+  color: var(--danger);
+  margin-bottom: 12px;
+  opacity: 0.8;
+}
+
+.modalTitle {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+
+.modalText {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 20px;
+  line-height: 1.4;
+}
+
+.modalActions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.modalBtn {
+  padding: 8px 20px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.modalBtn:hover {
+  background: var(--surface-hover);
+  border-color: var(--text-muted);
+  color: var(--text);
+}
+
+.modalBtnDanger {
+  background: var(--gradient);
+  color: #fff;
+  border: none;
+  box-shadow: 0 2px 10px rgba(217, 4, 41, 0.3);
+}
+
+.modalBtnDanger:hover {
+  box-shadow: 0 4px 16px rgba(217, 4, 41, 0.5);
+  transform: translateY(-1px);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}

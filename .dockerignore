@@ -1,0 +1,29 @@
+# Dependencies
+node_modules
+frontend/node_modules
+.venv
+venv
+
+# Build output (built in Docker)
+src/static
+
+# Data (mounted as volumes)
+src/songs
+src/database.db
+*.db
+
+# Dev/IDE
+.git
+.gitignore
+.vscode
+.env
+*.pyc
+__pycache__
+melodai.egg-info
+uv.lock
+
+# Tests & docs
+frontend/e2e
+CLAUDE.md
+FUNCTIONALITY.md
+screenshots.mjs

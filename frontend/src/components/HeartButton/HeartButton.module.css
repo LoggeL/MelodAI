@@ -1,0 +1,87 @@
+.wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+/* ─── Ring burst (::before) ─── */
+
+.wrap::before {
+  content: '';
+  position: absolute;
+  width: 1em;
+  height: 1em;
+  border-radius: 50%;
+  border: 2.5px solid var(--primary);
+  opacity: 0;
+  transform: scale(0);
+  pointer-events: none;
+}
+
+/* ─── Particle burst (::after) ─── */
+
+.wrap::after {
+  content: '';
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: transparent;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ─── Burst state ─── */
+
+.burst > svg {
+  animation: heartPop 0.45s var(--ease-spring) both;
+}
+
+.burst::before {
+  animation: ringBurst 0.45s ease-out both;
+}
+
+.burst::after {
+  animation: particleBurst 0.5s ease-out both;
+}
+
+@keyframes heartPop {
+  0%   { transform: scale(1); }
+  15%  { transform: scale(0.35); }
+  50%  { transform: scale(1.3); }
+  80%  { transform: scale(0.92); }
+  100% { transform: scale(1); }
+}
+
+@keyframes ringBurst {
+  0%   { opacity: 0.85; transform: scale(0.3); border-width: 3px; }
+  100% { opacity: 0;    transform: scale(2.4); border-width: 0.5px; }
+}
+
+@keyframes particleBurst {
+  0% {
+    opacity: 1;
+    box-shadow:
+      0 0 0 -2px #d90429,
+      0 0 0 -2px #ff6b81,
+      0 0 0 -2px #d90429,
+      0 0 0 -2px #ff6b81,
+      0 0 0 -2px #d90429,
+      0 0 0 -2px #ff6b81;
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    box-shadow:
+      -12px -14px 0 -1px #d90429,
+       14px -10px 0 -1px #ff6b81,
+       16px   5px 0 -1px #d90429,
+      -15px   7px 0 -1px #ff6b81,
+        5px -16px 0 -1px #d90429,
+       -5px  15px 0 -1px #ff6b81;
+  }
+}

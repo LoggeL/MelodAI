@@ -1,15 +1,15 @@
 services:
-  backend:
-    build:
-      context: .
+  melodai:
+    build: .
     ports:
-      - "5000:5000"
+      - "${PORT:-5050}:5000"
+    env_file:
+      - .env
     volumes:
-      - ./songs:/app/songs 
-  frontend:
-    image: nginx
-    volumes:
-      - ./index.html:/usr/share/nginx/html/index.html
-      - ./songs:/usr/share/nginx/html/songs
-    ports:
-     - "80:80"
+      - melodai-songs:/data/songs
+      - melodai-db:/data/db
+    restart: unless-stopped
+
+volumes:
+  melodai-songs:
+  melodai-db:

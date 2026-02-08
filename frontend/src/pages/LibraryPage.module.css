@@ -1,0 +1,1732 @@
+.page {
+  height: 100vh;
+  overflow-y: auto;
+  background: var(--bg);
+}
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: var(--spacing-lg) var(--spacing-lg) var(--spacing-2xl);
+}
+
+/* ─── Header ─── */
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+}
+
+.backBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  transition: all var(--transition);
+  flex-shrink: 0;
+  text-decoration: none;
+}
+
+.backBtn:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+  background: var(--primary-glow);
+}
+
+.headerInfo { flex: 1; }
+
+.title {
+  font-size: 1.8rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  background: var(--gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.subtitle {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.creditsBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.creditsBadge svg {
+  color: var(--warning);
+  font-size: 0.72rem;
+}
+
+.refreshBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+
+.refreshBtn:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+  background: var(--primary-glow);
+}
+
+/* ─── Playlist Pills ─── */
+
+.pillRow {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-md);
+  flex-wrap: wrap;
+  padding-bottom: 2px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  color: var(--text-muted);
+  border: none;
+  background: none;
+  border-radius: var(--radius-pill);
+  transition: all var(--transition);
+  white-space: nowrap;
+  position: relative;
+}
+
+.pill:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+.pillActive {
+  color: #fff;
+  background: var(--gradient);
+  box-shadow: 0 4px 15px rgba(217, 4, 41, 0.3);
+}
+
+.pillActive:hover {
+  color: #fff;
+  background: var(--gradient);
+}
+
+.pillCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.15);
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.pill:not(.pillActive) .pillCount {
+  background: var(--surface);
+  color: var(--text-muted);
+}
+
+
+/* ─── Toolbar ─── */
+
+.toolbar {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-lg);
+  align-items: center;
+}
+
+.searchWrap {
+  flex: 1;
+  position: relative;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.searchInput {
+  width: 100%;
+  padding: 10px 14px 10px 38px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  outline: none;
+  transition: all var(--transition);
+}
+
+.searchInput:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-glow);
+  background: var(--bg-secondary);
+}
+
+.searchInput::placeholder { color: var(--text-muted); }
+
+/* ─── Search Mode Toggle ─── */
+
+.modeToggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+
+.modeToggle:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-glow);
+}
+
+.modeToggleActive {
+  background: var(--gradient);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 2px 8px rgba(217, 4, 41, 0.25);
+}
+
+.modeToggleActive:hover {
+  background: var(--gradient);
+  color: #fff;
+  border-color: transparent;
+}
+
+/* ─── Deezer Search Dropdown ─── */
+
+.searchDropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  max-height: 360px;
+  overflow-y: auto;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+  z-index: 100;
+  backdrop-filter: blur(20px);
+}
+
+.searchDropdownLoading {
+  padding: 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.searchDropdownItem {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  transition: background var(--transition);
+}
+
+.searchDropdownItem:last-child {
+  border-bottom: none;
+}
+
+.searchDropdownItem:hover {
+  background: var(--surface-hover);
+}
+
+.searchDropdownArt {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.searchDropdownInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.searchDropdownTitle {
+  font-size: 0.82rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+}
+
+.searchDropdownArtist {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.searchDropdownAdd {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--gradient);
+  color: #fff;
+  border: none;
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.searchDropdownAdd:hover {
+  box-shadow: 0 4px 14px rgba(217, 4, 41, 0.4);
+  transform: translateY(-1px);
+}
+
+.searchDropdownInLibrary {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+}
+
+/* ─── Search Results Cards ─── */
+
+.searchResultsLoading {
+  text-align: center;
+  padding: var(--spacing-xl);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.searchResultsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--spacing-sm);
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+
+.searchResultsCount {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.inLibraryOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.inLibraryOverlay svg {
+  font-size: 1.2rem;
+  opacity: 0.8;
+}
+
+.inLibraryBadge {
+  display: block;
+  text-align: center;
+  width: 100%;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 7px 0;
+}
+
+.deezerAddBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 0;
+  border: none;
+  border-radius: 8px;
+  background: var(--gradient);
+  color: #fff;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.deezerAddBtn:hover {
+  box-shadow: 0 4px 14px rgba(217, 4, 41, 0.4);
+  transform: translateY(-1px);
+}
+
+/* ─── Preview Volume ─── */
+
+.volumeWrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  opacity: 0;
+  width: 0;
+  overflow: hidden;
+  transition: opacity 0.25s ease, width 0.25s ease;
+  pointer-events: none;
+}
+
+.volumeWrapVisible {
+  opacity: 1;
+  width: 90px;
+  pointer-events: auto;
+}
+
+.volumeIcon {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.volumeSlider {
+  width: 66px;
+  height: 12px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  outline: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.volumeSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--primary);
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 0 4px rgba(217, 4, 41, 0.4);
+  margin-top: -4px;
+}
+
+.volumeSlider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--primary);
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 0 4px rgba(217, 4, 41, 0.4);
+}
+
+.volumeSlider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+}
+
+.volumeSlider::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+}
+
+/* ─── View Toggle ─── */
+
+.viewToggle {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.viewToggleBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  color: var(--text-muted);
+  border: none;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.viewToggleBtn:first-child {
+  border-right: 1px solid var(--border);
+}
+
+.viewToggleBtn:hover {
+  color: var(--primary);
+  background: var(--primary-glow);
+}
+
+.viewToggleBtnActive {
+  color: var(--primary);
+  background: var(--primary-glow);
+}
+
+/* ─── Grid ─── */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--spacing-md);
+}
+
+/* ─── Card ─── */
+
+.card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: all var(--transition);
+  position: relative;
+}
+
+.card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow);
+  transform: translateY(-2px);
+}
+
+.cardProcessing {
+  opacity: 0.92;
+}
+
+.cardArt {
+  position: relative;
+  aspect-ratio: 1;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.cardArt img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform var(--transition);
+}
+
+.card:hover .cardArt img {
+  transform: scale(1.04);
+}
+
+.cardProcessing .cardArt img {
+  filter: brightness(0.4);
+}
+
+/* Heart-as-overlay button for grid cards */
+.artFavBtn {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity var(--transition);
+  color: #fff;
+  font-size: 1.3rem;
+  cursor: pointer;
+  z-index: 1;
+  padding: 0;
+}
+
+.cardArt:hover .artFavBtn {
+  opacity: 1;
+}
+
+.artFavBtnActive {
+  color: var(--primary);
+}
+
+.favBadge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--primary);
+  box-shadow: 0 0 6px rgba(217, 4, 41, 0.6);
+  animation: popIn 0.35s var(--ease-spring);
+  z-index: 3;
+}
+
+/* ─── Processing Overlay (Grid) ─── */
+
+.processingOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  z-index: 2;
+}
+
+.processingProgress {
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  background: var(--gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1;
+}
+
+.processingDetail {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.7);
+  max-width: 85%;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.processingBar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.processingBarFill {
+  height: 100%;
+  background: var(--gradient);
+  border-radius: 0 1px 0 0;
+  transition: width 0.5s ease;
+  box-shadow: 0 0 6px rgba(217, 4, 41, 0.6);
+}
+
+.reprocessBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--primary);
+  background: rgba(217, 4, 41, 0.15);
+  color: #fff;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: all var(--transition);
+  margin-top: 6px;
+}
+
+.reprocessBtn:hover {
+  background: var(--gradient);
+  box-shadow: 0 4px 14px rgba(217, 4, 41, 0.4);
+  transform: translateY(-1px);
+}
+
+.cardBody {
+  padding: 10px 12px 8px;
+}
+
+.cardTitle {
+  font-weight: 600;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.cardArtist {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+}
+
+.cardPreviewing {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 20px var(--primary-glow-strong) !important;
+}
+
+/* Preview progress bar at bottom of album art */
+.previewBar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 2;
+}
+
+.previewFill {
+  height: 100%;
+  background: var(--gradient);
+  border-radius: 0 1px 0 0;
+  transition: width 0.15s linear;
+  box-shadow: 0 0 6px rgba(217, 4, 41, 0.6);
+}
+
+.cardActions {
+  display: flex;
+  gap: 4px;
+  padding: 0 12px 10px;
+}
+
+.previewBtn,
+.playBtn,
+.addQueueBtn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 0;
+  border-radius: 8px;
+  font-size: 0.68rem;
+  cursor: pointer;
+  transition: all var(--transition);
+  border: none;
+}
+
+.previewBtn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.previewBtn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-glow);
+}
+
+.previewBtnActive {
+  background: var(--primary-glow);
+  border-color: var(--primary);
+  color: var(--primary);
+  animation: pulse 1.5s ease infinite;
+}
+
+.playBtn {
+  background: var(--gradient);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(217, 4, 41, 0.25);
+}
+
+.playBtn:hover {
+  box-shadow: 0 4px 14px rgba(217, 4, 41, 0.4);
+  transform: translateY(-1px);
+}
+
+.cardMenuWrap {
+  position: relative;
+  flex: 1;
+}
+
+.addQueueBtn {
+  background: transparent;
+  border: 1.5px solid var(--primary);
+  color: var(--primary);
+  width: 100%;
+}
+
+.addQueueBtn:hover {
+  background: var(--primary);
+  color: #fff;
+}
+
+/* ─── Playlist Dropdown ─── */
+
+.playlistDropdown {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  min-width: 180px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+  z-index: 50;
+  overflow: hidden;
+  backdrop-filter: blur(20px);
+}
+
+.playlistDropdownTitle {
+  padding: 10px 14px 6px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.playlistDropdownEmpty {
+  padding: 8px 14px 12px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.playlistDropdownItem {
+  display: block;
+  width: 100%;
+  padding: 8px 14px;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.playlistDropdownItem:hover {
+  background: var(--surface-hover);
+}
+
+.playlistDropdownRemove {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 14px;
+  border: none;
+  border-top: 1px solid var(--border);
+  background: none;
+  color: var(--primary);
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.playlistDropdownRemove:hover {
+  background: var(--primary-glow);
+}
+
+.playlistDropdownCreate {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px 8px;
+  border-top: 1px solid var(--border);
+}
+
+.playlistDropdownInput {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  outline: none;
+  transition: border-color var(--transition);
+  min-width: 0;
+}
+
+.playlistDropdownInput:focus {
+  border-color: var(--primary);
+}
+
+.playlistDropdownInput::placeholder {
+  color: var(--text-muted);
+}
+
+.playlistDropdownCreateBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: none;
+  background: var(--gradient);
+  color: #fff;
+  font-size: 0.6rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all var(--transition);
+}
+
+.playlistDropdownCreateBtn:hover {
+  box-shadow: 0 2px 8px rgba(217, 4, 41, 0.4);
+}
+
+/* ─── List View ─── */
+
+.listView {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.listHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: 10px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.listRow {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: 8px 16px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  transition: all var(--transition);
+  position: relative;
+  overflow: hidden;
+}
+
+.listRow:last-child {
+  border-bottom: none;
+}
+
+.listRow:hover {
+  background: var(--surface);
+}
+
+.listRowPreviewing {
+  background: var(--primary-glow) !important;
+  box-shadow: inset 0 0 20px rgba(217, 4, 41, 0.08);
+}
+
+.listColArt {
+  width: 40px;
+  flex-shrink: 0;
+}
+
+.listThumbWrap {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.listThumb {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  object-fit: cover;
+  display: block;
+}
+
+.listThumbOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+}
+
+.listThumbProgress {
+  font-family: var(--font-heading);
+  font-size: 0.65rem;
+  font-weight: 900;
+  background: var(--gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.listColTitle {
+  flex: 2;
+  min-width: 0;
+}
+
+.listTitle {
+  font-weight: 600;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+  color: var(--text);
+}
+
+.listArtist {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+}
+
+.listStatusDetail {
+  color: var(--warning);
+  font-size: 0.68rem;
+  font-weight: 500;
+}
+
+.listColAlbum {
+  flex: 1.5;
+  min-width: 0;
+}
+
+.listAlbumText {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+.listColDuration {
+  width: 60px;
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.listColActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  width: 140px;
+  justify-content: flex-end;
+}
+
+.listFavBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.listFavBtn:hover {
+  color: var(--primary);
+  background: var(--primary-glow);
+}
+
+.listFavActive {
+  color: var(--primary) !important;
+}
+
+.listActionBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.listActionBtn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-glow);
+}
+
+.listActionBtnActive {
+  background: var(--primary-glow);
+  border-color: var(--primary);
+  color: var(--primary);
+  animation: pulse 1.5s ease infinite;
+}
+
+.listPlayBtn {
+  background: var(--gradient);
+  color: #fff !important;
+  border: none !important;
+  box-shadow: 0 2px 6px rgba(217, 4, 41, 0.2);
+}
+
+.listPlayBtn:hover {
+  box-shadow: 0 3px 10px rgba(217, 4, 41, 0.35);
+  transform: translateY(-1px);
+}
+
+.listMenuWrap {
+  position: relative;
+}
+
+.listAddBtn {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.listAddBtn:hover {
+  background: var(--primary);
+  color: #fff;
+}
+
+.listProcessing {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--warning);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.listReprocessBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--primary);
+  background: var(--primary-glow);
+  color: var(--primary);
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.listReprocessBtn:hover {
+  background: var(--gradient);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(217, 4, 41, 0.3);
+}
+
+.listPreviewBar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: rgba(0, 0, 0, 0.2);
+  z-index: 2;
+}
+
+.listProcessingBar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: rgba(0, 0, 0, 0.2);
+  z-index: 1;
+}
+
+/* ─── Playlists Overview ─── */
+
+.playlistsOverview {
+  margin-top: var(--spacing-sm);
+}
+
+.playlistsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--spacing-md);
+}
+
+.playlistCard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.playlistCard:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow);
+  transform: translateY(-2px);
+}
+
+.playlistCardMosaic {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 16 / 9;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 1.8rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.playlistCard:hover .playlistCardMosaic {
+  color: var(--primary);
+}
+
+.playlistCardBody {
+  padding: 12px 14px;
+}
+
+.playlistCardName {
+  font-weight: 600;
+  font-size: 0.88rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.playlistCardCount {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.playlistCardDelete {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: none;
+  background: rgba(0, 0, 0, 0.5);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.65rem;
+  cursor: pointer;
+  opacity: 0;
+  transition: all var(--transition);
+  backdrop-filter: blur(8px);
+}
+
+.playlistCard:hover .playlistCardDelete {
+  opacity: 1;
+}
+
+.playlistCardDelete:hover {
+  background: var(--primary);
+  color: #fff;
+}
+
+/* New playlist card */
+.playlistNewCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  background: transparent;
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--radius);
+  min-height: 140px;
+  cursor: pointer;
+  transition: all var(--transition);
+  color: var(--text-muted);
+}
+
+.playlistNewCard:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-glow);
+}
+
+.playlistNewCardIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  font-size: 0.9rem;
+  transition: all var(--transition);
+}
+
+.playlistNewCardLabel {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Create playlist card (editing state) */
+.playlistCreateCard {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+  border: 1.5px solid var(--primary);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: 0 0 0 3px var(--primary-glow);
+}
+
+.playlistCreateInput {
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  outline: none;
+}
+
+.playlistCreateInput::placeholder {
+  color: var(--text-muted);
+}
+
+/* ─── Playlist Detail Header ─── */
+
+.playlistDetailHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+  padding: var(--spacing-sm) 0;
+}
+
+.playlistBackBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+
+.playlistBackBtn:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+  background: var(--primary-glow);
+}
+
+.playlistDetailInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.playlistDetailName {
+  font-size: 1.3rem;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  background: var(--gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.playlistDetailCount {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.playlistAddSongsBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--primary);
+  background: transparent;
+  color: var(--primary);
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+
+.playlistAddSongsBtn:hover {
+  background: var(--primary);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(217, 4, 41, 0.3);
+}
+
+.playlistAddSongsBtnActive {
+  background: var(--gradient);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 2px 8px rgba(217, 4, 41, 0.25);
+}
+
+.playlistAddSongsBtnActive:hover {
+  background: var(--gradient);
+  color: #fff;
+  border-color: transparent;
+}
+
+.playlistDeleteBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+
+.playlistDeleteBtn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-glow);
+}
+
+/* ─── Add Songs Section ─── */
+
+.addSongsSection {
+  margin-bottom: var(--spacing-lg);
+}
+
+.addSongsSearchWrap {
+  position: relative;
+  margin-bottom: var(--spacing-sm);
+}
+
+.addSongsList {
+  max-height: 420px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-secondary);
+}
+
+.addSongsEmpty {
+  padding: var(--spacing-xl);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.addSongRow {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  transition: background var(--transition);
+}
+
+.addSongRow:last-child {
+  border-bottom: none;
+}
+
+.addSongRow:hover {
+  background: var(--surface);
+}
+
+.addSongThumb {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.addSongInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.addSongTitle {
+  font-weight: 600;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.addSongArtist {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.addSongBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1.5px solid var(--primary);
+  background: transparent;
+  color: var(--primary);
+  font-size: 0.65rem;
+  cursor: pointer;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+
+.addSongBtn:hover {
+  background: var(--gradient);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 2px 8px rgba(217, 4, 41, 0.3);
+}
+
+/* ─── Empty ─── */
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-md);
+  color: var(--text-muted);
+  padding: var(--spacing-2xl) var(--spacing-md);
+  text-align: center;
+  grid-column: 1 / -1;
+}
+
+.emptyIcon {
+  font-size: 2.5rem;
+  opacity: 0.12;
+}
+
+.emptyState h3 {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.emptyState p {
+  font-size: 0.85rem;
+  opacity: 0.6;
+}
+
+/* ─── Responsive ─── */
+
+@media (max-width: 768px) {
+  .container {
+    padding: var(--spacing-md) var(--spacing-sm) var(--spacing-xl);
+  }
+
+  .title { font-size: 1.4rem; }
+
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: var(--spacing-sm);
+  }
+
+  .toolbar {
+    flex-wrap: wrap;
+  }
+
+  .pillRow {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 4px;
+  }
+
+  .pillRow::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Hide album column on small screens */
+  .listColAlbum {
+    display: none;
+  }
+
+  .listColActions {
+    width: auto;
+  }
+
+  .listRow {
+    padding: 8px 10px;
+    gap: var(--spacing-sm);
+  }
+
+  .listHeader {
+    padding: 8px 10px;
+    gap: var(--spacing-sm);
+  }
+
+  .creditsBadge {
+    display: none;
+  }
+
+  .playlistsGrid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: var(--spacing-sm);
+  }
+
+  .playlistDetailHeader {
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+  }
+
+  .playlistDetailName {
+    font-size: 1.1rem;
+  }
+
+  .addSongsList {
+    max-height: 320px;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+@keyframes popIn {
+  0% { transform: scale(0); opacity: 0; }
+  50% { transform: scale(1.4); }
+  100% { transform: scale(1); opacity: 1; }
+}

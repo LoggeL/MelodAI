@@ -1,618 +1,596 @@
-from flask import (
-    Blueprint,
-    jsonify,
-    request,
-    session,
-    send_from_directory,
-)
-import secrets
-import shutil
 import os
-from ..models.db import get_db
-from ..utils.decorators import admin_required
-from ..models.db import create_invite_key
-from ..utils.status_checks import (
-    run_all_checks,
-    get_processing_queue,
-    get_unfinished_songs,
-    save_status_check,
-    add_to_processing_queue,
-    is_track_in_queue,
-    remove_from_processing_queue,
-    update_queue_item_status,
-)
-from ..utils.constants import STATUS_ERROR
-import time
+import secrets
+from datetime import datetime, timezone
+from flask import Blueprint, request, jsonify
 
-admin_bp = Blueprint("admin", __name__)
+from src.utils.decorators import admin_required
+from src.models.db import query_db, execute_db, insert_db
+
+admin_bp = Blueprint("admin", __name__, url_prefix="/api/admin")
 
 
-@admin_bp.route("/admin/me", methods=["GET"])
-@admin_required
-def get_current_admin():
-    """Get current admin user info"""
-    return jsonify({"user_id": session.get("user_id")})
-
-
-@admin_bp.route("/admin/users", methods=["GET"])
+@admin_bp.route("/users")
 @admin_required
 def list_users():
-    db = get_db()
-    users = db.execute(
-        """
-        SELECT id, username, is_approved, is_admin, created_at, 
-               last_online,
-               (SELECT COUNT(*) FROM usage_logs WHERE user_id = users.id) as activity_count
-        FROM users
-        ORDER BY last_online DESC
-    """
-    ).fetchall()
-    return jsonify([dict(user) for user in users])
+    users = query_db("SELECT id, username, display_name, is_admin, is_approved, credits, created_at, last_online FROM users ORDER BY created_at DESC")
+    result = []
+    for u in users:
+        activity = query_db("SELECT COUNT(*) as c FROM usage_logs WHERE user_id = ?", [u["id"]], one=True)
+        result.append({
+            "id": u["id"],
+            "username": u["username"],
+            "display_name": u["display_name"],
+            "is_admin": bool(u["is_admin"]),
+            "is_approved": bool(u["is_approved"]),
+            "credits": u["credits"] or 0,
+            "created_at": u["created_at"],
+            "last_online": u["last_online"],
+            "activity_count": activity["c"] if activity else 0,
+        })
+    return jsonify(result)
 
 
-@admin_bp.route("/admin/users/<int:user_id>/approve", methods=["POST"])
+@admin_bp.route("/users/<int:user_id>/approve", methods=["POST"])
 @admin_required
 def approve_user(user_id):
-    db = get_db()
-    db.execute("UPDATE users SET is_approved = TRUE WHERE id = ?", (user_id,))
-    db.commit()
-    return jsonify({"message": "User approved"})
+    execute_db("UPDATE users SET is_approved = 1 WHERE id = ?", [user_id])
+    return jsonify({"success": True})
 
 
-@admin_bp.route("/admin/users/<int:user_id>/promote", methods=["POST"])
+@admin_bp.route("/users/<int:user_id>/promote", methods=["POST"])
 @admin_required
 def promote_user(user_id):
-    """Promote a user to admin"""
-    db = get_db()
-
-    # Prevent promoting yourself (optional safety check)
-    if user_id == session.get("user_id"):
-        return jsonify({"error": "Cannot modify your own admin status"}), 400
-
-    db.execute("UPDATE users SET is_admin = TRUE WHERE id = ?", (user_id,))
-    db.commit()
-    return jsonify({"message": "User promoted to admin"})
+    execute_db("UPDATE users SET is_admin = 1 WHERE id = ?", [user_id])
+    return jsonify({"success": True})
 
 
-@admin_bp.route("/admin/users/<int:user_id>/demote", methods=["POST"])
+@admin_bp.route("/users/<int:user_id>/demote", methods=["POST"])
 @admin_required
 def demote_user(user_id):
-    """Demote a user from admin"""
-    db = get_db()
-
-    # Prevent demoting yourself
-    if user_id == session.get("user_id"):
-        return jsonify({"error": "Cannot modify your own admin status"}), 400
-
-    db.execute("UPDATE users SET is_admin = FALSE WHERE id = ?", (user_id,))
-    db.commit()
-    return jsonify({"message": "User demoted from admin"})
+    from flask import session as flask_session
+    if flask_session.get("user_id") == user_id:
+        return jsonify({"error": "Cannot demote your own account"}), 400
+    execute_db("UPDATE users SET is_admin = 0 WHERE id = ?", [user_id])
+    return jsonify({"success": True})
 
 
-@admin_bp.route("/admin/users/<int:user_id>", methods=["DELETE"])
+@admin_bp.route("/users/<int:user_id>", methods=["DELETE"])
 @admin_required
 def delete_user(user_id):
-    """Delete a user account"""
-    db = get_db()
-
-    # Prevent deleting yourself
-    if user_id == session.get("user_id"):
+    from flask import session as flask_session
+    if flask_session.get("user_id") == user_id:
         return jsonify({"error": "Cannot delete your own account"}), 400
-
-    # Delete user's usage logs first (foreign key constraint)
-    db.execute("DELETE FROM usage_logs WHERE user_id = ?", (user_id,))
-
-    # Delete the user
-    db.execute("DELETE FROM users WHERE id = ?", (user_id,))
-    db.commit()
-
-    return jsonify({"message": "User deleted successfully"})
+    execute_db("DELETE FROM usage_logs WHERE user_id = ?", [user_id])
+    execute_db("DELETE FROM auth_tokens WHERE user_id = ?", [user_id])
+    execute_db("DELETE FROM password_resets WHERE user_id = ?", [user_id])
+    execute_db("DELETE FROM users WHERE id = ?", [user_id])
+    return jsonify({"success": True})
 
 
-@admin_bp.route("/admin/invite-keys", methods=["POST"])
+@admin_bp.route("/users/<int:user_id>/credits", methods=["POST"])
 @admin_required
-def create_invite_key_route():
-    key = secrets.token_urlsafe(16)  # Generate a secure random key
-    create_invite_key(session["user_id"], key)
+def set_credits(user_id):
+    data = request.get_json()
+    credits = data.get("credits")
+    if credits is None:
+        return jsonify({"error": "credits required"}), 400
+    execute_db("UPDATE users SET credits = ? WHERE id = ?", [int(credits), user_id])
+    return jsonify({"success": True})
+
+
+@admin_bp.route("/invite-keys", methods=["GET"])
+@admin_required
+def list_invite_keys():
+    keys = query_db("SELECT * FROM invite_keys ORDER BY created_at DESC")
+    return jsonify([{
+        "id": k["id"],
+        "key": k["key"],
+        "created_at": k["created_at"],
+        "used_by": k["used_by"],
+        "used_at": k["used_at"],
+    } for k in keys])
+
+
+@admin_bp.route("/invite-keys", methods=["POST"])
+@admin_required
+def generate_invite_key():
+    from flask import session as flask_session
+    key = secrets.token_urlsafe(16)
+    user_id = flask_session.get("user_id")
+    insert_db(
+        "INSERT INTO invite_keys (key, created_by) VALUES (?, ?)",
+        [key, user_id],
+    )
     return jsonify({"key": key})
 
 
-@admin_bp.route("/admin/usage", methods=["GET"])
+@admin_bp.route("/invite-keys/used", methods=["DELETE"])
 @admin_required
-def get_usage_logs():
-    db = get_db()
+def delete_used_invite_keys():
+    count = query_db("SELECT COUNT(*) as c FROM invite_keys WHERE used_by IS NOT NULL", one=True)["c"]
+    execute_db("DELETE FROM invite_keys WHERE used_by IS NOT NULL")
+    return jsonify({"success": True, "deleted": count})
 
-    # Get query parameters
-    page = request.args.get("page", 1, type=int)
-    per_page = request.args.get("per_page", 50, type=int)
-    action = request.args.get("action")
-    username = request.args.get("username")
 
-    # Build the query
-    query = """
-        SELECT u.username, l.track_id, l.action, l.created_at 
-        FROM usage_logs l 
-        JOIN users u ON l.user_id = u.id 
-        WHERE 1=1
-    """
-    params = []
-
-    if action:
-        query += " AND l.action = ?"
-        params.append(action)
-    if username:
-        query += " AND u.username LIKE ?"
-        params.append(f"%{username}%")
-
-    # Get total count
-    count_query = query.replace(
-        "u.username, l.track_id, l.action, l.created_at", "COUNT(*)"
-    )
-    total = db.execute(count_query, params).fetchone()[0]
-
-    # Add pagination
-    query += " ORDER BY l.created_at DESC LIMIT ? OFFSET ?"
-    params.extend([per_page, (page - 1) * per_page])
-
-    # Execute final query
-    logs = db.execute(query, params).fetchall()
-
-    return jsonify(
-        {
-            "logs": [dict(log) for log in logs],
-            "total": total,
-            "page": page,
-            "per_page": per_page,
-            "total_pages": (total + per_page - 1) // per_page,
-        }
+@admin_bp.route("/stats")
+@admin_required
+def stats():
+    total_users = query_db("SELECT COUNT(*) as c FROM users", one=True)["c"]
+    total_plays = query_db("SELECT COUNT(*) as c FROM usage_logs WHERE action = 'play'", one=True)["c"]
+    total_downloads = query_db("SELECT COUNT(*) as c FROM usage_logs WHERE action = 'download'", one=True)["c"]
+    total_searches = query_db("SELECT COUNT(*) as c FROM usage_logs WHERE action = 'search'", one=True)["c"]
+    most_active = query_db(
+        "SELECT username, COUNT(*) as c FROM usage_logs GROUP BY username ORDER BY c DESC LIMIT 1",
+        one=True,
     )
 
+    return jsonify({
+        "total_users": total_users,
+        "total_plays": total_plays,
+        "total_downloads": total_downloads,
+        "total_searches": total_searches,
+        "most_active_user": most_active["username"] if most_active else None,
+        "most_active_count": most_active["c"] if most_active else 0,
+    })
 
-@admin_bp.route("/admin/stats", methods=["GET"])
+
+@admin_bp.route("/usage-logs")
 @admin_required
-def get_usage_stats():
-    db = get_db()
+def usage_logs():
+    page = int(request.args.get("page", 1))
+    per_page = int(request.args.get("per_page", 50))
+    username_filter = request.args.get("username", "")
+    action_filter = request.args.get("action", "")
 
-    stats = {
-        "total_users": db.execute("SELECT COUNT(*) FROM users").fetchone()[0],
-        "total_downloads": db.execute(
-            "SELECT COUNT(*) FROM usage_logs WHERE action = 'download'"
-        ).fetchone()[0],
-        "total_plays": db.execute(
-            "SELECT COUNT(*) FROM usage_logs WHERE action = 'play'"
-        ).fetchone()[0],
-        "total_searches": db.execute(
-            "SELECT COUNT(*) FROM usage_logs WHERE action = 'search'"
-        ).fetchone()[0],
-        "total_random_plays": db.execute(
-            "SELECT COUNT(*) FROM usage_logs WHERE action = 'random_play'"
-        ).fetchone()[0],
-        "most_active_user": db.execute(
-            """
-            SELECT u.username, COUNT(*) as count 
-            FROM usage_logs l 
-            JOIN users u ON l.user_id = u.id 
-            GROUP BY u.id 
-            ORDER BY count DESC 
-            LIMIT 1
-        """
-        ).fetchone(),
-    }
+    offset = (page - 1) * per_page
+    query = "SELECT * FROM usage_logs WHERE 1=1"
+    args = []
 
-    if stats["most_active_user"]:
-        stats["most_active_user"] = dict(stats["most_active_user"])
+    if username_filter:
+        query += " AND username LIKE ?"
+        args.append(f"%{username_filter}%")
+    if action_filter:
+        query += " AND action = ?"
+        args.append(action_filter)
 
-    return jsonify(stats)
+    # Count total
+    count_query = query.replace("SELECT *", "SELECT COUNT(*) as c")
+    total = query_db(count_query, args, one=True)["c"]
+
+    query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+    args.extend([per_page, offset])
+
+    logs = query_db(query, args)
+    return jsonify({
+        "logs": [{
+            "id": l["id"],
+            "username": l["username"],
+            "action": l["action"],
+            "detail": l["detail"],
+            "created_at": l["created_at"],
+        } for l in logs],
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+    })
 
 
-@admin_bp.route("/admin/invite-keys", methods=["GET"])
+@admin_bp.route("/storage")
 @admin_required
-def list_invite_keys():
-    db = get_db()
-    keys = db.execute(
-        """
-        SELECT 
-            ik.key, 
-            ik.created_at,
-            creator.username as created_by,
-            user.username as used_by,
-            ik.used_at
-        FROM invite_keys ik
-        JOIN users creator ON ik.created_by = creator.id
-        LEFT JOIN users user ON ik.used_by = user.id
-        ORDER BY ik.created_at DESC
-    """
-    ).fetchall()
-    return jsonify([dict(key) for key in keys])
+def storage():
+    import shutil
+    from src.utils.file_handling import get_all_track_ids, SONGS_PATH
+
+    # System disk usage
+    disk = shutil.disk_usage("/")
+
+    # Songs directory size
+    songs_total = 0
+    song_count = 0
+    if os.path.exists(SONGS_PATH):
+        for track_id in get_all_track_ids():
+            track_dir = os.path.join(SONGS_PATH, track_id)
+            for f in os.listdir(track_dir):
+                fp = os.path.join(track_dir, f)
+                if os.path.isfile(fp):
+                    songs_total += os.path.getsize(fp)
+            song_count += 1
+
+    # Database size
+    db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "database.db")
+    db_size = os.path.getsize(db_path) if os.path.exists(db_path) else 0
+
+    return jsonify({
+        "disk_total": disk.total,
+        "disk_used": disk.used,
+        "disk_free": disk.free,
+        "songs_size": songs_total,
+        "songs_count": song_count,
+        "db_size": db_size,
+    })
 
 
-@admin_bp.route("/admin/status", methods=["GET"])
+@admin_bp.route("/songs")
 @admin_required
-def show_status_page():
-    """Render the system status page for admins"""
-    return send_from_directory("static", "status.html")
+def list_songs():
+    from src.utils.file_handling import get_all_track_ids, load_metadata, load_lyrics, is_track_complete, get_track_file_sizes
 
-
-@admin_bp.route("/admin/status/check", methods=["GET", "POST"])
-@admin_required
-def check_system_status():
-    """Run system status checks and return results"""
-    db = get_db()
-
-    # Run all system checks
-    check_results = run_all_checks(session.get("user_id"))
-
-    # For each component, get the last 90 days of history
-    for check in check_results:
-        history = db.execute(
-            """
-            SELECT status, details, last_checked
-            FROM system_status
-            WHERE component = ?
-            AND last_checked >= datetime('now', '-90 days')
-            ORDER BY last_checked ASC
-        """,
-            (check["component"],),
-        ).fetchall()
-
-        # Calculate uptime percentage
-        total_checks = len(history) if history else 1
-        ok_checks = (
-            sum(1 for h in history if h["status"] == "OK")
-            if history
-            else (1 if check["status"] == "OK" else 0)
-        )
-        uptime = (ok_checks / total_checks) * 100
-
-        # Add history and uptime to check results
-        check["history"] = [dict(h) for h in history]
-        check["uptime"] = f"{uptime:.2f}%"
-        check["last_checked"] = (
-            check["history"][-1]["last_checked"] if history else None
-        )
-
-    # Return the results as JSON
-    return jsonify(
-        {"checks": check_results, "timestamp": request.args.get("timestamp")}
-    )
-
-
-@admin_bp.route("/admin/status/history", methods=["GET"])
-@admin_required
-def get_status_history():
-    """Get historical status check data"""
-    db = get_db()
-
-    # Get query parameters
-    component = request.args.get("component")
-    limit = request.args.get("limit", 50, type=int)
-
-    # Build the query
-    query = """
-        SELECT 
-            s.id,
-            s.component,
-            s.status,
-            s.details,
-            s.last_checked,
-            u.username as checked_by
-        FROM system_status s
-        LEFT JOIN users u ON s.checked_by = u.id
-        WHERE 1=1
-    """
-    params = []
-
-    if component:
-        query += " AND s.component = ?"
-        params.append(component)
-
-    # Add sorting and limit
-    query += " ORDER BY s.last_checked DESC LIMIT ?"
-    params.append(limit)
-
-    # Execute the query
-    history = db.execute(query, params).fetchall()
-
-    # Get list of unique components for filtering
-    components = db.execute(
-        "SELECT DISTINCT component FROM system_status ORDER BY component"
-    ).fetchall()
-
-    return jsonify(
-        {
-            "history": [dict(item) for item in history],
-            "components": [item["component"] for item in components],
-        }
-    )
-
-
-@admin_bp.route("/admin/status/queue", methods=["GET"])
-@admin_required
-def get_track_queue():
-    """Get the current track processing queue"""
-    # Get the current processing queue
-    queue = get_processing_queue()
-
-    # Format the queue data for display
-    formatted_queue = []
-    for track_id, info in queue.items():
-        # Calculate elapsed time
-        elapsed_seconds = time.time() - info.get("start_time", 0)
-        elapsed_minutes = elapsed_seconds // 60
-        elapsed_seconds = elapsed_seconds % 60
-
-        # Format queue item
-        formatted_item = {
-            "track_id": track_id,
-            "title": info.get("metadata", {}).get("title", "Unknown"),
-            "artist": info.get("metadata", {}).get("artist", "Unknown"),
-            "status": info.get("status", "unknown"),
-            "progress": info.get("progress", 0),
-            "elapsed_time": f"{int(elapsed_minutes)}m {int(elapsed_seconds)}s",
-            "start_time": info.get("start_time", 0),
-        }
-        formatted_queue.append(formatted_item)
-
-    # Sort by start time (oldest first)
-    formatted_queue.sort(key=lambda x: x.get("start_time", 0))
-
-    return jsonify({"queue": formatted_queue})
-
-
-@admin_bp.route("/admin/status/unfinished", methods=["GET"])
-@admin_required
-def get_unfinished_songs_list():
-    """Get the list of unfinished songs that can be reprocessed"""
-    db = get_db()
-    unfinished_songs = get_unfinished_songs()
-
-    # Add failure count information to each song
-    for song in unfinished_songs:
-        failure_info = db.execute(
-            "SELECT failure_count, error_message FROM processing_failures WHERE track_id = ?",
-            (song["track_id"],)
-        ).fetchone()
-        
-        song["failure_count"] = failure_info["failure_count"] if failure_info else 0
-        song["error_message"] = failure_info["error_message"] if failure_info else None
-        song["last_modified"] = time.strftime(
-            "%Y-%m-%d %H:%M:%S", time.localtime(song["last_modified"])
-        )
-
-    return jsonify({"unfinished_songs": unfinished_songs})
-
-
-@admin_bp.route("/admin/status/reprocess", methods=["POST"])
-@admin_required
-def reprocess_track():
-    """Reprocess a track that was not completed successfully"""
-    data = request.get_json()
-    track_id = data.get("track_id")
-
-    if not track_id:
-        return jsonify({"error": "Missing track ID"}), 400
-
-    # Check if track is already being processed
-    if is_track_in_queue(track_id):
-        return (
-            jsonify({"error": "Track is already being processed", "in_queue": True}),
-            400,
-        )
-
-    # Import here to avoid circular imports
-    from ..routes.track import de_add_track
-    import threading
-    from flask import current_app
-    import json as json_lib
-    import os
-
-    # Store user_id from session before starting the thread
-    user_id = session.get("user_id")
-
-    # Try to get existing metadata
-    metadata_path = f"src/songs/{track_id}/metadata.json"
-    metadata = {}
-
-    if os.path.isfile(metadata_path) and os.path.getsize(metadata_path) > 0:
-        try:
-            with open(metadata_path, "r") as f:
-                metadata = json_lib.load(f)
-        except Exception as e:
-            print(f"Error loading metadata: {e}")
-
-    # Add to processing queue BEFORE starting the thread
-    add_to_processing_queue(track_id, metadata)
-
-    # Start reprocessing in background
-    def process_track(app, track_id, user_id):
-        with app.app_context():
-            try:
-                save_status_check(
-                    "Track Reprocessing",
-                    "OK",
-                    f"Started reprocessing track {track_id} manually",
-                    user_id,
-                )
-                de_add_track(track_id, user_id)
-                # Status updates are stored in database instead of socket emit
-                update_queue_item_status(track_id, "complete", 100)
-            except Exception as e:
-                print(f"Error reprocessing track {track_id}:", e)
-                # Update error status in database
-                update_queue_item_status(track_id, "error", 0)
-
-                # Log the processing error
-                save_status_check(
-                    "Track Reprocessing",
-                    STATUS_ERROR,
-                    f"Failed to reprocess track {track_id}: {str(e)}",
-                    user_id,
-                )
-
-                # Track the failure in database
-                db = get_db()
-                db.execute(
-                    """
-                    INSERT INTO processing_failures (track_id, failure_count, error_message)
-                    VALUES (?, 1, ?)
-                    ON CONFLICT(track_id) DO UPDATE SET
-                        failure_count = failure_count + 1,
-                        last_failure = CURRENT_TIMESTAMP,
-                        error_message = ?
-                    """,
-                    (track_id, str(e), str(e))
-                )
-                db.commit()
-
-                # Ensure cleanup on error
-                remove_from_processing_queue(track_id)
-
-    # Start processing in a new thread with app instance and user_id
-    thread = threading.Thread(
-        target=process_track,
-        args=(current_app._get_current_object(), track_id, user_id),
-    )
-    thread.daemon = True  # Make thread daemon so it doesn't prevent app shutdown
-    thread.start()
-
-    return jsonify(
-        {"success": True, "message": f"Track {track_id} reprocessing started"}
-    )
-
-
-@admin_bp.route("/admin/track/<track_id>", methods=["DELETE"])
-@admin_required
-def delete_track(track_id):
-    """Delete a failed track and all its associated files"""
-    db = get_db()
-    
-    # Get failure count to verify this track has failed
-    failure_info = db.execute(
-        "SELECT failure_count FROM processing_failures WHERE track_id = ?",
-        (track_id,)
-    ).fetchone()
-    
-    if not failure_info:
-        return jsonify({"error": "Track has no failure record"}), 400
-    
-    try:
-        # Delete the track directory if it exists
-        track_dir = f"src/songs/{track_id}"
-        if os.path.exists(track_dir):
-            shutil.rmtree(track_dir)
-        
-        # Remove from processing failures table
-        db.execute("DELETE FROM processing_failures WHERE track_id = ?", (track_id,))
-        
-        # Remove any usage logs for this track
-        db.execute("DELETE FROM usage_logs WHERE track_id = ?", (track_id,))
-        
-        db.commit()
-        
-        return jsonify({
-            "success": True, 
-            "message": f"Track {track_id} deleted successfully"
-        })
-    except Exception as e:
-        return jsonify({"error": f"Failed to delete track: {str(e)}"}), 500
-
-
-@admin_bp.route("/admin/songs", methods=["GET"])
-@admin_required
-def show_songs_page():
-    """Render the songs management page for admins"""
-    return send_from_directory("static", "admin_songs.html")
-
-
-@admin_bp.route("/admin/songs/list", methods=["GET"])
-@admin_required
-def list_all_songs():
-    """Get all songs in the library with metadata"""
-    import json
-    from pathlib import Path
-    
-    songs_dir = Path("src/songs")
-    if not songs_dir.exists():
-        return jsonify({"songs": [], "count": 0})
-    
+    track_ids = get_all_track_ids()
     songs = []
-    
-    # Get all song directories
-    for song_dir in songs_dir.iterdir():
-        if not song_dir.is_dir():
-            continue
-        
-        track_id = song_dir.name
-        metadata_file = song_dir / "metadata.json"
-        
-        # Check if song has metadata
-        if metadata_file.exists():
-            try:
-                with open(metadata_file, "r") as f:
-                    metadata = json.load(f)
-                
-                # Check file existence
-                has_song = (song_dir / "song.mp3").exists()
-                has_vocals = (song_dir / "vocals.mp3").exists()
-                has_no_vocals = (song_dir / "no_vocals.mp3").exists()
-                has_lyrics = (song_dir / "lyrics.json").exists()
-                
-                # Calculate total size
-                total_size = 0
-                for file in song_dir.glob("*"):
-                    if file.is_file():
-                        total_size += file.stat().st_size
-                
-                songs.append({
-                    "track_id": track_id,
-                    "title": metadata.get("title", "Unknown"),
-                    "artist": metadata.get("artist", "Unknown"),
-                    "album": metadata.get("album", "Unknown"),
-                    "duration": metadata.get("duration", 0),
-                    "cover": metadata.get("cover", ""),
-                    "has_song": has_song,
-                    "has_vocals": has_vocals,
-                    "has_no_vocals": has_no_vocals,
-                    "has_lyrics": has_lyrics,
-                    "size_mb": round(total_size / (1024 * 1024), 2),
-                    "last_modified": song_dir.stat().st_mtime,
-                })
-            except Exception as e:
-                print(f"Error reading metadata for {track_id}: {e}")
-                continue
-    
-    # Sort by title
-    songs.sort(key=lambda x: x["title"].lower())
-    
-    return jsonify({"songs": songs, "count": len(songs)})
+    for tid in track_ids:
+        meta = load_metadata(tid)
+        if meta:
+            img_url = meta.get("img_url", "")
+            if img_url:
+                img_url = img_url.replace("/56x56", "/200x200", 1)
+            lyrics = load_lyrics(tid)
+            songs.append({
+                "id": tid,
+                "title": meta.get("title", "Unknown"),
+                "artist": meta.get("artist", "Unknown"),
+                "img_url": img_url,
+                "complete": is_track_complete(tid),
+                "file_sizes": get_track_file_sizes(tid),
+                "avg_confidence": lyrics.get("avg_confidence") if lyrics else None,
+            })
+    return jsonify(songs)
 
 
-@admin_bp.route("/admin/songs/<track_id>", methods=["DELETE"])
+@admin_bp.route("/songs/<track_id>/details")
 @admin_required
-def delete_any_song(track_id):
-    """Delete any song and all its associated files (admin only)"""
-    db = get_db()
-    
-    try:
-        # Check if the track directory exists
-        track_dir = f"src/songs/{track_id}"
-        if not os.path.exists(track_dir):
-            return jsonify({"error": "Track not found"}), 404
-        
-        # Delete the track directory
-        shutil.rmtree(track_dir)
-        
-        # Remove from processing failures table if exists
-        db.execute("DELETE FROM processing_failures WHERE track_id = ?", (track_id,))
-        
-        # Remove any usage logs for this track
-        db.execute("DELETE FROM usage_logs WHERE track_id = ?", (track_id,))
-        
-        db.commit()
-        
-        return jsonify({
-            "success": True, 
-            "message": f"Track {track_id} deleted successfully"
+def song_details(track_id):
+    import json
+    from src.utils.file_handling import (
+        load_metadata, load_lyrics, is_track_complete, get_song_dir
+    )
+    from src.utils.constants import TRACK_FILES
+
+    meta = load_metadata(track_id)
+    if not meta:
+        return jsonify({"error": "Track not found"}), 404
+
+    song_dir = get_song_dir(track_id)
+    files = {}
+    for key, filename in TRACK_FILES.items():
+        path = os.path.join(song_dir, filename)
+        exists = os.path.exists(path)
+        files[key] = {
+            "exists": exists,
+            "size": os.path.getsize(path) if exists else 0,
+        }
+
+    lyrics = load_lyrics(track_id)
+
+    lyrics_raw = None
+    raw_path = os.path.join(song_dir, TRACK_FILES["lyrics_raw"])
+    if os.path.exists(raw_path):
+        with open(raw_path, "r") as f:
+            lyrics_raw = json.load(f)
+
+    failures = query_db(
+        "SELECT * FROM processing_failures WHERE track_id = ? ORDER BY updated_at DESC",
+        [track_id]
+    )
+
+    errors = query_db(
+        "SELECT * FROM error_log WHERE track_id = ? ORDER BY created_at DESC LIMIT 20",
+        [track_id]
+    )
+
+    play_count = query_db(
+        "SELECT COUNT(*) as c FROM usage_logs WHERE action = 'play' AND detail = ?",
+        [track_id], one=True
+    )["c"]
+    download_count = query_db(
+        "SELECT COUNT(*) as c FROM usage_logs WHERE action = 'download' AND detail = ?",
+        [track_id], one=True
+    )["c"]
+    recent_plays = query_db(
+        "SELECT username, created_at FROM usage_logs WHERE action = 'play' AND detail = ? ORDER BY created_at DESC LIMIT 10",
+        [track_id]
+    )
+
+    fav_count = query_db(
+        "SELECT COUNT(*) as c FROM favorites WHERE track_id = ?",
+        [track_id], one=True
+    )["c"]
+
+    playlist_count = query_db(
+        "SELECT COUNT(*) as c FROM playlist_tracks WHERE track_id = ?",
+        [track_id], one=True
+    )["c"]
+
+    return jsonify({
+        "id": track_id,
+        "metadata": meta,
+        "complete": is_track_complete(track_id),
+        "files": files,
+        "lyrics": lyrics,
+        "lyrics_raw": lyrics_raw,
+        "processing_failures": [{
+            "id": f["id"],
+            "stage": f["stage"],
+            "error_message": f["error_message"],
+            "failure_count": f["failure_count"],
+            "created_at": f["created_at"],
+            "updated_at": f["updated_at"],
+        } for f in failures],
+        "errors": [{
+            "id": e["id"],
+            "error_type": e["error_type"],
+            "source": e["source"],
+            "error_message": e["error_message"],
+            "stack_trace": e["stack_trace"],
+            "created_at": e["created_at"],
+        } for e in errors],
+        "usage": {
+            "play_count": play_count,
+            "download_count": download_count,
+            "recent_plays": [{
+                "username": p["username"],
+                "created_at": p["created_at"],
+            } for p in recent_plays],
+        },
+        "favorites_count": fav_count,
+        "playlist_count": playlist_count,
+    })
+
+
+@admin_bp.route("/songs/<track_id>", methods=["DELETE"])
+@admin_required
+def delete_song(track_id):
+    from src.utils.file_handling import delete_track
+    from src.utils.status_checks import remove_from_queue
+    deleted = delete_track(track_id)
+    if deleted:
+        remove_from_queue(track_id)
+        execute_db("DELETE FROM processing_failures WHERE track_id = ?", [track_id])
+        return jsonify({"success": True})
+    # Even if files don't exist, clean up queue and DB
+    remove_from_queue(track_id)
+    execute_db("DELETE FROM processing_failures WHERE track_id = ?", [track_id])
+    return jsonify({"success": True})
+
+
+@admin_bp.route("/songs/<track_id>/reprocess", methods=["POST"])
+@admin_required
+def reprocess_song(track_id):
+    from flask import current_app
+    from src.routes.track import process_track
+    from src.utils.status_checks import set_processing_status
+    from src.utils.constants import STATUS_METADATA, PROGRESS
+    import threading
+
+    app = current_app._get_current_object()
+    set_processing_status(track_id, STATUS_METADATA, PROGRESS[STATUS_METADATA], "Reprocessing...")
+
+    t = threading.Thread(target=process_track, args=(track_id, app), daemon=True)
+    t.start()
+
+    return jsonify({"success": True, "message": "Reprocessing started"})
+
+
+@admin_bp.route("/status/checks", methods=["POST"])
+@admin_required
+def run_checks():
+    from src.utils.status_checks import run_health_checks
+
+    results = run_health_checks()
+
+    # Save to database
+    for component, data in results.items():
+        insert_db(
+            "INSERT INTO system_status (component, status, message) VALUES (?, ?, ?)",
+            [component, data["status"], data["message"]],
+        )
+
+    return jsonify(results)
+
+
+@admin_bp.route("/status/history")
+@admin_required
+def status_history():
+    rows = query_db("SELECT * FROM system_status ORDER BY checked_at DESC LIMIT 100")
+    return jsonify([{
+        "id": r["id"],
+        "component": r["component"],
+        "status": r["status"],
+        "message": r["message"],
+        "checked_at": r["checked_at"],
+    } for r in rows])
+
+
+@admin_bp.route("/status/queue")
+@admin_required
+def processing_queue():
+    from src.utils.status_checks import get_processing_status
+    return jsonify(get_processing_status())
+
+
+@admin_bp.route("/status/unfinished")
+@admin_required
+def unfinished_tracks():
+    from src.utils.file_handling import get_all_track_ids, is_track_complete, load_metadata
+    failures = query_db("SELECT * FROM processing_failures ORDER BY updated_at DESC")
+
+    result = []
+    for f in failures:
+        meta = load_metadata(f["track_id"])
+        result.append({
+            "track_id": f["track_id"],
+            "title": meta.get("title", "Unknown") if meta else "Unknown",
+            "artist": meta.get("artist", "Unknown") if meta else "Unknown",
+            "stage": f["stage"],
+            "error_message": f["error_message"],
+            "failure_count": f["failure_count"],
+            "updated_at": f["updated_at"],
+            "complete": is_track_complete(f["track_id"]),
         })
-    except Exception as e:
-        return jsonify({"error": f"Failed to delete track: {str(e)}"}), 500
+    return jsonify(result)
+
+
+@admin_bp.route("/logs")
+@admin_required
+def app_logs_list():
+    page = int(request.args.get("page", 1))
+    per_page = int(request.args.get("per_page", 50))
+    level_filter = request.args.get("level", "")
+    source_filter = request.args.get("source", "")
+
+    offset = (page - 1) * per_page
+    query = "SELECT * FROM app_logs WHERE 1=1"
+    args = []
+
+    if level_filter:
+        query += " AND level = ?"
+        args.append(level_filter)
+    if source_filter:
+        query += " AND source = ?"
+        args.append(source_filter)
+
+    count_query = query.replace("SELECT *", "SELECT COUNT(*) as c")
+    total = query_db(count_query, args, one=True)["c"]
+
+    query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+    args.extend([per_page, offset])
+
+    rows = query_db(query, args)
+    return jsonify({
+        "logs": [{
+            "id": r["id"],
+            "level": r["level"],
+            "source": r["source"],
+            "message": r["message"],
+            "details": r["details"],
+            "track_id": r["track_id"],
+            "username": r["username"],
+            "created_at": r["created_at"],
+        } for r in rows],
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+    })
+
+
+@admin_bp.route("/logs/clear", methods=["DELETE"])
+@admin_required
+def clear_logs():
+    execute_db("DELETE FROM app_logs")
+    return jsonify({"success": True})
+
+
+@admin_bp.route("/errors")
+@admin_required
+def error_log_list():
+    page = int(request.args.get("page", 1))
+    per_page = int(request.args.get("per_page", 50))
+    type_filter = request.args.get("type", "")
+    resolved_filter = request.args.get("resolved", "")
+
+    offset = (page - 1) * per_page
+    query = "SELECT * FROM error_log WHERE 1=1"
+    args = []
+
+    if type_filter:
+        query += " AND error_type = ?"
+        args.append(type_filter)
+    if resolved_filter != "":
+        query += " AND resolved = ?"
+        args.append(int(resolved_filter))
+
+    count_query = query.replace("SELECT *", "SELECT COUNT(*) as c")
+    total = query_db(count_query, args, one=True)["c"]
+
+    query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+    args.extend([per_page, offset])
+
+    rows = query_db(query, args)
+    return jsonify({
+        "errors": [{
+            "id": r["id"],
+            "error_type": r["error_type"],
+            "source": r["source"],
+            "error_message": r["error_message"],
+            "stack_trace": r["stack_trace"],
+            "track_id": r["track_id"],
+            "request_method": r["request_method"],
+            "request_path": r["request_path"],
+            "user_id": r["user_id"],
+            "username": r["username"],
+            "resolved": bool(r["resolved"]),
+            "resolved_at": r["resolved_at"],
+            "created_at": r["created_at"],
+        } for r in rows],
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+    })
+
+
+@admin_bp.route("/errors/<int:error_id>/resolve", methods=["POST"])
+@admin_required
+def resolve_error(error_id):
+    row = query_db("SELECT resolved FROM error_log WHERE id = ?", [error_id], one=True)
+    if not row:
+        return jsonify({"error": "Not found"}), 404
+    new_val = 0 if row["resolved"] else 1
+    resolved_at = datetime.now(timezone.utc).isoformat() if new_val else None
+    execute_db(
+        "UPDATE error_log SET resolved = ?, resolved_at = ? WHERE id = ?",
+        [new_val, resolved_at, error_id],
+    )
+    return jsonify({"success": True, "resolved": bool(new_val)})
+
+
+@admin_bp.route("/errors/resolved", methods=["DELETE"])
+@admin_required
+def clear_resolved_errors():
+    execute_db("DELETE FROM error_log WHERE resolved = 1")
+    return jsonify({"success": True})
+
+
+@admin_bp.route("/songs/compress", methods=["POST"])
+@admin_required
+def compress_songs():
+    from flask import current_app
+    import threading
+
+    app = current_app._get_current_object()
+
+    def _run_compress():
+        with app.app_context():
+            from src.utils.file_handling import (
+                get_all_track_ids, get_track_file_path, compress_audio_file, get_audio_bitrate
+            )
+            from src.utils.error_logging import log_event
+
+            track_ids = get_all_track_ids()
+            compressed = 0
+            skipped = 0
+            failed = 0
+
+            for tid in track_ids:
+                for file_key in ("vocals", "no_vocals"):
+                    path = get_track_file_path(tid, file_key)
+                    if not os.path.exists(path):
+                        continue
+                    bitrate = get_audio_bitrate(path)
+                    if bitrate is not None and bitrate <= 160:
+                        skipped += 1
+                        continue
+                    try:
+                        compress_audio_file(path)
+                        compressed += 1
+                    except Exception as e:
+                        print(f"Failed to compress {file_key} for track {tid}: {e}")
+                        failed += 1
+
+            log_event(
+                "info", "admin",
+                f"Bulk compress complete: {compressed} files compressed, {skipped} skipped, {failed} failed"
+            )
+
+    t = threading.Thread(target=_run_compress, daemon=True)
+    t.start()
+
+    return jsonify({"success": True, "message": "Compression started in background"})

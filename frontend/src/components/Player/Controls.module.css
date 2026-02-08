@@ -1,0 +1,395 @@
+.controls {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+  z-index: 1;
+}
+
+.progressRow {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-xl) 0;
+  position: relative;
+  z-index: 1;
+}
+
+.buttonsRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xs) var(--spacing-xl) var(--spacing-sm);
+  gap: var(--spacing-lg);
+  position: relative;
+  z-index: 1;
+}
+
+.playback {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.visualizerBg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  z-index: 0;
+}
+
+.visualizerBgActive {
+  opacity: 1;
+}
+
+.playBtnWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 58px;
+  height: 58px;
+  will-change: transform, filter;
+  transition: transform 0.06s ease-out, filter 0.06s ease-out;
+}
+
+.playBtn {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: var(--gradient);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  transition: all var(--transition);
+  box-shadow: 0 4px 20px var(--primary-glow), 0 2px 8px rgba(0,0,0,0.15);
+  position: relative;
+  z-index: 1;
+}
+
+.playBtn:hover {
+  transform: scale(1.18);
+  box-shadow: 0 6px 30px var(--primary-glow), 0 4px 12px rgba(0,0,0,0.2);
+}
+
+.playBtn:active { transform: scale(0.92); }
+
+.playBtnPlaying {
+  background: #111;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* Spinning record */
+.record {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: radial-gradient(circle,
+    #222 0%,
+    #111 30%,
+    #1a1a1a 32%,
+    #0d0d0d 34%,
+    #1a1a1a 36%,
+    #111 60%,
+    #1a1a1a 62%,
+    #0d0d0d 64%,
+    #1a1a1a 66%,
+    #222 100%
+  );
+  position: relative;
+  animation: spin 2s linear infinite;
+}
+
+/* Subtle groove lines */
+.recordGrooves {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: repeating-radial-gradient(
+    circle,
+    transparent 0px,
+    transparent 2px,
+    rgba(255,255,255,0.03) 2.5px,
+    transparent 3px
+  );
+  pointer-events: none;
+}
+
+/* Center label area */
+.recordLabel {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 65%;
+  height: 65%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--gradient);
+  overflow: hidden;
+}
+
+.recordArt {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Center hole */
+.recordHole {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: #111;
+  box-shadow: inset 0 0 2px rgba(0,0,0,0.8);
+  z-index: 1;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.controlBtn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 14px;
+  font-size: 1.2rem;
+  border-radius: 50%;
+  transition: all var(--transition);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.controlBtn:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+.progress {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.time {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  min-width: 40px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
+.barWrapper {
+  flex: 1;
+  height: 4px;
+  background: var(--surface-hover);
+  border-radius: 2px;
+  cursor: pointer;
+  position: relative;
+  transition: height 0.15s ease;
+}
+
+.barWrapper:hover { height: 6px; }
+
+.barFill {
+  height: 100%;
+  background: var(--gradient);
+  border-radius: 2px;
+  position: relative;
+  transition: width 0.1s linear;
+}
+
+.barFill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+  animation: shimmer 3s infinite;
+  background-size: 200% 100%;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.thumb {
+  position: absolute;
+  right: -7px;
+  top: 50%;
+  transform: translateY(-50%) scale(0);
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 10px var(--primary-glow), 0 2px 4px rgba(0,0,0,0.2);
+  transition: transform 0.15s ease;
+}
+
+.barWrapper:hover .thumb { transform: translateY(-50%) scale(1); }
+
+.karaokeBtn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 8px 14px;
+  font-size: 1rem;
+  border-radius: var(--radius-pill);
+  transition: all var(--transition);
+}
+
+.karaokeBtn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.karaokeBtnActive {
+  background: var(--primary-glow);
+  border-color: var(--primary);
+  color: var(--primary);
+  box-shadow: 0 0 12px var(--primary-glow);
+}
+
+.rightControls {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  position: absolute;
+  right: var(--spacing-xl);
+}
+
+.volumeStack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.volumeGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.volumeLabelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.volumeLabel {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.volumeValue {
+  font-size: 0.65rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 120px;
+  height: 6px;
+  border-radius: 3px;
+  outline: none;
+  transition: opacity var(--transition);
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+  transition: all var(--transition);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+.slider::-webkit-slider-thumb:hover {
+  background: #fff;
+  box-shadow: 0 0 10px var(--primary-glow), 0 0 20px var(--primary-glow);
+  transform: scale(1.25);
+}
+
+.slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+.slider::-moz-range-thumb:hover {
+  box-shadow: 0 0 10px var(--primary-glow), 0 0 20px var(--primary-glow);
+}
+
+.slider::-moz-range-track {
+  height: 5px;
+  border-radius: 3px;
+  background: transparent;
+}
+
+.slider:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.slider:disabled::-webkit-slider-thumb {
+  cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+  .progressRow { padding: var(--spacing-xs) var(--spacing-md) 0; }
+  .buttonsRow { padding: var(--spacing-xs) var(--spacing-md) var(--spacing-xs); gap: var(--spacing-sm); }
+  .rightControls { display: none; }
+}
+
+/* Large screens / projector / beamer */
+@media (min-width: 1440px) {
+  .playBtnWrapper { width: 68px; height: 68px; }
+  .playBtn { width: 68px; height: 68px; font-size: 1.5rem; }
+  .recordHole { width: 10px; height: 10px; }
+  .controlBtn { padding: 16px; font-size: 1.4rem; }
+  .time { font-size: 0.9rem; min-width: 48px; }
+  .barWrapper { height: 6px; }
+  .barWrapper:hover { height: 9px; }
+  .thumb { width: 18px; height: 18px; right: -9px; }
+  .karaokeBtn { padding: 10px 18px; font-size: 1.1rem; }
+  .slider { width: 140px; height: 7px; }
+  .slider::-webkit-slider-thumb { width: 18px; height: 18px; }
+  .slider::-moz-range-thumb { width: 18px; height: 18px; }
+  .volumeLabel { font-size: 0.8rem; }
+  .volumeValue { font-size: 0.75rem; }
+  .progressRow { padding: var(--spacing-md) var(--spacing-2xl) 0; }
+  .buttonsRow { padding: var(--spacing-sm) var(--spacing-2xl) var(--spacing-md); gap: var(--spacing-xl); }
+}
