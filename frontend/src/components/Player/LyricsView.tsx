@@ -215,7 +215,7 @@ export function LyricsView({ lyrics, loading, currentTime, onSeek, onEditWord, h
                     onDoubleClick={() => handleDoubleClick(i, j, w.word)}
                     title="Click to seek, double-click to edit"
                   >
-                    {w.word}{' '}
+                    {w.word}
                   </span>
                 )
               })}

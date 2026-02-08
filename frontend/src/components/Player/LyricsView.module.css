@@ -157,9 +157,11 @@
 }
 
 .lineApproaching .word {
-  display: inline-block;
   font-size: calc(1.1rem + var(--approach, 0) * 0.55rem);
   font-weight: calc(400 + var(--approach, 0) * 100);
+  padding: 1px calc(1px - var(--approach, 0) * 1px);
+  line-height: calc(2 - var(--approach, 0) * 0.5);
+  margin-right: calc(0.25em - var(--approach, 0) * 0.05em);
 }
 
 /* Break indicator expand/collapse wrapper */
@@ -208,7 +210,8 @@
 
 /* Words */
 .word {
-  display: inline;
+  display: inline-block;
+  margin-right: 0.25em;
   padding: 1px 1px;
   border-radius: 3px;
   cursor: pointer;
@@ -219,10 +222,12 @@
 }
 
 .lineActive .word {
-  display: inline-block;
   font-size: 1.65rem;
   font-weight: 500;
   letter-spacing: 0.005em;
+  padding: 1px 0;
+  line-height: 1.5;
+  margin-right: 0.2em;
 }
 
 .lineActive .word::after {
