@@ -286,6 +286,22 @@
 }
 
 /* Untimed lyrics (no word-level timestamps) */
+.untimedBanner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-md);
+  margin: 0 auto var(--spacing-lg);
+  max-width: 520px;
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: var(--radius-sm);
+  color: #818cf8;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+}
+
 .untimedLine {
   border-left-color: var(--text-muted);
 }

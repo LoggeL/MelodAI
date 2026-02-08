@@ -1,6 +1,6 @@
 import { useRef, useEffect, useMemo, useState, useCallback } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faMicrophone, faGuitar, faTriangleExclamation } from '@fortawesome/free-solid-svg-icons'
+import { faMicrophone, faGuitar, faTriangleExclamation, faLanguage } from '@fortawesome/free-solid-svg-icons'
 import type { LyricsData } from '../../types'
 import styles from './LyricsView.module.css'
 
@@ -148,6 +148,10 @@ export function LyricsView({ lyrics, loading, currentTime, duration, onSeek, onE
 
     return (
       <div className={styles.container} ref={containerRef}>
+        <div className={styles.untimedBanner}>
+          <FontAwesomeIcon icon={faLanguage} />
+          <span>Lyrics from external source — word-level timing unavailable</span>
+        </div>
         {plainLyrics.map((line, i) => {
           const dist = Math.abs(i - activeLineIdx)
           const lineClass = [
