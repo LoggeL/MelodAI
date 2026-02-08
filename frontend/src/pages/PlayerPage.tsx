@@ -169,6 +169,7 @@ export function PlayerPage() {
                 lyrics={player.lyrics}
                 loading={player.lyricsLoading}
                 currentTime={player.currentTime}
+                duration={player.duration}
                 onSeek={player.seek}
                 onEditWord={player.editWord}
                 hasTrack

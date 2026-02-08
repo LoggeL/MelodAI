@@ -626,6 +626,11 @@ function SongsTab() {
               {(s.avg_confidence * 100).toFixed(0)}%
             </span>
           )}
+          {s.complete && !s.has_lyrics && (
+            <span className={`${styles.tag} ${styles.tagDanger}`} style={{ fontSize: '0.55rem', padding: '1px 5px' }}>
+              No Lyrics
+            </span>
+          )}
           <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', minWidth: 60 }}>
             {formatSize(Object.values(s.file_sizes).reduce((a, b) => a + b, 0))}
           </span>

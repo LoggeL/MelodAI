@@ -52,6 +52,8 @@ export interface LyricsData {
   avg_confidence?: number
   lyrics_source?: 'genius' | 'heuristic'
   genius_stats?: GeniusStats
+  untimed?: boolean
+  plain_lyrics?: string[]
 }
 
 export interface TrackMetadata {
@@ -146,6 +148,7 @@ export interface AdminSong {
   complete: boolean
   file_sizes: Record<string, number>
   avg_confidence: number | null
+  has_lyrics: boolean
 }
 
 export interface UnfinishedTrack {

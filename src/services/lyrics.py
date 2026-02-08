@@ -24,9 +24,10 @@ def _extract_text(output):
 def _is_bad_output(output, reference_lines=None):
     """Detect if transcription output is broken (character-level or wrong content).
 
-    Checks two things:
-    1. Character-level tokenization (>50% single-char 'words')
-    2. If reference lyrics provided, low text similarity to reference
+    Checks:
+    1. Empty segments (no words transcribed at all)
+    2. Character-level tokenization (>50% single-char 'words')
+    3. If reference lyrics provided, low text similarity to reference
     """
     if not isinstance(output, dict):
         return False
@@ -40,6 +41,11 @@ def _is_bad_output(output, reference_lines=None):
                 total += 1
                 if len(text) <= 1:
                     single += 1
+
+    # Empty transcription — no words at all
+    if total == 0:
+        logger.warning("Empty transcription — no words detected")
+        return True
 
     # Character-level check
     if total > 10 and single / total > 0.5:

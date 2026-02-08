@@ -224,6 +224,9 @@ def list_songs():
             if img_url:
                 img_url = img_url.replace("/56x56", "/200x200", 1)
             lyrics = load_lyrics(tid)
+            has_lyrics = False
+            if lyrics:
+                has_lyrics = bool(lyrics.get("segments")) or bool(lyrics.get("plain_lyrics"))
             songs.append({
                 "id": tid,
                 "title": meta.get("title", "Unknown"),
@@ -232,6 +235,7 @@ def list_songs():
                 "complete": is_track_complete(tid),
                 "file_sizes": get_track_file_sizes(tid),
                 "avg_confidence": lyrics.get("avg_confidence") if lyrics else None,
+                "has_lyrics": has_lyrics,
             })
     return jsonify(songs)
 

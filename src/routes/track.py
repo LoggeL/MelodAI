@@ -647,6 +647,28 @@ def _stage_process_lyrics(track_id):
                 except Exception as e:
                     print(f"WARNING: Genius lyrics fetch failed for {track_id}: {e}")
 
+    # Check if WhisperX returned empty segments
+    raw_segments = raw_data.get("segments", raw_data if isinstance(raw_data, list) else [])
+    has_words = any(
+        w.get("word", "").strip()
+        for seg in (raw_segments if isinstance(raw_segments, list) else [])
+        for w in seg.get("words", [])
+    )
+
+    if not has_words and genius_lines:
+        # WhisperX failed but we have external lyrics — save as untimed
+        print(f"INFO: WhisperX returned no words for {track_id}, using untimed genius lyrics")
+        set_processing_status(track_id, STATUS_PROCESSING, 89, "Using external lyrics (untimed)...")
+        processed = {
+            "segments": [],
+            "untimed": True,
+            "plain_lyrics": genius_lines,
+            "lyrics_source": "genius",
+        }
+        save_lyrics(track_id, processed)
+        set_processing_status(track_id, STATUS_PROCESSING, PROGRESS[STATUS_PROCESSING], "Lyrics synced (untimed)")
+        return
+
     if genius_lines:
         try:
             segments = raw_data.get("segments", raw_data if isinstance(raw_data, list) else [])

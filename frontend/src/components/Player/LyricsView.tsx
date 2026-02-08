@@ -8,6 +8,7 @@ interface Props {
   lyrics: LyricsData | null
   loading: boolean
   currentTime: number
+  duration: number
   onSeek: (time: number) => void
   onEditWord?: (segIdx: number, wordIdx: number, newWord: string) => void
   hasTrack: boolean
@@ -18,7 +19,7 @@ const SPEAKER_CLASSES = [
   styles.speaker3, styles.speaker4, styles.speaker5,
 ]
 
-export function LyricsView({ lyrics, loading, currentTime, onSeek, onEditWord, hasTrack }: Props) {
+export function LyricsView({ lyrics, loading, currentTime, duration, onSeek, onEditWord, hasTrack }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const lastScrollRef = useRef(0)
   const [editing, setEditing] = useState<{ seg: number; word: number } | null>(null)
@@ -56,6 +57,29 @@ export function LyricsView({ lyrics, loading, currentTime, onSeek, onEditWord, h
       lastScrollRef.current = Date.now()
     }
   }, [currentTime, lyrics, editing])
+
+  // Auto-scroll for untimed lyrics
+  useEffect(() => {
+    if (!containerRef.current || !lyrics?.untimed || !lyrics?.plain_lyrics?.length || !duration) return
+    const progress = duration > 0 ? currentTime / duration : 0
+    const activeIdx = Math.min(
+      Math.floor(progress * lyrics.plain_lyrics.length),
+      lyrics.plain_lyrics.length - 1
+    )
+    const lines = containerRef.current.querySelectorAll(`.${styles.untimedLine}`)
+    const activeLine = lines[activeIdx] as HTMLElement | undefined
+    if (!activeLine) return
+
+    const container = containerRef.current
+    const containerRect = container.getBoundingClientRect()
+    const lineRect = activeLine.getBoundingClientRect()
+    const targetTop = containerRect.height * 0.4
+    const offset = lineRect.top - containerRect.top - targetTop + lineRect.height / 2
+
+    if (Math.abs(offset) > 30) {
+      container.scrollTop += offset * 0.12
+    }
+  }, [currentTime, lyrics, duration])
 
   const handleDoubleClick = useCallback((segIdx: number, wordIdx: number, word: string) => {
     if (!onEditWord) return
@@ -99,8 +123,10 @@ export function LyricsView({ lyrics, loading, currentTime, onSeek, onEditWord, h
   }
 
   const segments = lyrics?.segments || []
+  const plainLyrics = lyrics?.plain_lyrics || []
+  const isUntimed = lyrics?.untimed && plainLyrics.length > 0
 
-  if (segments.length === 0) {
+  if (segments.length === 0 && !isUntimed) {
     return (
       <div className={styles.container}>
         <div className={styles.emptyState}>
@@ -108,6 +134,35 @@ export function LyricsView({ lyrics, loading, currentTime, onSeek, onEditWord, h
           <h3>No Lyrics Available</h3>
           <p>This song appears to be instrumental or has no detectable lyrics</p>
         </div>
+      </div>
+    )
+  }
+
+  // Untimed lyrics mode: evenly scroll through plain text lines
+  if (isUntimed) {
+    const progress = duration > 0 ? currentTime / duration : 0
+    const activeLineIdx = Math.min(
+      Math.floor(progress * plainLyrics.length),
+      plainLyrics.length - 1
+    )
+
+    return (
+      <div className={styles.container} ref={containerRef}>
+        {plainLyrics.map((line, i) => {
+          const dist = Math.abs(i - activeLineIdx)
+          const lineClass = [
+            styles.line,
+            styles.untimedLine,
+            dist === 0 ? styles.lineNear : '',
+            dist <= 2 && dist > 0 ? styles.lineNear : '',
+          ].filter(Boolean).join(' ')
+
+          return (
+            <div key={i} className={lineClass}>
+              <span className={styles.word}>{line || '\u00A0'}</span>
+            </div>
+          )
+        })}
       </div>
     )
   }

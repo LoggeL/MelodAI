@@ -285,6 +285,19 @@
   .lineApproaching .word { font-size: calc(0.95rem + var(--approach, 0) * 0.3rem); }
 }
 
+/* Untimed lyrics (no word-level timestamps) */
+.untimedLine {
+  border-left-color: var(--text-muted);
+}
+
+.untimedLine .word {
+  cursor: default;
+}
+
+.untimedLine .word:hover {
+  background: transparent;
+}
+
 /* Large screens / projector / beamer */
 @media (min-width: 1440px) {
   .word { font-size: 1.3rem; line-height: 2.2; }
