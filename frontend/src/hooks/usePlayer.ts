@@ -148,7 +148,7 @@ export function usePlayer(options: UsePlayerOptions = {}) {
     return () => { if (saveQueueTimerRef.current) clearTimeout(saveQueueTimerRef.current) }
   }, [queue, currentIndex])
 
-  // Validate restored queue items against server
+  // Validate restored queue items against server and fetch lyrics for current track
   useEffect(() => {
     if (storedQueue.queue.length === 0) return
     const validateQueue = async () => {
@@ -172,6 +172,20 @@ export function usePlayer(options: UsePlayerOptions = {}) {
           : storedQueue.currentIndex
         setQueue(validItems)
         setCurrentIndex(validItems.length > 0 ? newIndex : -1)
+      }
+
+      // Fetch lyrics for the restored current track so they display without replay
+      const ci = storedQueue.currentIndex
+      const currentItem = ci >= 0 && ci < validItems.length ? validItems[ci] : (ci >= 0 && ci < storedQueue.queue.length ? storedQueue.queue[ci] : null)
+      if (currentItem?.ready) {
+        setLyricsLoading(true)
+        try {
+          const lyricsData = await tracks.lyrics(currentItem.id)
+          setLyrics(lyricsData)
+        } catch {
+          setLyrics(null)
+        }
+        setLyricsLoading(false)
       }
     }
     validateQueue()
@@ -234,9 +248,16 @@ export function usePlayer(options: UsePlayerOptions = {}) {
     animRef.current = requestAnimationFrame(tick)
   }, [])
 
-  // Cleanup
+  // Cleanup: stop all audio on unmount
   useEffect(() => {
     return () => {
+      try { vocalsSourceRef.current?.stop() } catch { /* already stopped */ }
+      try { instSourceRef.current?.stop() } catch { /* already stopped */ }
+      vocalsSourceRef.current = null
+      instSourceRef.current = null
+      if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
+        audioCtxRef.current.close()
+      }
       if (animRef.current) cancelAnimationFrame(animRef.current)
       if (pollRef.current) clearInterval(pollRef.current)
     }

@@ -17,13 +17,13 @@
   display: none;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 0.95rem;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1rem;
   cursor: pointer;
   transition: all var(--transition);
   padding: 0;
@@ -135,8 +135,8 @@
 }
 
 @media (max-width: 768px) {
-  .header { padding: 0 var(--spacing-md); }
-  .menuBtn { display: inline-flex; }
+  .header { padding: 0 var(--spacing-sm); gap: var(--spacing-sm); }
+  .menuBtn { display: inline-flex; order: -1; }
   .creditChip { padding: 4px 8px; font-size: 0.75rem; }
 }
 

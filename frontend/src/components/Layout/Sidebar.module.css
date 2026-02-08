@@ -18,6 +18,7 @@
   border-right: none;
 }
 
+/* ─── Expand / collapse toggle ─── */
 .toggle {
   position: absolute;
   top: 12px;
@@ -44,21 +45,33 @@
   background: var(--surface-hover);
 }
 
+/* ─── Header with brand ─── */
 .header {
   padding: var(--spacing-sm) var(--spacing-md);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.brand {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
 }
 
-.header img { width: 28px; height: 28px; }
+.logo {
+  width: 26px;
+  height: 26px;
+}
 
 .logoText {
-  font-size: 1.3rem;
+  font-size: 1.2rem;
   font-weight: 900;
   letter-spacing: 0.06em;
   color: var(--text);
+  line-height: 1;
 }
 
 .logoAccent {
@@ -68,68 +81,105 @@
   background-clip: text;
 }
 
-.tabs {
+/* ─── Tab bar — segmented control style ─── */
+.tabBar {
+  position: relative;
   display: flex;
-  gap: 2px;
-  padding: 3px;
-  margin: var(--spacing-xs) var(--spacing-sm);
+  gap: 0;
+  margin: 10px 12px 0;
   background: var(--surface);
+  border-radius: 10px;
+  padding: 3px;
+  flex-shrink: 0;
+}
+
+.tabIndicator {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: calc(50% - 3px);
+  height: calc(100% - 6px);
+  background: var(--gradient);
   border-radius: 8px;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  opacity: 0.15;
 }
 
 .tab {
   flex: 1;
-  padding: 6px 8px;
+  padding: 8px 0;
   text-align: center;
   font-family: var(--font-heading);
   font-weight: 700;
   font-size: 0.72rem;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
   cursor: pointer;
   color: var(--text-muted);
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   background: none;
-  transition: all var(--transition);
+  transition: color 0.25s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 7px;
+  position: relative;
+  z-index: 1;
+  user-select: none;
 }
 
 .tabIcon {
-  font-size: 0.65rem;
-  opacity: 0.7;
+  font-size: 0.62rem;
+  opacity: 0.6;
+  transition: all 0.25s ease;
 }
 
 .tabActive {
   color: var(--text);
-  background: var(--bg-secondary);
-  box-shadow: var(--shadow-sm);
 }
 
-.tabActive .tabIcon { opacity: 1; color: var(--primary); }
+.tabActive .tabIcon {
+  opacity: 1;
+  color: var(--primary);
+}
 
-.tab:hover:not(.tabActive) { color: var(--text-secondary); }
+.tab:hover:not(.tabActive) {
+  color: var(--text-secondary);
+}
 
+/* ─── Content area with stacked panels ─── */
 .content {
   flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.panel {
+  position: absolute;
+  inset: 0;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
 }
 
-/* Close button inside sidebar header — mobile only */
+.panelActive {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ─── Close button (mobile only) ─── */
 .mobileClose {
   display: none;
   align-items: center;
   justify-content: center;
   width: 30px;
   height: 30px;
-  margin-left: auto;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   background: transparent;
   color: var(--text-muted);
   font-size: 1rem;
@@ -143,11 +193,12 @@
   background: var(--surface-hover);
 }
 
-/* Backdrop overlay */
+/* ─── Backdrop overlay ─── */
 .backdrop {
   display: none;
 }
 
+/* ─── Mobile responsive ─── */
 @media (max-width: 768px) {
   .sidebar {
     position: fixed;
@@ -158,20 +209,33 @@
     max-width: 360px;
     z-index: 200;
     transform: translateX(-100%);
-    transition: transform var(--transition);
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
-  .open { transform: translateX(0); }
+  .open {
+    transform: translateX(0);
+  }
 
-  .toggle { display: none; }
+  .toggle {
+    display: none;
+  }
 
-  .mobileClose { display: inline-flex; }
+  .mobileClose {
+    display: inline-flex;
+  }
 
   .backdrop {
     display: block;
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
     z-index: 199;
+    animation: backdropIn 0.25s ease;
   }
+}
+
+@keyframes backdropIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }

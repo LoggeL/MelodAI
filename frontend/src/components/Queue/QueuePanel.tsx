@@ -1,6 +1,9 @@
 import { useState, useCallback } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faMusic, faGripVertical, faRotateRight, faXmark, faDice, faShuffle, faTrashCan } from '@fortawesome/free-solid-svg-icons'
+import {
+  faMusic, faGripVertical, faRotateRight, faXmark,
+  faDice, faShuffle, faTrashCan, faPlay, faVolumeHigh,
+} from '@fortawesome/free-solid-svg-icons'
 import type { QueueItem } from '../../types'
 import styles from './QueuePanel.module.css'
 
@@ -31,12 +34,29 @@ export function QueuePanel({
 
   return (
     <>
+      {queue.length > 0 && (
+        <div className={styles.queueActions}>
+          <span className={styles.queueCount}>{queue.length} song{queue.length !== 1 ? 's' : ''}</span>
+          <div className={styles.actionBtns}>
+            <button className={styles.actionBtn} onClick={onRandom} title="Add random song">
+              <FontAwesomeIcon icon={faDice} />
+            </button>
+            <button className={styles.actionBtn} onClick={onShuffle} title="Shuffle queue">
+              <FontAwesomeIcon icon={faShuffle} />
+            </button>
+            <button className={`${styles.actionBtn} ${styles.actionBtnDanger}`} onClick={handleClear} title="Clear queue">
+              <FontAwesomeIcon icon={faTrashCan} />
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className={styles.list}>
         {queue.length === 0 && (
           <div className={styles.emptyState}>
             <div className={styles.emptyIcon}><FontAwesomeIcon icon={faMusic} /></div>
-            <h3>Queue is empty</h3>
-            <p>Search for a song to get started</p>
+            <h3>Nothing in queue</h3>
+            <p>Search for a song or pick from the library</p>
           </div>
         )}
         {queue.map((item, i) => {
@@ -68,9 +88,28 @@ export function QueuePanel({
               onClick={() => item.ready && onPlay(i)}
             >
               <div className={styles.grip}><FontAwesomeIcon icon={faGripVertical} /></div>
-              <img className={styles.thumb} src={item.thumbnail || '/logo.svg'} alt="" loading="lazy" />
+
+              <div className={styles.thumbWrap}>
+                <img className={styles.thumb} src={item.thumbnail || '/logo.svg'} alt="" loading="lazy" />
+                {isActive && (
+                  <div className={styles.eqBars}>
+                    <span /><span /><span />
+                  </div>
+                )}
+                {!isActive && item.ready && (
+                  <div className={styles.playOverlay}>
+                    <FontAwesomeIcon icon={faPlay} />
+                  </div>
+                )}
+              </div>
+
               <div className={styles.info}>
-                <div className={styles.title}>{item.title}</div>
+                <div className={styles.titleRow}>
+                  {isActive && (
+                    <FontAwesomeIcon icon={faVolumeHigh} className={styles.nowIcon} />
+                  )}
+                  <span className={styles.title}>{item.title}</span>
+                </div>
                 <div className={styles.artist}>{item.artist}</div>
                 {item.error && <div className={styles.status} style={{ color: 'var(--danger)' }}>Error</div>}
                 {!item.ready && !item.error && (
@@ -82,6 +121,7 @@ export function QueuePanel({
                   </>
                 )}
               </div>
+
               <div className={styles.actions} onClick={e => e.stopPropagation()}>
                 {item.error && (
                   <button className={styles.removeBtn} onClick={() => onRetry(i)} title="Retry">
@@ -97,18 +137,6 @@ export function QueuePanel({
             </div>
           )
         })}
-      </div>
-
-      <div className={styles.queueActions}>
-        <button className={styles.actionBtn} onClick={onRandom} title="Random">
-          <FontAwesomeIcon icon={faDice} />
-        </button>
-        <button className={styles.actionBtn} onClick={onShuffle} title="Shuffle">
-          <FontAwesomeIcon icon={faShuffle} />
-        </button>
-        <button className={styles.actionBtn} onClick={handleClear} title="Clear">
-          <FontAwesomeIcon icon={faTrashCan} />
-        </button>
       </div>
 
       {showConfirm && (
