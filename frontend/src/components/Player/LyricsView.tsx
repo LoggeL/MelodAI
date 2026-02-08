@@ -185,7 +185,7 @@ export function LyricsView({ lyrics, loading, currentTime, onSeek, onEditWord, h
             )}
             <div className={lineClass} style={approachStyle}>
               {seg.words.map((w, j) => {
-                const wActive = currentTime >= w.start && currentTime <= w.end + 0.1
+                const wActive = isActive && currentTime >= w.start && currentTime <= w.end + 0.1
                 const isEditing = editing?.seg === i && editing?.word === j
 
                 if (isEditing) {
