@@ -547,11 +547,16 @@ export function usePlayer(options: UsePlayerOptions = {}) {
       isPlayingRef.current = false
       setIsPlaying(false)
     } else {
+      // If buffers aren't loaded yet (e.g. restored from localStorage), do a full playIndex
+      if (!vocalsBufferRef.current || !instBufferRef.current) {
+        playIndex(currentIndexRef.current)
+        return
+      }
       if (audioCtxRef.current?.state === 'suspended') audioCtxRef.current.resume()
       startPlayback(pausedAtRef.current)
       setIsPlaying(true)
     }
-  }, [isPlaying, startPlayback])
+  }, [isPlaying, startPlayback, playIndex])
 
   const seek = useCallback((time: number) => {
     if (!audioCtxRef.current || !vocalsBufferRef.current) return

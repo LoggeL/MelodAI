@@ -146,6 +146,22 @@
   animation: pulseNext 1.5s ease-in-out infinite;
 }
 
+/* Smooth approach ramp — driven by --approach (0→1) set per-frame in JS */
+.lineApproaching {
+  opacity: calc(0.65 + var(--approach, 0) * 0.35);
+  transform: scale(calc(0.98 + var(--approach, 0) * 0.02));
+  filter: blur(0);
+  padding: calc(8px + var(--approach, 0) * 4px) 24px;
+  margin: calc(1px + var(--approach, 0) * 3px) auto;
+  transition: none;
+}
+
+.lineApproaching .word {
+  display: inline-block;
+  font-size: calc(1.1rem + var(--approach, 0) * 0.55rem);
+  font-weight: calc(400 + var(--approach, 0) * 100);
+}
+
 /* Break indicator expand/collapse wrapper */
 .breakWrapper {
   display: grid;
@@ -259,6 +275,8 @@
   .lineActive .word { font-size: 1.25rem; }
   .line { padding: 6px 12px; }
   .lineActive { padding: 8px 12px; }
+  .lineApproaching { padding: calc(6px + var(--approach, 0) * 2px) 12px; }
+  .lineApproaching .word { font-size: calc(0.95rem + var(--approach, 0) * 0.3rem); }
 }
 
 /* Large screens / projector / beamer */
@@ -267,6 +285,8 @@
   .lineActive .word { font-size: 2rem; }
   .line { padding: 10px 32px; }
   .lineActive { padding: 16px 32px; margin: 6px auto; }
+  .lineApproaching { padding: calc(10px + var(--approach, 0) * 6px) 32px; margin: calc(1px + var(--approach, 0) * 5px) auto; }
+  .lineApproaching .word { font-size: calc(1.3rem + var(--approach, 0) * 0.7rem); }
   .breakIndicator { font-size: 0.8rem; padding: 12px 0; }
   .emptyIcon { font-size: 6rem; }
   .emptyState h3 { font-size: 1.6rem; }

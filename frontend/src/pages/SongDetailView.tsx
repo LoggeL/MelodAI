@@ -76,9 +76,12 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
 
   const toggle = (key: string) => setExpanded(prev => ({ ...prev, [key]: !prev[key] }))
 
-  const handleReprocess = async () => {
-    await admin.reprocessSong(trackId)
-    toast.success('Reprocessing started')
+  const [showReprocessMenu, setShowReprocessMenu] = useState(false)
+
+  const handleReprocess = async (fromStage?: string) => {
+    setShowReprocessMenu(false)
+    await admin.reprocessSong(trackId, fromStage)
+    toast.success('Reprocessing started' + (fromStage && fromStage !== 'all' ? ` (from ${fromStage})` : ''))
   }
 
   const handleDelete = async () => {
@@ -95,10 +98,10 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
         toast.error(String((result as Record<string, unknown>).error))
       } else {
         setData(prev => prev ? { ...prev, genius_lyrics: result } : prev)
-        toast.success('Genius lyrics fetched')
+        toast.success('Reference lyrics fetched')
       }
     } catch {
-      toast.error('Failed to fetch Genius lyrics')
+      toast.error('Failed to fetch reference lyrics')
     }
     setFetchingGenius(false)
   }
@@ -188,9 +191,19 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
                 <FontAwesomeIcon icon={faPlay} /> Play Song
               </button>
             )}
-            <button className={styles.actionBtn} onClick={handleReprocess}>
-              <FontAwesomeIcon icon={faRotateRight} /> Reprocess
-            </button>
+            <div className={styles.reprocessDropdown}>
+              <button className={styles.actionBtn} onClick={() => setShowReprocessMenu(prev => !prev)}>
+                <FontAwesomeIcon icon={faRotateRight} /> Reprocess
+              </button>
+              {showReprocessMenu && (
+                <div className={styles.reprocessMenu}>
+                  <button onClick={() => handleReprocess('all')}>Reprocess All</button>
+                  <button onClick={() => handleReprocess('splitting')}>Redo Vocal Split</button>
+                  <button onClick={() => handleReprocess('lyrics')}>Redo Lyrics Extraction</button>
+                  <button onClick={() => handleReprocess('processing')}>Redo Lyrics Processing</button>
+                </div>
+              )}
+            </div>
             <button className={`${styles.actionBtn} ${styles.dangerBtn}`} onClick={handleDelete}>
               <FontAwesomeIcon icon={faTrash} /> Delete
             </button>
@@ -344,12 +357,12 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
           <div className={styles.empty}>No processed lyrics available</div>
         )}
 
-        {/* Genius Lyrics */}
+        {/* Reference Lyrics */}
         <div className={styles.collapsible}>
           <div className={styles.collapsibleHeader} onClick={() => toggle('genius')}>
             <span className={styles.collapsibleTitle}>
               <FontAwesomeIcon icon={faWandMagicSparkles} style={{ fontSize: '0.75rem' }} />
-              Genius Lyrics
+              Reference Lyrics
               {data.genius_lyrics && (
                 <span className={styles.collapsibleBadge}>
                   {data.genius_lyrics.lines.length} lines
@@ -374,10 +387,10 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
                 </div>
               ) : (
                 <div className={styles.geniusFetch}>
-                  <p>No cached Genius lyrics.</p>
+                  <p>No cached reference lyrics.</p>
                   <button className={styles.actionBtn} onClick={handleFetchGenius} disabled={fetchingGenius}>
                     <FontAwesomeIcon icon={faWandMagicSparkles} />
-                    {fetchingGenius ? 'Fetching...' : 'Fetch from Genius'}
+                    {fetchingGenius ? 'Fetching...' : 'Fetch from lrclib'}
                   </button>
                 </div>
               )}

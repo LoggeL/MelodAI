@@ -147,11 +147,22 @@ export function LyricsView({ lyrics, loading, currentTime, onSeek, onEditWord, h
         const isNear = !isActive && !isNext && dist < 5
         const spkClass = speakerMap[seg.speaker] || SPEAKER_CLASSES[0]
 
+        // Smooth approach: ramp from lineNext → lineActive over 2s before activation
+        const timeUntilStart = seg.start - currentTime
+        const isApproaching = i === nextIndex && !isActive && timeUntilStart > 0 && timeUntilStart <= 2
+        let approachStyle: React.CSSProperties | undefined
+        if (isApproaching) {
+          const linear = 1 - (timeUntilStart / 2) // 0 → 1
+          const t = linear * linear * (3 - 2 * linear) // smoothstep
+          approachStyle = { '--approach': t } as React.CSSProperties
+        }
+
         const lineClass = [
           styles.line,
           spkClass,
           isActive ? styles.lineActive : '',
-          isNext ? styles.lineNext : '',
+          isApproaching ? styles.lineApproaching : '',
+          isNext && !isApproaching ? styles.lineNext : '',
           isNear ? styles.lineNear : '',
         ].filter(Boolean).join(' ')
 
@@ -172,7 +183,7 @@ export function LyricsView({ lyrics, loading, currentTime, onSeek, onEditWord, h
                 </div>
               </div>
             )}
-            <div className={lineClass}>
+            <div className={lineClass} style={approachStyle}>
               {seg.words.map((w, j) => {
                 const wActive = currentTime >= w.start && currentTime <= w.end + 0.1
                 const isEditing = editing?.seg === i && editing?.word === j

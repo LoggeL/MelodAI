@@ -153,7 +153,11 @@ export const admin = {
   storage: () => request<StorageStats>('/api/admin/storage'),
   songs: () => request<AdminSong[]>('/api/admin/songs'),
   deleteSong: (id: string) => request('/api/admin/songs/' + id, { method: 'DELETE' }),
-  reprocessSong: (id: string) => request('/api/admin/songs/' + id + '/reprocess', { method: 'POST' }),
+  reprocessSong: (id: string, fromStage?: string) => request('/api/admin/songs/' + id + '/reprocess', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from_stage: fromStage || 'all' }),
+  }),
   songDetails: (id: string) => request<SongDetail>('/api/admin/songs/' + id + '/details'),
   fetchGeniusLyrics: (id: string) => request<{ lines: string[] }>('/api/admin/songs/' + id + '/genius', { method: 'POST' }),
   runChecks: () => request<Record<string, HealthCheck>>('/api/admin/status/checks', { method: 'POST' }),

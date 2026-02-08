@@ -85,23 +85,37 @@ def run_health_checks():
         else:
             results["queue"] = {"status": "ok", "message": f"{len(active)} tracks processing"}
 
-    # Genius check
+    # lrclib check
     try:
-        token = os.getenv("GENIUS_BEARER_TOKEN", "")
-        if not token:
-            results["genius"] = {"status": "error", "message": "GENIUS_BEARER_TOKEN not set"}
+        resp = requests.get(
+            "https://lrclib.net/api/search",
+            params={"q": "test"},
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            results["lrclib"] = {"status": "ok", "message": "lrclib.net accessible"}
+        else:
+            results["lrclib"] = {"status": "error", "message": f"HTTP {resp.status_code}"}
+    except Exception as e:
+        results["lrclib"] = {"status": "error", "message": str(e)}
+
+    # Voxtral (Mistral) check
+    try:
+        mistral_key = os.getenv("MISTRAL_API_KEY", "")
+        if not mistral_key:
+            results["voxtral"] = {"status": "error", "message": "MISTRAL_API_KEY not set"}
         else:
             resp = requests.get(
-                "https://api.genius.com/search?q=test",
-                headers={"Authorization": f"Bearer {token}"},
+                "https://api.mistral.ai/v1/models",
+                headers={"Authorization": f"Bearer {mistral_key}"},
                 timeout=10,
             )
             if resp.status_code == 200:
-                results["genius"] = {"status": "ok", "message": "Genius API accessible"}
+                results["voxtral"] = {"status": "ok", "message": "Mistral API accessible (Voxtral fallback)"}
             else:
-                results["genius"] = {"status": "error", "message": f"HTTP {resp.status_code}"}
+                results["voxtral"] = {"status": "error", "message": f"HTTP {resp.status_code}"}
     except Exception as e:
-        results["genius"] = {"status": "error", "message": str(e)}
+        results["voxtral"] = {"status": "error", "message": str(e)}
 
     # OpenRouter check
     try:

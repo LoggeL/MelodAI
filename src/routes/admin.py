@@ -394,19 +394,44 @@ def delete_song(track_id):
 @admin_bp.route("/songs/<track_id>/reprocess", methods=["POST"])
 @admin_required
 def reprocess_song(track_id):
-    from flask import current_app
+    from flask import current_app, request as flask_request
     from src.routes.track import process_track
     from src.utils.status_checks import set_processing_status
     from src.utils.constants import STATUS_METADATA, PROGRESS
+    from src.utils.file_handling import get_song_dir, get_track_file_path
     import threading
 
     app = current_app._get_current_object()
+
+    # Determine which stage to start from
+    data = flask_request.get_json(silent=True) or {}
+    from_stage = data.get("from_stage", "all")
+
+    # Map stages to files that need to be deleted to force re-run
+    stage_artifacts = {
+        "splitting": ["vocals", "no_vocals", "lyrics_raw", "lyrics"],
+        "lyrics": ["lyrics_raw", "lyrics"],
+        "processing": ["lyrics"],
+    }
+
+    if from_stage in stage_artifacts:
+        song_dir = get_song_dir(track_id)
+        for file_key in stage_artifacts[from_stage]:
+            path = get_track_file_path(track_id, file_key)
+            if os.path.exists(path):
+                os.remove(path)
+        # Also remove genius_lyrics.json if re-running lyrics stage
+        if from_stage in ("splitting", "lyrics"):
+            genius_path = os.path.join(song_dir, "genius_lyrics.json")
+            if os.path.exists(genius_path):
+                os.remove(genius_path)
+
     set_processing_status(track_id, STATUS_METADATA, PROGRESS[STATUS_METADATA], "Reprocessing...")
 
     t = threading.Thread(target=process_track, args=(track_id, app), daemon=True)
     t.start()
 
-    return jsonify({"success": True, "message": "Reprocessing started"})
+    return jsonify({"success": True, "message": f"Reprocessing started (from: {from_stage})"})
 
 
 @admin_bp.route("/status/checks", methods=["POST"])
