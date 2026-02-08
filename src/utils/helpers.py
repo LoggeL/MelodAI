@@ -535,14 +535,14 @@ def postprocess_lyrics_heuristic(raw_data, genius_line_breaks=None):
         # Split at speaker changes within Genius lines
         genius_segs = _split_at_speaker_changes(genius_segs)
 
-        # Safety-net: split lines > 12 words at timing gaps
+        # Safety-net: split lines > 20 words at timing gaps
         final_segs = []
         for seg in genius_segs:
             words = seg.get("words", [])
-            if len(words) <= 12:
+            if len(words) <= 20:
                 final_segs.append(seg)
             else:
-                for word_group in _split_segment_at_gaps(words, max_words=12):
+                for word_group in _split_segment_at_gaps(words, max_words=20):
                     if word_group:
                         final_segs.append(_make_segment(word_group))
 
