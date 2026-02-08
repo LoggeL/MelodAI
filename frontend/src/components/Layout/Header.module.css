@@ -1,0 +1,151 @@
+.header {
+  height: var(--header-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--spacing-xl);
+  border-bottom: 1px solid var(--border);
+  gap: var(--spacing-md);
+  flex-shrink: 0;
+  background: var(--bg-secondary);
+  position: relative;
+  z-index: 10;
+}
+
+/* Hamburger menu — mobile only */
+.menuBtn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all var(--transition);
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.menuBtn:hover {
+  background: var(--surface-hover);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* Nav icon buttons */
+.navBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all var(--transition);
+  text-decoration: none;
+  padding: 0;
+}
+
+.navBtn:hover {
+  background: var(--surface-hover);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.navBtnDanger:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.separator {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+/* Credit chip */
+.creditChip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 0.82rem;
+  color: var(--text);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.creditIcon {
+  color: #f59e0b;
+  font-size: 0.8rem;
+}
+
+.creditCount {
+  line-height: 1;
+}
+
+/* Profile avatar button */
+.avatarCircle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--gradient);
+  color: #fff;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 0.82rem;
+  line-height: 1;
+  user-select: none;
+  flex-shrink: 0;
+  text-decoration: none;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all var(--transition);
+}
+
+.avatarCircle:hover {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-glow);
+}
+
+@media (max-width: 768px) {
+  .header { padding: 0 var(--spacing-md); }
+  .menuBtn { display: inline-flex; }
+  .creditChip { padding: 4px 8px; font-size: 0.75rem; }
+}
+
+/* Large screens / projector / beamer */
+@media (min-width: 1440px) {
+  .header { height: 68px; padding: 0 var(--spacing-2xl); }
+  .navBtn { width: 42px; height: 42px; font-size: 1rem; }
+  .avatarCircle { width: 42px; height: 42px; font-size: 0.95rem; }
+  .separator { height: 26px; }
+  .creditChip { font-size: 0.95rem; padding: 5px 12px; }
+  .creditIcon { font-size: 0.9rem; }
+}

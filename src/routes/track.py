@@ -1,553 +1,688 @@
-from flask import Blueprint, jsonify, request, session, current_app
-from ..models.db import get_db
-from ..utils.decorators import login_required
-from ..services.deezer import (
-    deezer_search,
-    get_song_infos_from_deezer_website,
-    download_song,
-)
-from ..services.lyrics import process_lyrics
-from ..utils.status_checks import (
-    save_status_check,
-    add_to_processing_queue,
-    update_queue_item_status,
-    remove_from_processing_queue,
-    get_processing_queue,
-    is_track_in_queue,
-)
-from ..utils.constants import STATUS_OK, STATUS_ERROR
 import os
-import random
 import json
-from pathlib import Path
+import random
 import threading
-import replicate
+import time
+import traceback
 import requests
+from datetime import datetime
+from flask import Blueprint, request, jsonify, session
 
-track_bp = Blueprint("track", __name__)
+from src.utils.decorators import login_required
+from src.utils.constants import STATUS_METADATA, STATUS_DOWNLOADING, STATUS_SPLITTING, STATUS_LYRICS, STATUS_PROCESSING, STATUS_COMPLETE, STATUS_ERROR, PROGRESS
 
+# Simple TTL cache for Deezer search results
+_search_cache: dict[str, tuple[float, list]] = {}
+_SEARCH_CACHE_TTL = 300  # 5 minutes
+from src.utils.file_handling import (
+    get_song_dir, load_metadata, save_metadata, load_lyrics,
+    save_lyrics, save_lyrics_raw, track_file_exists, get_track_file_path,
+    is_track_complete, get_all_track_ids, SONGS_PATH, compress_audio_file,
+)
+from src.utils.status_checks import set_processing_status, get_processing_status, remove_from_queue
 
-def de_search_track(search_term):
-    print("Searching for", search_term)
-    try:
-        results = deezer_search(search_term, "track")
-
-        output = []
-        for track in results:
-            output.append(
-                {
-                    "id": track["id"],
-                    "title": track["title"],
-                    "artist": track["artist"],
-                    "thumb": track["img_url"],
-                }
-            )
-
-        # Prevent duplicates in trackName trackArtist
-        seen = set()
-        output = [
-            x
-            for x in output
-            if not (
-                x["title"] + x["artist"] in seen or seen.add(x["title"] + x["artist"])
-            )
-        ]
-
-        # Log successful search to status
-        save_status_check(
-            "Deezer Search",
-            STATUS_OK,
-            f"Successfully searched for '{search_term}' with {len(output)} results",
-        )
-
-        return output
-    except Exception as e:
-        # Log error to status
-        save_status_check(
-            "Deezer Search",
-            STATUS_ERROR,
-            f"Error searching for '{search_term}': {str(e)}",
-        )
-        raise
+track_bp = Blueprint("track", __name__, url_prefix="/api")
 
 
-def split_track(track_id):
-    if not os.path.isfile(
-        "src/songs/{}/vocals.mp3".format(track_id)
-    ) or not os.path.isfile("src/songs/{}/no_vocals.mp3".format(track_id)):
-
-        print("Splitting Song")
-
-        update_queue_item_status(track_id, "splitting", 30)
-
-        try:
-            with open("src/songs/{}/song.mp3".format(track_id), "rb") as song_file:
-                output = replicate.run(
-                    "ryan5453/demucs:7a9db77ed93f8f4f7e233a94d8519a867fbaa9c6d16ea5b53c1394f1557f9c61",
-                    input={
-                        "jobs": 0,
-                        "audio": song_file,
-                        "stem": "vocals",
-                        "model": "htdemucs",
-                        "split": True,
-                        "shifts": 1,
-                        "overlap": 0.25,
-                        "clip_mode": "rescale",
-                        "mp3_preset": 2,
-                        "wav_format": "int24",
-                        "mp3_bitrate": 320,
-                        "output_format": "mp3",
-                    },
-                )
-
-            # Save the vocals
-            with open("src/songs/{}/vocals.mp3".format(track_id), "wb") as f:
-                f.write(requests.get(output["vocals"]).content)  # type: ignore
-
-            # Save the instrumental
-            with open("src/songs/{}/no_vocals.mp3".format(track_id), "wb") as f:
-                f.write(requests.get(output["no_vocals"]).content)  # type: ignore
-
-            update_queue_item_status(track_id, "split_complete", 50)
-
-            # Log successful split
-            save_status_check(
-                "Track Splitting", STATUS_OK, f"Successfully split track {track_id}"
-            )
-
-        except Exception as e:
-            # Update queue status on error
-            update_queue_item_status(track_id, "split_error", 30)
-
-            # Log error
-            save_status_check(
-                "Track Splitting",
-                STATUS_ERROR,
-                f"Error splitting track {track_id}: {str(e)}",
-            )
-            raise
+def _upgrade_cover_url(url: str) -> str:
+    """Replace Deezer cover_small (56x56) with 200x200."""
+    if not url:
+        return url
+    return url.replace("/56x56", "/200x200", 1)
 
 
-def download_track(track_id, user_id=None):
-    # Download song
-    if (
-        not os.path.isfile(f"src/songs/{track_id}/song.mp3")
-        or os.path.getsize(f"src/songs/{track_id}/song.mp3") == 0
-    ):
-        print("Downloading Song")
-
-        update_queue_item_status(track_id, "downloading", 10)
-
-        try:
-            track_info = get_song_infos_from_deezer_website("track", track_id)
-            download_song(track_info, f"src/songs/{track_id}/song.mp3")
-
-            update_queue_item_status(track_id, "downloaded", 20)
-
-            # Log successful download to system status
-            save_status_check(
-                "Track Download",
-                STATUS_OK,
-                f"Successfully downloaded track {track_id}: {track_info.get('SNG_TITLE', 'Unknown')} by {track_info.get('ART_NAME', 'Unknown')}",
-            )
-
-            # Record usage only when an actual download happened
-            if user_id is not None:
-                db = get_db()
-                db.execute(
-                    "INSERT INTO usage_logs (user_id, track_id, action) VALUES (?, ?, ?)",
-                    (user_id, track_id, "download"),
-                )
-                db.commit()
-
-        except Exception as e:
-            # Update queue status on error
-            update_queue_item_status(track_id, "download_error", 0)
-
-            # Log error
-            save_status_check(
-                "Track Download",
-                STATUS_ERROR,
-                f"Error downloading track {track_id}: {str(e)}",
-            )
-            raise
-
-
-def de_add_track(track_id, user_id=None):
-    with current_app.app_context():
-        try:
-            os.makedirs(f"src/songs/{track_id}", exist_ok=True)
-
-            print("Processing Song", track_id)
-
-            update_queue_item_status(track_id, "starting", 0)
-
-            # Check if metadata exists
-            if (
-                not os.path.isfile(f"src/songs/{track_id}/metadata.json")
-                or os.path.getsize(f"src/songs/{track_id}/metadata.json") == 0
-            ):
-                print("Fetching Metadata")
-                track_info = get_song_infos_from_deezer_website("track", track_id)
-                metadata = {
-                    "title": track_info["SNG_TITLE"],  # type: ignore
-                    "artist": track_info["ART_NAME"],  # type: ignore
-                    "duration": track_info["DURATION"],  # type: ignore
-                    "cover": track_info["ALB_PICTURE"],  # type: ignore
-                    "album": track_info["ALB_TITLE"],  # type: ignore
-                    "track_id": track_id,
-                }
-                with open(f"src/songs/{track_id}/metadata.json", "w") as f:
-                    json.dump(metadata, f)
-
-                update_queue_item_status(track_id, "metadata_complete", 10)
-
-            download_track(track_id, user_id)
-
-            split_track(track_id)
-
-            process_lyrics(track_id)
-
-            print("Done")
-
-            update_queue_item_status(track_id, "complete", 100)
-
-            # Remove from processing queue when complete
-            remove_from_processing_queue(track_id)
-
-            # Log successful processing
-            save_status_check(
-                "Track Processing",
-                STATUS_OK,
-                f"Successfully processed track {track_id}",
-            )
-
-            return True
-
-        except Exception as e:
-            # Remove from processing queue on error
-            remove_from_processing_queue(track_id)
-
-            # Log error
-            save_status_check(
-                "Track Processing",
-                STATUS_ERROR,
-                f"Error processing track {track_id}: {str(e)}",
-            )
-            
-            # Track the failure in database
-            db = get_db()
-            db.execute(
-                """
-                INSERT INTO processing_failures (track_id, failure_count, error_message)
-                VALUES (?, 1, ?)
-                ON CONFLICT(track_id) DO UPDATE SET
-                    failure_count = failure_count + 1,
-                    last_failure = CURRENT_TIMESTAMP,
-                    error_message = ?
-                """,
-                (track_id, str(e), str(e))
-            )
-            db.commit()
-            
-            raise
-
-
-@track_bp.route("/search", methods=["GET"])
+@track_bp.route("/search")
 @login_required
 def search():
-    search_term = request.args.get("q")
-    if not search_term:
-        return jsonify({"error": "Missing search term"}), 400
+    q = request.args.get("q", "").strip()
+    if not q:
+        return jsonify([])
 
-    results = de_search_track(search_term)
+    # Check cache
+    cache_key = q.lower()
+    if cache_key in _search_cache:
+        cached_time, cached_results = _search_cache[cache_key]
+        if time.time() - cached_time < _SEARCH_CACHE_TTL:
+            _log_usage("search", q)
+            return jsonify(cached_results)
 
-    # Log the search
-    db = get_db()
-    db.execute(
-        "INSERT INTO usage_logs (user_id, track_id, action) VALUES (?, ?, ?)",
-        (session["user_id"], search_term, "search"),
-    )
-    db.commit()
+    from src.services.deezer import deezer_search, TYPE_TRACK
+    try:
+        results = deezer_search(q, TYPE_TRACK)
+    except Exception as e:
+        from src.utils.error_logging import log_api_error
+        log_api_error(str(e), traceback.format_exc(), source="/search")
+        return jsonify({"error": str(e)}), 500
 
+    # Upgrade cover images from 56x56 to 500x500
+    for r in results:
+        if "img_url" in r:
+            r["img_url"] = _upgrade_cover_url(r["img_url"])
+
+    # Store in cache
+    _search_cache[cache_key] = (time.time(), results)
+
+    _log_usage("search", q)
     return jsonify(results)
 
 
-@track_bp.route("/add", methods=["GET"])
+@track_bp.route("/add")
 @login_required
 def add():
-    track_id = request.args.get("id")
+    track_id = request.args.get("id", "").strip()
     if not track_id:
-        return jsonify({"error": "Missing track ID"}), 400
+        return jsonify({"error": "Track ID required"}), 400
 
-    # Check if track is already being processed
-    if is_track_in_queue(track_id):
-        return jsonify(
-            {
-                "success": False,
-                "message": "Track is already being processed",
-                "in_queue": True,
-            }
-        )
+    # Check if already in queue
+    status = get_processing_status(track_id)
+    if status and status["status"] not in (STATUS_COMPLETE, STATUS_ERROR):
+        return jsonify({"status": "already_processing", "progress": status["progress"]})
 
-    # Try to get existing metadata, or create minimal entry
-    metadata_path = f"src/songs/{track_id}/metadata.json"
-    metadata = {}
+    # Check if already complete (no credit cost for existing songs)
+    if is_track_complete(track_id):
+        meta = load_metadata(track_id)
+        if meta and "img_url" in meta:
+            meta["img_url"] = _upgrade_cover_url(meta["img_url"])
+        return jsonify({
+            "status": "ready",
+            "progress": 100,
+            "metadata": meta,
+        })
 
-    if os.path.isfile(metadata_path) and os.path.getsize(metadata_path) > 0:
-        try:
-            with open(metadata_path, "r") as f:
-                metadata = json.load(f)
-        except Exception as e:
-            print(f"Error loading metadata: {e}")
+    # Credit check for new processing (5 credits)
+    from src.utils.decorators import _get_current_user
+    from src.models.db import query_db as _qdb, execute_db as _edb
+    user = _get_current_user()
+    if user and not user["is_admin"]:
+        credits = user["credits"] or 0
+        if credits < 5:
+            return jsonify({"error": "insufficient_credits", "credits": credits, "required": 5}), 403
+        _edb("UPDATE users SET credits = credits - 5 WHERE id = ?", [user["id"]])
 
-    # Add to processing queue BEFORE starting the thread
-    add_to_processing_queue(track_id, metadata)
+    _log_usage("download", track_id)
 
-    # Capture user_id for usage logging in background thread
-    user_id = session["user_id"]
+    from src.utils.error_logging import log_event
+    username = user["username"] if user else "unknown"
+    log_event("info", "pipeline", f"Processing started for track {track_id}", user_id=user["id"] if user else None, username=username, track_id=str(track_id))
 
     # Start processing in background
-    def process_track(app, user_id):
-        with app.app_context():
-            try:
-                de_add_track(track_id, user_id)
-                # Status updates are stored in database instead of socket emit
-            except Exception as e:
-                print("Error processing track", e)
-                # Update error status in database
-                update_queue_item_status(track_id, "error", 0)
+    from flask import current_app
+    app = current_app._get_current_object()
 
-                # Log the processing error
-                save_status_check(
-                    "Track Processing",
-                    STATUS_ERROR,
-                    f"Failed to process track {track_id}: {str(e)}",
-                )
+    set_processing_status(track_id, STATUS_METADATA, PROGRESS[STATUS_METADATA], "Getting song info...")
 
-                # Track the failure in database
-                db = get_db()
-                db.execute(
-                    """
-                    INSERT INTO processing_failures (track_id, failure_count, error_message)
-                    VALUES (?, 1, ?)
-                    ON CONFLICT(track_id) DO UPDATE SET
-                        failure_count = failure_count + 1,
-                        last_failure = CURRENT_TIMESTAMP,
-                        error_message = ?
-                    """,
-                    (track_id, str(e), str(e))
-                )
-                db.commit()
+    t = threading.Thread(target=process_track, args=(track_id, app), daemon=True)
+    t.start()
 
-                # Ensure cleanup on error
-                remove_from_processing_queue(track_id)
+    # Return updated credits for non-admin users
+    updated_credits = None
+    if user and not user["is_admin"]:
+        refreshed = _qdb("SELECT credits FROM users WHERE id = ?", [user["id"]], one=True)
+        updated_credits = refreshed["credits"] if refreshed else 0
 
-    # Start processing in a new thread with app instance
-    thread = threading.Thread(
-        target=process_track, args=(current_app._get_current_object(), user_id)
-    )
-    thread.daemon = True  # Make thread daemon so it doesn't prevent app shutdown
-    thread.start()
-
-    return jsonify({"success": True})
+    resp = {"status": "processing", "progress": 0}
+    if updated_credits is not None:
+        resp["credits"] = updated_credits
+    return jsonify(resp)
 
 
-@track_bp.route("/play", methods=["POST"])
+@track_bp.route("/track/<track_id>")
 @login_required
-def log_play():
-    data = request.get_json(silent=True) or {}
-    track_id = data.get("track_id")
-    if not track_id:
-        return jsonify({"error": "Missing track ID"}), 400
+def track_info(track_id):
+    meta = load_metadata(track_id)
+    if not meta:
+        return jsonify({"error": "Track not found"}), 404
 
-    db = get_db()
-    db.execute(
-        "INSERT INTO usage_logs (user_id, track_id, action) VALUES (?, ?, ?)",
-        (session["user_id"], track_id, "play"),
-    )
-    db.commit()
+    status = get_processing_status(track_id)
+    complete = is_track_complete(track_id)
 
-    return jsonify({"success": True})
+    if "img_url" in meta:
+        meta["img_url"] = _upgrade_cover_url(meta["img_url"])
+
+    return jsonify({
+        "metadata": meta,
+        "complete": complete,
+        "status": status,
+    })
 
 
-@track_bp.route("/random", methods=["POST"])
+@track_bp.route("/track/<track_id>/lyrics")
 @login_required
-def random_song():
-    try:
-        data = request.get_json()
-        exclude_ids = data.get("exclude_ids", [])
-
-        # Get all processed songs
-        processed_songs = []
-        songs_dir = "src/songs"
-        for track_id in os.listdir(songs_dir):
-            if os.path.isfile(
-                os.path.join(songs_dir, track_id, "metadata.json")
-            ) and os.path.isfile(os.path.join(songs_dir, track_id, "lyrics.json")):
-                if track_id not in exclude_ids:
-                    processed_songs.append(track_id)
-
-        if not processed_songs:
-            return jsonify({"error": "No available songs"}), 404
-
-        track_id = random.choice(processed_songs)
-
-        with open(f"src/songs/{track_id}/metadata.json") as f:
-            metadata = json.load(f)
-
-        # Log the random play
-        db = get_db()
-        db.execute(
-            "INSERT INTO usage_logs (user_id, track_id, action) VALUES (?, ?, ?)",
-            (session["user_id"], track_id, "random_play"),
-        )
-        db.commit()
-
-        return jsonify({"track_id": track_id, "metadata": metadata})
-
-    except Exception as e:
-        # Log the error
-        save_status_check(
-            "Random Track Selection",
-            STATUS_ERROR,
-            f"Error selecting random track: {str(e)}",
-        )
-        return jsonify({"error": str(e)}), 500
+def track_lyrics(track_id):
+    lyrics = load_lyrics(track_id)
+    if not lyrics:
+        return jsonify({"error": "Lyrics not found"}), 404
+    return jsonify(lyrics)
 
 
-@track_bp.route("/track/library", methods=["GET"])
+@track_bp.route("/track/library")
 @login_required
-def get_library():
-    """Get all available songs from the library."""
-    songs_dir = Path("src/songs")
-    if not songs_dir.exists():
-        return jsonify({"songs": [], "count": 0}), 200
-
-    songs = []
-
-    # Get all song directories that have the required files
-    for song_dir in songs_dir.iterdir():
-        if not song_dir.is_dir():
-            continue
-
-        metadata_file = song_dir / "metadata.json"
-        lyrics_file = song_dir / "lyrics.json"
-
-        # Check if song has all required files
-        has_metadata = metadata_file.exists()
-        has_lyrics = lyrics_file.exists()
-        has_vocals = (song_dir / "vocals.mp3").exists()
-        has_no_vocals = (song_dir / "no_vocals.mp3").exists()
-
-        if has_metadata:
-            try:
-                with open(metadata_file, "r") as f:
-                    metadata = json.load(f)
-
-                # Calculate completion status
-                completion = 0
-                if has_metadata:
-                    completion += 25
-                if has_lyrics:
-                    completion += 25
-                if has_vocals:
-                    completion += 25
-                if has_no_vocals:
-                    completion += 25
-
-                songs.append(
-                    {
-                        "id": song_dir.name,
-                        "title": metadata.get("title", "Unknown"),
-                        "artist": metadata.get("artist", "Unknown"),
-                        "duration": metadata.get("duration", 0),
-                        "cover": metadata.get("cover", ""),
-                        "completion": completion,
-                        "ready": completion == 100,
-                    }
-                )
-            except Exception as e:
-                print(f"Error reading metadata for {song_dir.name}: {e}")
-                continue
-
-    # Sort by title
-    songs.sort(key=lambda x: x["title"].lower())
-
-    return jsonify({"songs": songs, "count": len(songs)})
+def library():
+    track_ids = get_all_track_ids()
+    tracks = []
+    for tid in track_ids:
+        meta = load_metadata(tid)
+        if meta:
+            tracks.append({
+                "id": tid,
+                "title": meta.get("title", "Unknown"),
+                "artist": meta.get("artist", "Unknown"),
+                "album": meta.get("album", ""),
+                "duration": meta.get("duration", 0),
+                "img_url": _upgrade_cover_url(meta.get("img_url", "")),
+                "complete": is_track_complete(tid),
+            })
+    return jsonify(tracks)
 
 
-@track_bp.route("/track/<track_id>", methods=["GET"])
-def get_track_metadata(track_id):
-    try:
-        metadata_path = Path(f"src/songs/{track_id}/metadata.json")
-        if metadata_path.exists():
-            with open(metadata_path) as f:
-                metadata = json.load(f)
-            return jsonify(metadata)
-
-        track_info = get_song_infos_from_deezer_website("track", track_id)
-        metadata = {
-            "title": track_info["SNG_TITLE"],  # type: ignore
-            "artist": track_info["ART_NAME"],  # type: ignore
-            "duration": track_info["DURATION"],  # type: ignore
-            "cover": track_info["ALB_PICTURE"],  # type: ignore
-            "album": track_info["ALB_TITLE"],  # type: ignore
-        }
-        return jsonify(metadata)
-    except Exception as e:
-        # Log the error
-        save_status_check(
-            "Track Metadata",
-            STATUS_ERROR,
-            f"Error retrieving metadata for track {track_id}: {str(e)}",
-        )
-        raise
-
-
-@track_bp.route("/track/status", methods=["GET"])
+@track_bp.route("/track/status")
 @login_required
-def get_track_status():
-    """Get the status of a track or all tracks in the processing queue"""
+def status():
     track_id = request.args.get("id")
-
-    # Get the processing queue
-    queue = get_processing_queue()
-
-    # If track_id is provided, return status for that track only
     if track_id:
-        if track_id in queue:
-            return jsonify(
-                {
-                    "track_id": track_id,
-                    "status": queue[track_id].get("status", "unknown"),
-                    "progress": queue[track_id].get("progress", 0),
-                    "metadata": queue[track_id].get("metadata", {}),
-                }
+        s = get_processing_status(track_id)
+        if not s:
+            if is_track_complete(track_id):
+                return jsonify({"status": STATUS_COMPLETE, "progress": 100})
+            return jsonify({"status": "unknown", "progress": 0})
+        return jsonify(s)
+    return jsonify(get_processing_status())
+
+
+@track_bp.route("/track/<track_id>/lyrics", methods=["PUT"])
+@login_required
+def update_lyrics(track_id):
+    """Update a single word in the lyrics."""
+    data = request.get_json()
+    seg_idx = data.get("segmentIndex")
+    word_idx = data.get("wordIndex")
+    new_word = data.get("word", "").strip()
+
+    if seg_idx is None or word_idx is None or not new_word:
+        return jsonify({"error": "segmentIndex, wordIndex, and word required"}), 400
+
+    lyrics = load_lyrics(track_id)
+    if not lyrics:
+        return jsonify({"error": "Lyrics not found"}), 404
+
+    segments = lyrics.get("segments", [])
+    if seg_idx < 0 or seg_idx >= len(segments):
+        return jsonify({"error": "Invalid segment index"}), 400
+
+    words = segments[seg_idx].get("words", [])
+    if word_idx < 0 or word_idx >= len(words):
+        return jsonify({"error": "Invalid word index"}), 400
+
+    words[word_idx]["word"] = new_word
+    save_lyrics(track_id, lyrics)
+    return jsonify({"success": True})
+
+
+@track_bp.route("/favorites", methods=["GET"])
+@login_required
+def get_favorites():
+    from src.models.db import query_db
+    user_id = session.get("user_id")
+    rows = query_db("SELECT track_id FROM favorites WHERE user_id = ?", [user_id])
+    return jsonify([r["track_id"] for r in rows])
+
+
+@track_bp.route("/favorites/<track_id>", methods=["POST"])
+@login_required
+def add_favorite(track_id):
+    from src.models.db import query_db, insert_db
+    user_id = session.get("user_id")
+    existing = query_db("SELECT id FROM favorites WHERE user_id = ? AND track_id = ?", [user_id, str(track_id)], one=True)
+    if not existing:
+        insert_db("INSERT INTO favorites (user_id, track_id) VALUES (?, ?)", [user_id, str(track_id)])
+    return jsonify({"success": True})
+
+
+@track_bp.route("/favorites/<track_id>", methods=["DELETE"])
+@login_required
+def remove_favorite(track_id):
+    from src.models.db import execute_db
+    user_id = session.get("user_id")
+    execute_db("DELETE FROM favorites WHERE user_id = ? AND track_id = ?", [user_id, str(track_id)])
+    return jsonify({"success": True})
+
+
+@track_bp.route("/play/<track_id>")
+@login_required
+def log_play(track_id):
+    _log_usage("play", track_id)
+    return jsonify({"success": True})
+
+
+@track_bp.route("/play/<track_id>/credit", methods=["POST"])
+@login_required
+def play_credit(track_id):
+    """Deduct 1 credit for playing a song (after 15s). Admins are exempt."""
+    from src.utils.decorators import _get_current_user
+    from src.models.db import query_db, execute_db
+    user = _get_current_user()
+    if not user:
+        return jsonify({"error": "Not authenticated"}), 401
+
+    if user["is_admin"]:
+        return jsonify({"success": True, "credits": user["credits"] or 0})
+
+    credits = user["credits"] or 0
+    if credits < 1:
+        return jsonify({"error": "insufficient_credits", "credits": credits}), 403
+
+    execute_db("UPDATE users SET credits = credits - 1 WHERE id = ?", [user["id"]])
+    refreshed = query_db("SELECT credits FROM users WHERE id = ?", [user["id"]], one=True)
+    updated = refreshed["credits"] if refreshed else 0
+    return jsonify({"success": True, "credits": updated})
+
+
+@track_bp.route("/random")
+@login_required
+def random_track():
+    track_ids = get_all_track_ids()
+    complete_ids = [tid for tid in track_ids if is_track_complete(tid)]
+    if not complete_ids:
+        return jsonify({"error": "No songs available"}), 404
+
+    exclude = request.args.get("exclude", "").split(",")
+    available = [tid for tid in complete_ids if tid not in exclude]
+    if not available:
+        available = complete_ids
+
+    chosen = random.choice(available)
+    meta = load_metadata(chosen)
+    if meta and "img_url" in meta:
+        meta["img_url"] = _upgrade_cover_url(meta["img_url"])
+    return jsonify({"id": chosen, "metadata": meta})
+
+
+# ─── Playlists ───
+
+@track_bp.route("/playlists", methods=["GET"])
+@login_required
+def list_playlists():
+    from src.models.db import query_db
+    user_id = session.get("user_id")
+    playlists = query_db("SELECT * FROM playlists WHERE user_id = ? ORDER BY created_at DESC", [user_id])
+    result = []
+    for p in playlists:
+        track_count = query_db("SELECT COUNT(*) as c FROM playlist_tracks WHERE playlist_id = ?", [p["id"]], one=True)
+        result.append({
+            "id": p["id"],
+            "name": p["name"],
+            "track_count": track_count["c"] if track_count else 0,
+            "created_at": p["created_at"],
+        })
+    return jsonify(result)
+
+
+@track_bp.route("/playlists", methods=["POST"])
+@login_required
+def create_playlist():
+    from src.models.db import insert_db
+    data = request.get_json()
+    name = data.get("name", "").strip()
+    if not name:
+        return jsonify({"error": "Name required"}), 400
+    user_id = session.get("user_id")
+    pid = insert_db("INSERT INTO playlists (user_id, name) VALUES (?, ?)", [user_id, name])
+    return jsonify({"id": pid, "name": name})
+
+
+@track_bp.route("/playlists/<int:playlist_id>", methods=["DELETE"])
+@login_required
+def delete_playlist(playlist_id):
+    from src.models.db import execute_db, query_db
+    user_id = session.get("user_id")
+    pl = query_db("SELECT id FROM playlists WHERE id = ? AND user_id = ?", [playlist_id, user_id], one=True)
+    if not pl:
+        return jsonify({"error": "Not found"}), 404
+    execute_db("DELETE FROM playlist_tracks WHERE playlist_id = ?", [playlist_id])
+    execute_db("DELETE FROM playlists WHERE id = ?", [playlist_id])
+    return jsonify({"success": True})
+
+
+@track_bp.route("/playlists/<int:playlist_id>/tracks", methods=["GET"])
+@login_required
+def get_playlist_tracks(playlist_id):
+    from src.models.db import query_db
+    user_id = session.get("user_id")
+    pl = query_db("SELECT id FROM playlists WHERE id = ? AND user_id = ?", [playlist_id, user_id], one=True)
+    if not pl:
+        return jsonify({"error": "Not found"}), 404
+    rows = query_db(
+        "SELECT track_id, position FROM playlist_tracks WHERE playlist_id = ? ORDER BY position",
+        [playlist_id],
+    )
+    tracks = []
+    for r in rows:
+        meta = load_metadata(r["track_id"])
+        if meta:
+            tracks.append({
+                "id": r["track_id"],
+                "title": meta.get("title", "Unknown"),
+                "artist": meta.get("artist", "Unknown"),
+                "album": meta.get("album", ""),
+                "duration": meta.get("duration", 0),
+                "img_url": _upgrade_cover_url(meta.get("img_url", "")),
+                "complete": is_track_complete(r["track_id"]),
+                "position": r["position"],
+            })
+    return jsonify(tracks)
+
+
+@track_bp.route("/playlists/<int:playlist_id>/tracks", methods=["POST"])
+@login_required
+def add_to_playlist(playlist_id):
+    from src.models.db import query_db, insert_db
+    user_id = session.get("user_id")
+    pl = query_db("SELECT id FROM playlists WHERE id = ? AND user_id = ?", [playlist_id, user_id], one=True)
+    if not pl:
+        return jsonify({"error": "Not found"}), 404
+    data = request.get_json()
+    track_id = data.get("track_id", "").strip()
+    if not track_id:
+        return jsonify({"error": "track_id required"}), 400
+    # Get next position
+    last = query_db("SELECT MAX(position) as p FROM playlist_tracks WHERE playlist_id = ?", [playlist_id], one=True)
+    pos = (last["p"] or 0) + 1
+    try:
+        insert_db("INSERT INTO playlist_tracks (playlist_id, track_id, position) VALUES (?, ?, ?)", [playlist_id, track_id, pos])
+    except Exception:
+        return jsonify({"error": "Track already in playlist"}), 409
+    return jsonify({"success": True})
+
+
+@track_bp.route("/playlists/<int:playlist_id>/tracks/<track_id>", methods=["DELETE"])
+@login_required
+def remove_from_playlist(playlist_id, track_id):
+    from src.models.db import execute_db, query_db
+    user_id = session.get("user_id")
+    pl = query_db("SELECT id FROM playlists WHERE id = ? AND user_id = ?", [playlist_id, user_id], one=True)
+    if not pl:
+        return jsonify({"error": "Not found"}), 404
+    execute_db("DELETE FROM playlist_tracks WHERE playlist_id = ? AND track_id = ?", [playlist_id, track_id])
+    return jsonify({"success": True})
+
+
+@track_bp.route("/credits")
+@login_required
+def get_credits():
+    from src.utils.decorators import _get_current_user
+    user = _get_current_user()
+    return jsonify({"credits": user["credits"] or 0 if user else 0})
+
+
+def process_track(track_id, app):
+    """6-stage processing pipeline. Runs in a background thread."""
+    from src.utils.error_logging import log_pipeline_error
+
+    stages = [
+        ("metadata", _stage_metadata),
+        ("download", _stage_download),
+        ("splitting", _stage_split),
+        ("lyrics", _stage_lyrics),
+        ("processing", _stage_process_lyrics),
+        ("complete", _stage_complete),
+    ]
+
+    with app.app_context():
+        for stage_name, stage_fn in stages:
+            try:
+                stage_fn(track_id)
+            except Exception as e:
+                tb = traceback.format_exc()
+                print(f"ERROR processing track {track_id} at stage '{stage_name}': {e}")
+                set_processing_status(track_id, STATUS_ERROR, 0, str(e))
+                _record_failure(track_id, stage_name, str(e))
+                log_pipeline_error(track_id, stage_name, str(e), tb)
+                return
+
+
+def _stage_metadata(track_id):
+    """Stage 1: Fetch metadata from Deezer (0-10%)"""
+    if track_file_exists(track_id, "metadata"):
+        set_processing_status(track_id, STATUS_METADATA, PROGRESS[STATUS_METADATA], "Song info ready")
+        return
+
+    set_processing_status(track_id, STATUS_METADATA, 2, "Getting song info...")
+
+    from src.services.deezer import get_song_infos_from_deezer_website, TYPE_TRACK, get_picture_link
+    song = get_song_infos_from_deezer_website(TYPE_TRACK, track_id)
+
+    metadata = {
+        "id": track_id,
+        "title": song.get("SNG_TITLE", "Unknown"),
+        "artist": song.get("ART_NAME", "Unknown"),
+        "album": song.get("ALB_TITLE", "Unknown"),
+        "duration": int(song.get("DURATION", 0)),
+        "img_url": get_picture_link(song.get("ALB_PICTURE", "")),
+        "deezer_data": song,
+    }
+    save_metadata(track_id, metadata)
+    set_processing_status(track_id, STATUS_METADATA, PROGRESS[STATUS_METADATA], "Song info ready")
+
+
+def _stage_download(track_id):
+    """Stage 2: Download + decrypt from Deezer (10-20%)"""
+    if track_file_exists(track_id, "song"):
+        set_processing_status(track_id, STATUS_DOWNLOADING, PROGRESS[STATUS_DOWNLOADING], "Song downloaded")
+        return
+
+    set_processing_status(track_id, STATUS_DOWNLOADING, 12, "Downloading song...")
+
+    meta = load_metadata(track_id)
+    song_data = meta.get("deezer_data", {})
+    output_path = get_track_file_path(track_id, "song")
+
+    from src.services.deezer import download_song
+    download_song(song_data, output_path)
+
+    set_processing_status(track_id, STATUS_DOWNLOADING, PROGRESS[STATUS_DOWNLOADING], "Song downloaded")
+
+
+def _stage_split(track_id):
+    """Stage 3: Split vocals/instrumental via Demucs on Replicate (20-50%)"""
+    if track_file_exists(track_id, "vocals") and track_file_exists(track_id, "no_vocals"):
+        set_processing_status(track_id, STATUS_SPLITTING, PROGRESS[STATUS_SPLITTING], "Vocals separated")
+        return
+
+    set_processing_status(track_id, STATUS_SPLITTING, 25, "Preparing audio...")
+
+    from src.services.lyrics import upload_audio_to_replicate, split_audio_demucs
+
+    song_path = get_track_file_path(track_id, "song")
+    audio_url = upload_audio_to_replicate(song_path)
+
+    set_processing_status(track_id, STATUS_SPLITTING, 30, "Separating vocals...")
+
+    output = split_audio_demucs(audio_url)
+
+    set_processing_status(track_id, STATUS_SPLITTING, 45, "Saving vocal tracks...")
+
+    print(f"Demucs output type: {type(output)}, repr: {repr(output)}")
+
+    # Demucs with stem="vocals" returns a FileOutput or dict with vocals/other URLs
+    vocals_url = None
+    no_vocals_url = None
+
+    if isinstance(output, dict):
+        vocals_url = str(output.get("vocals", ""))
+        no_vocals_url = str(output.get("other", "") or output.get("no_vocals", "") or output.get("accompaniment", ""))
+    elif isinstance(output, (list, tuple)) and len(output) >= 1:
+        # Some Replicate models return a list of URLs
+        vocals_url = str(output[0])
+        if len(output) >= 2:
+            no_vocals_url = str(output[1])
+    elif hasattr(output, 'vocals'):
+        vocals_url = str(output.vocals)
+        no_vocals_url = str(getattr(output, 'other', '') or getattr(output, 'no_vocals', ''))
+    elif hasattr(output, 'url'):
+        # FileOutput with .url attribute
+        vocals_url = str(output.url)
+    else:
+        # Single output - it's the vocals
+        vocals_url = str(output)
+
+    print(f"Demucs parsed: vocals_url={vocals_url!r}, no_vocals_url={no_vocals_url!r}")
+
+    if vocals_url:
+        _download_file(vocals_url, get_track_file_path(track_id, "vocals"))
+        print(f"Downloaded vocals to {get_track_file_path(track_id, 'vocals')}")
+    else:
+        print(f"WARNING: No vocals URL extracted from Demucs output")
+
+    if no_vocals_url:
+        _download_file(no_vocals_url, get_track_file_path(track_id, "no_vocals"))
+        print(f"Downloaded no_vocals to {get_track_file_path(track_id, 'no_vocals')}")
+    else:
+        print(f"WARNING: No no_vocals URL from Demucs (stem=vocals mode). Generating from original...")
+        # If Demucs only returned vocals, we don't have the instrumental.
+        # This can happen with stem="vocals" on some Demucs versions.
+
+    # Compress split audio from 320kbps to 128kbps
+    set_processing_status(track_id, STATUS_SPLITTING, 48, "Compressing audio...")
+    for file_key in ("vocals", "no_vocals"):
+        path = get_track_file_path(track_id, file_key)
+        if os.path.exists(path):
+            try:
+                compress_audio_file(path)
+                print(f"Compressed {file_key} for track {track_id}")
+            except Exception as e:
+                print(f"WARNING: Failed to compress {file_key} for track {track_id}: {e}")
+
+    set_processing_status(track_id, STATUS_SPLITTING, PROGRESS[STATUS_SPLITTING], "Vocals separated")
+
+
+def _stage_lyrics(track_id):
+    """Stage 4: Extract lyrics via WhisperX on Replicate (50-85%)"""
+    if track_file_exists(track_id, "lyrics_raw"):
+        set_processing_status(track_id, STATUS_LYRICS, PROGRESS[STATUS_LYRICS], "Lyrics extracted")
+        return
+
+    set_processing_status(track_id, STATUS_LYRICS, 55, "Analyzing vocals...")
+
+    from src.services.lyrics import upload_audio_to_replicate, extract_lyrics_whisperx
+
+    vocals_path = get_track_file_path(track_id, "vocals")
+    audio_url = upload_audio_to_replicate(vocals_path)
+
+    set_processing_status(track_id, STATUS_LYRICS, 60, "Extracting lyrics...")
+
+    output = extract_lyrics_whisperx(audio_url)
+
+    set_processing_status(track_id, STATUS_LYRICS, 80, "Saving lyrics...")
+
+    # Save raw output
+    if isinstance(output, dict):
+        raw_data = output
+    else:
+        raw_data = json.loads(str(output)) if not isinstance(output, (list, dict)) else output
+
+    save_lyrics_raw(track_id, raw_data)
+    set_processing_status(track_id, STATUS_LYRICS, PROGRESS[STATUS_LYRICS], "Lyrics extracted")
+
+
+def _stage_process_lyrics(track_id):
+    """Stage 5: Split lyrics into karaoke lines (85-90%)"""
+    if track_file_exists(track_id, "lyrics"):
+        set_processing_status(track_id, STATUS_PROCESSING, PROGRESS[STATUS_PROCESSING], "Lyrics synced")
+        return
+
+    set_processing_status(track_id, STATUS_PROCESSING, 86, "Fetching reference lyrics...")
+
+    from src.utils.helpers import postprocess_lyrics_heuristic, correct_lyrics_with_genius
+
+    # Load raw lyrics
+    raw_path = get_track_file_path(track_id, "lyrics_raw")
+    with open(raw_path, "r") as f:
+        raw_data = json.load(f)
+
+    # Correct WhisperX transcription with Genius reference lyrics
+    genius_line_breaks = []
+    meta = load_metadata(track_id)
+    if meta:
+        title = meta.get("title", "")
+        artist = meta.get("artist", "")
+        if title and artist:
+            try:
+                from src.services.genius import fetch_lyrics
+                genius_lines = fetch_lyrics(title, artist)
+                if genius_lines:
+                    segments = raw_data.get("segments", raw_data if isinstance(raw_data, list) else [])
+                    corrected, genius_line_breaks = correct_lyrics_with_genius(segments, genius_lines)
+                    raw_data["segments"] = corrected
+                    # Save corrected raw data back
+                    save_lyrics_raw(track_id, raw_data)
+            except Exception as e:
+                print(f"WARNING: Genius lyrics correction failed for {track_id}: {e}")
+
+    set_processing_status(track_id, STATUS_PROCESSING, 89, "Processing lyrics...")
+
+    # Split into karaoke lines using Genius line breaks or heuristic fallback
+    processed = postprocess_lyrics_heuristic(raw_data, genius_line_breaks=genius_line_breaks)
+
+    save_lyrics(track_id, processed)
+    set_processing_status(track_id, STATUS_PROCESSING, PROGRESS[STATUS_PROCESSING], "Lyrics synced")
+
+
+def _stage_complete(track_id):
+    """Stage 6: Mark as complete (100%)"""
+    from src.utils.error_logging import log_event
+    log_event("info", "pipeline", f"Processing complete for track {track_id}", track_id=str(track_id))
+    set_processing_status(track_id, STATUS_COMPLETE, 100, "Ready to play!")
+
+    # Clean up deezer_data from metadata (it's large and no longer needed)
+    meta = load_metadata(track_id)
+    if meta and "deezer_data" in meta:
+        del meta["deezer_data"]
+        save_metadata(track_id, meta)
+
+
+def _download_file(url, output_path):
+    """Download a file from URL to local path."""
+    resp = requests.get(str(url), stream=True, timeout=300)
+    resp.raise_for_status()
+    with open(output_path, "wb") as f:
+        for chunk in resp.iter_content(chunk_size=8192):
+            f.write(chunk)
+
+
+def _record_failure(track_id, stage, error_msg):
+    """Record a processing failure in the database."""
+    try:
+        from src.models.db import query_db, execute_db, insert_db
+        existing = query_db(
+            "SELECT * FROM processing_failures WHERE track_id = ?",
+            [str(track_id)],
+            one=True,
+        )
+        if existing:
+            execute_db(
+                "UPDATE processing_failures SET failure_count = failure_count + 1, stage = ?, error_message = ?, updated_at = ? WHERE track_id = ?",
+                [stage, error_msg, datetime.utcnow().isoformat(), str(track_id)],
             )
         else:
-            # Check if the track exists but is no longer in the queue (completed)
-            if os.path.exists(f"src/songs/{track_id}/lyrics.json"):
-                return jsonify(
-                    {
-                        "track_id": track_id,
-                        "status": "complete",
-                        "progress": 100,
-                        "metadata": {},
-                    }
-                )
-            return jsonify({"error": f"Track {track_id} not found"}), 404
+            insert_db(
+                "INSERT INTO processing_failures (track_id, stage, error_message) VALUES (?, ?, ?)",
+                [str(track_id), stage, error_msg],
+            )
+    except Exception as e:
+        print(f"WARNING: Could not record failure: {e}")
 
-    # Otherwise, return status for all tracks in the queue
-    result = []
-    for tid, info in queue.items():
-        result.append(
-            {
-                "track_id": tid,
-                "status": info.get("status", "unknown"),
-                "progress": info.get("progress", 0),
-                "metadata": info.get("metadata", {}),
-            }
+
+def _log_usage(action, detail=""):
+    """Log a usage event."""
+    try:
+        from src.models.db import insert_db
+        user_id = session.get("user_id")
+        from src.utils.decorators import _get_current_user
+        user = _get_current_user()
+        username = user["username"] if user else "unknown"
+        insert_db(
+            "INSERT INTO usage_logs (user_id, username, action, detail) VALUES (?, ?, ?, ?)",
+            [user_id, username, action, detail],
         )
-
-    return jsonify({"tracks": result})
+    except Exception:
+        pass

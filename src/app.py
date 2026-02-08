@@ -1,132 +1,92 @@
-# src/app.py
-from flask import Flask, session
-from flask_cors import CORS
 import os
 from datetime import timedelta
-from .models.db import init_app, update_last_online
-from .services.deezer import init_deezer_session, test_deezer_login
+from flask import Flask
+from flask_cors import CORS
+from dotenv import load_dotenv
 
-# Import and register blueprints
-from .routes.auth import auth_bp
-from .routes.admin import admin_bp
-from .routes.track import track_bp
-from .routes.static import static_bp
-
-# Initialize Flask app
-app = Flask(__name__)
-app.secret_key = os.urandom(24)
-app.permanent_session_lifetime = timedelta(days=30)
-
-# Setup CORS
-CORS(app, supports_credentials=True)
-
-# Initialize database
-with app.app_context():
-    init_app(app)
-
-# Initialize Deezer session
-print("Starting Deezer")
-init_deezer_session()
-test_deezer_login()
-
-app.register_blueprint(auth_bp)
-app.register_blueprint(admin_bp)
-app.register_blueprint(track_bp)
-app.register_blueprint(static_bp)
+load_dotenv()
 
 
-# Before request handler
-@app.before_request
-def before_request():
-    """Update user's last online timestamp before each request."""
-    if "user_id" in session:
-        update_last_online(session["user_id"])
+def create_app():
+    app = Flask(__name__, static_folder=None)
+    app.secret_key = os.getenv("SECRET_KEY", os.urandom(32).hex())
+    app.permanent_session_lifetime = timedelta(days=30)
+
+    CORS(app)
+
+    from src.models.db import init_db, close_db
+    init_db()
+    app.teardown_appcontext(close_db)
+
+    from src.routes.auth import auth_bp
+    from src.routes.track import track_bp
+    from src.routes.static import static_bp
+    from src.routes.admin import admin_bp
+
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(track_bp)
+    app.register_blueprint(admin_bp)
+    app.register_blueprint(static_bp)
+
+    @app.errorhandler(500)
+    def handle_500(e):
+        import traceback
+        from src.utils.error_logging import log_api_error
+        log_api_error(str(e), traceback.format_exc())
+        return {"error": "Internal server error"}, 500
+
+    with app.app_context():
+        _startup_hooks(app)
+
+    return app
 
 
-# Auto-reprocess unfinished tracks on startup
-def auto_reprocess_unfinished_tracks():
-    """Automatically reprocess all unfinished tracks on app startup"""
+def _startup_hooks(app):
+    from src.services.deezer import init_deezer_session, test_deezer_login
     import threading
-    import time
-    import json
-    from .utils.status_checks import (
-        get_unfinished_songs,
-        is_track_in_queue,
-        add_to_processing_queue,
-        update_queue_item_status,
-    )
-    from .routes.track import de_add_track
-    
-    def reprocess_worker():
-        # Wait a bit for the app to fully initialize
+
+    _ensure_admin_account()
+
+    from src.utils.error_logging import log_event
+    log_event("info", "system", "Application started")
+
+    try:
+        init_deezer_session()
+        test_deezer_login()
+    except Exception as e:
+        print(f"WARNING: Deezer init failed: {e}")
+        log_event("warning", "system", f"Deezer init failed: {e}")
+
+    # Auto-reprocess unfinished tracks after a delay
+    def delayed_reprocess():
+        import time
         time.sleep(5)
-        
         with app.app_context():
-            try:
-                print("🔄 Checking for unfinished tracks to reprocess...")
-                unfinished_songs = get_unfinished_songs()
-                
-                if not unfinished_songs:
-                    print("✅ No unfinished tracks found")
-                    return
-                
-                print(f"📋 Found {len(unfinished_songs)} unfinished track(s)")
-                
-                for song in unfinished_songs:
-                    track_id = song["track_id"]
-                    
-                    # Skip if already in queue
-                    if is_track_in_queue(track_id):
-                        print(f"⏭️  Skipping {track_id} - already in queue")
-                        continue
-                    
-                    # Get metadata if available
-                    metadata_path = f"src/songs/{track_id}/metadata.json"
-                    metadata = {}
-                    
-                    if os.path.isfile(metadata_path) and os.path.getsize(metadata_path) > 0:
-                        try:
-                            with open(metadata_path, "r") as f:
-                                metadata = json.load(f)
-                        except Exception as e:
-                            print(f"⚠️  Error loading metadata for {track_id}: {e}")
-                    
-                    # Add to processing queue
-                    add_to_processing_queue(track_id, metadata)
-                    
-                    print(f"🔄 Auto-reprocessing: {metadata.get('title', track_id)} - {metadata.get('artist', 'Unknown')}")
-                    
-                    # Start reprocessing in a separate thread
-                    def process_track(track_id):
-                        with app.app_context():
-                            try:
-                                de_add_track(track_id)
-                                update_queue_item_status(track_id, "complete", 100)
-                                print(f"✅ Completed reprocessing: {track_id}")
-                            except Exception as e:
-                                print(f"❌ Error reprocessing track {track_id}: {e}")
-                                update_queue_item_status(track_id, "error", 0)
-                    
-                    thread = threading.Thread(
-                        target=process_track,
-                        args=(track_id,),
-                        daemon=True
-                    )
-                    thread.start()
-                    
-                    # Small delay between starting tracks to avoid overwhelming the system
-                    time.sleep(2)
-                
-                print(f"✅ Auto-reprocessing initiated for {len(unfinished_songs)} track(s)")
-                
-            except Exception as e:
-                print(f"❌ Error in auto-reprocess: {e}")
-    
-    # Start the reprocessing worker in a background thread
-    thread = threading.Thread(target=reprocess_worker, daemon=True)
-    thread.start()
+            from src.utils.status_checks import reprocess_unfinished_tracks
+            reprocess_unfinished_tracks(app)
+
+    t = threading.Thread(target=delayed_reprocess, daemon=True)
+    t.start()
 
 
-# Start auto-reprocessing on app initialization
-print("🚀 Starting auto-reprocess worker...")
-auto_reprocess_unfinished_tracks()
+def _ensure_admin_account():
+    """Create the admin account from ADMIN_USERNAME/ADMIN_PASSWORD env vars if it doesn't exist."""
+    admin_user = os.getenv("ADMIN_USERNAME", "").strip()
+    admin_pass = os.getenv("ADMIN_PASSWORD", "").strip()
+    if not admin_user or not admin_pass:
+        return
+
+    from src.models.db import query_db, insert_db
+    from werkzeug.security import generate_password_hash
+
+    existing = query_db("SELECT id FROM users WHERE username = ?", [admin_user], one=True)
+    if existing:
+        return
+
+    display_name = os.getenv("ADMIN_DISPLAY_NAME", "Logge").strip()
+    password_hash = generate_password_hash(admin_pass)
+    insert_db(
+        "INSERT INTO users (username, display_name, password_hash, is_admin, is_approved) VALUES (?, ?, ?, 1, 1)",
+        [admin_user, display_name, password_hash],
+    )
+    print(f"Admin account '{admin_user}' created from environment variables.")

@@ -1,0 +1,115 @@
+.wrapper {
+  position: relative;
+}
+
+.trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  outline: none;
+  cursor: pointer;
+  transition: border-color var(--transition);
+  min-width: 0;
+  user-select: none;
+}
+
+.trigger:focus,
+.triggerOpen {
+  border-color: var(--primary);
+}
+
+.triggerLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chevron {
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  transition: transform var(--transition);
+  color: var(--text-muted);
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+/* ─── Dropdown Panel ─── */
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 50;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.dropdownOpen {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.option {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+  outline: none;
+}
+
+.option:hover,
+.optionFocused {
+  background: var(--surface-hover);
+}
+
+.optionSelected {
+  background: var(--primary-glow);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.optionSelected:hover,
+.optionSelected.optionFocused {
+  background: var(--primary-glow);
+}
+
+/* ─── Large Screens ─── */
+
+@media (min-width: 1440px) {
+  .trigger {
+    padding: 10px 16px;
+    font-size: 0.9rem;
+  }
+
+  .option {
+    padding: 10px 16px;
+    font-size: 0.9rem;
+  }
+}

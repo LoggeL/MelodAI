@@ -1,0 +1,205 @@
+.container {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-2xl) var(--spacing-xl);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-xl);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.header, .emptyHeader {
+  text-align: center;
+  padding-top: var(--spacing-lg);
+}
+
+.emptyHeader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding-top: var(--spacing-2xl);
+}
+
+.emptyLogo {
+  height: 48px;
+  width: auto;
+  opacity: 0.2;
+}
+
+.title {
+  font-family: var(--font-heading);
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 0.02em;
+}
+
+.subtitle {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: var(--spacing-md);
+  width: 100%;
+  max-width: 720px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: var(--radius);
+  transition: all 0.25s var(--ease-out);
+  border: 1px solid transparent;
+  animation: cardIn 0.4s var(--ease-out) both;
+}
+
+@keyframes cardIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.card:hover {
+  background: var(--surface-hover);
+  border-color: var(--border);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.artWrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.art {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.3s var(--ease-out);
+}
+
+.card:hover .art {
+  transform: scale(1.05);
+}
+
+.playOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.25s var(--ease-out);
+  color: #fff;
+  font-size: 1.2rem;
+}
+
+.card:hover .playOverlay {
+  opacity: 1;
+}
+
+.cardTitle {
+  font-weight: 600;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cardArtist {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.branding {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-md) 0;
+  opacity: 0.12;
+  transition: opacity 0.3s ease;
+}
+
+.branding:hover {
+  opacity: 0.3;
+}
+
+.brandingLogo {
+  height: 24px;
+  width: auto;
+}
+
+/* Skeletons */
+.skeletonCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+}
+
+.skeletonArt {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(90deg, var(--surface) 25%, var(--surface-hover) 50%, var(--surface) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.8s infinite ease-in-out;
+}
+
+.skeletonTitle {
+  height: 12px;
+  width: 75%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--surface) 25%, var(--surface-hover) 50%, var(--surface) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.8s infinite ease-in-out;
+}
+
+.skeletonArtist {
+  height: 10px;
+  width: 50%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--surface) 25%, var(--surface-hover) 50%, var(--surface) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.8s infinite ease-in-out;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Large screens / projector / beamer */
+@media (min-width: 1440px) {
+  .grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--spacing-lg); max-width: 900px; }
+  .title { font-size: 1.8rem; }
+  .subtitle { font-size: 1rem; }
+  .cardTitle { font-size: 0.95rem; }
+  .cardArtist { font-size: 0.82rem; }
+  .playOverlay { font-size: 1.5rem; }
+  .brandingLogo { height: 32px; }
+  .emptyLogo { height: 64px; }
+}

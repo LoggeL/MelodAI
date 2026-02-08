@@ -1,0 +1,298 @@
+.controls {
+  padding: 6px 10px;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.filterInput {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  outline: none;
+  transition: all var(--transition);
+  min-width: 0;
+}
+
+.filterInput:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-glow);
+  background: var(--bg-secondary);
+}
+
+.filterInput::placeholder { color: var(--text-muted); }
+
+.iconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.65rem;
+  cursor: pointer;
+  transition: all var(--transition);
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.iconBtn:hover {
+  background: var(--surface-hover);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.iconBtnActive {
+  color: var(--primary) !important;
+  border-color: var(--primary) !important;
+  background: var(--primary-glow) !important;
+}
+
+.iconBtnSmall {
+  width: 24px;
+  height: 24px;
+  font-size: 0.58rem;
+  border-radius: 4px;
+}
+
+/* Favorite button */
+.addBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.65rem;
+  cursor: pointer;
+  transition: all var(--transition);
+  flex-shrink: 0;
+  padding: 0;
+  opacity: 0;
+}
+
+.item:hover .addBtn { opacity: 1; }
+.favActive { opacity: 1 !important; color: var(--primary) !important; }
+
+.addBtn:hover {
+  color: var(--primary);
+  background: var(--primary-glow);
+}
+
+.grid {
+  padding: 2px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  cursor: default;
+  transition: all var(--transition);
+  border: 1px solid transparent;
+}
+
+.item:hover {
+  background: var(--surface-hover);
+}
+
+/* Thumbnail wrapper with hover overlay */
+.thumbWrap {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  cursor: pointer;
+  border-radius: 5px;
+  overflow: hidden;
+  border: 2px solid transparent;
+  transition: border-color var(--transition);
+}
+
+/* Favorited: red border */
+.thumbFav {
+  border-color: var(--primary);
+}
+
+/* Dark overlay on hover */
+.thumbOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity var(--transition);
+  color: #fff;
+  font-size: 0.75rem;
+}
+
+.thumbWrap:hover .thumbOverlay {
+  opacity: 1;
+}
+
+/* Heart shown when already favorited (always visible) */
+.thumbHeartBadge {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.thumbHeartBadge .heartIcon {
+  font-size: 0.6rem;
+  color: var(--primary);
+  filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.8));
+}
+
+.thumb {
+  width: 100%;
+  height: 100%;
+  border-radius: 3px;
+  object-fit: cover;
+  display: block;
+}
+
+.info { flex: 1; min-width: 0; overflow: hidden; }
+
+.title {
+  font-weight: 600;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.artist {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.complete { background: var(--success); box-shadow: 0 0 5px rgba(16, 185, 129, 0.4); }
+.incomplete { background: var(--warning); }
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-md);
+  color: var(--text-muted);
+  padding: var(--spacing-2xl) var(--spacing-md);
+  text-align: center;
+}
+
+.emptyIcon { font-size: 2rem; opacity: 0.15; }
+.emptyState h3 { font-size: 0.9rem; color: var(--text-secondary); font-weight: 500; }
+.emptyState p { font-size: 0.78rem; opacity: 0.5; }
+
+.searchDeezerBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--primary);
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.searchDeezerBtn:hover {
+  background: var(--primary);
+  color: #fff;
+}
+
+/* Loading skeletons */
+.skeletonItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+}
+
+.skeletonThumb {
+  width: 36px;
+  height: 36px;
+  border-radius: 5px;
+  background: linear-gradient(90deg, var(--surface) 25%, var(--surface-hover) 50%, var(--surface) 75%);
+  background-size: 200% 100%;
+  animation: libShimmer 1.8s infinite ease-in-out;
+  flex-shrink: 0;
+}
+
+.skeletonInfo {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.skeletonTitle {
+  height: 11px;
+  width: 70%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--surface) 25%, var(--surface-hover) 50%, var(--surface) 75%);
+  background-size: 200% 100%;
+  animation: libShimmer 1.8s infinite ease-in-out;
+}
+
+.skeletonArtist {
+  height: 9px;
+  width: 45%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--surface) 25%, var(--surface-hover) 50%, var(--surface) 75%);
+  background-size: 200% 100%;
+  animation: libShimmer 1.8s infinite ease-in-out;
+}
+
+.skeletonItem:nth-child(odd) .skeletonTitle { width: 65%; }
+.skeletonItem:nth-child(3n) .skeletonTitle { width: 80%; }
+.skeletonItem:nth-child(odd) .skeletonArtist { width: 40%; }
+.skeletonItem:nth-child(3n) .skeletonArtist { width: 55%; }
+
+.skeletonDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--surface-hover);
+  flex-shrink: 0;
+}
+
+@keyframes libShimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}

@@ -1,0 +1,226 @@
+.page {
+  overflow: auto;
+  height: 100vh;
+}
+
+/* Gradient accent line at the top of the page */
+.accentLine {
+  height: 3px;
+  background: linear-gradient(90deg, #d90429, #8b0000, #d90429);
+  background-size: 200% 100%;
+  animation: shimmer 3s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.about {
+  max-width: 700px;
+  margin: 0 auto;
+  padding: var(--spacing-2xl) var(--spacing-lg);
+}
+
+.header {
+  text-align: center;
+  margin-bottom: var(--spacing-2xl);
+}
+
+.header img {
+  display: block;
+  margin: 0 auto 16px;
+  width: 80px;
+  height: 80px;
+}
+
+.titleRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: center;
+}
+
+.headerTitle {
+  font-size: 2.5rem;
+  margin-bottom: 0;
+  background: var(--gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.version {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 10px;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #d90429;
+  border: 1.5px solid #d90429;
+  border-radius: var(--radius-pill);
+  line-height: 1.6;
+  position: relative;
+  top: -4px;
+}
+
+.header p { color: var(--text-secondary); font-size: 1.1rem; margin-top: 8px; }
+
+.section { margin-bottom: var(--spacing-xl); }
+
+.section h2 {
+  font-size: 1.3rem;
+  margin-bottom: var(--spacing-sm);
+  padding-bottom: var(--spacing-xs);
+  border-bottom: 2px solid var(--primary);
+  display: inline-block;
+}
+
+.section p,
+.section li {
+  color: var(--text-secondary);
+  line-height: 1.7;
+  font-size: 0.95rem;
+}
+
+.section ul { padding-left: 24px; margin-top: 8px; }
+.section li { margin-bottom: 6px; }
+
+/* UI Mockup SVG illustration */
+.uiMockup {
+  margin: var(--spacing-lg) 0;
+  display: flex;
+  justify-content: center;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.uiMockupSvg {
+  width: 100%;
+  max-width: 600px;
+  height: auto;
+  display: block;
+}
+
+/* Technology grid */
+.techGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+}
+
+.techItem {
+  padding: 14px 12px;
+  border: 2px solid var(--border);
+  border-radius: 0;
+  text-align: center;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  transition: all var(--transition);
+  position: relative;
+  cursor: default;
+}
+
+/* Top accent bar on hover */
+.techItem::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #d90429, #8b0000);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--transition);
+}
+
+.techItem:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(217, 4, 41, 0.15);
+}
+
+.techItem:hover::before {
+  transform: scaleX(1);
+}
+
+/* Branding section */
+.branding {
+  text-align: center;
+  margin-top: var(--spacing-xl);
+  margin-bottom: var(--spacing-md);
+  padding: var(--spacing-lg) 0;
+  border-top: 1px solid var(--border);
+}
+
+.brandingText {
+  display: block;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-secondary);
+  opacity: 0.5;
+  margin-bottom: 10px;
+}
+
+.brandingRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.brandingLogo {
+  width: 32px;
+  height: 32px;
+  display: block;
+}
+
+.brandingName {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 1.2rem;
+  letter-spacing: 0.04em;
+  background: linear-gradient(135deg, #d90429, #8b0000);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.back {
+  text-align: center;
+  margin-top: var(--spacing-lg);
+}
+
+.backBtn {
+  display: inline-flex;
+  padding: 12px 32px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--gradient);
+  color: #fff;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all var(--transition);
+  box-shadow: 0 4px 15px rgba(217,4,41,0.3);
+}
+
+.backBtn:hover {
+  transform: translateY(-2px);
+  color: #fff;
+}

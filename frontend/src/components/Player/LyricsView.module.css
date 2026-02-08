@@ -1,0 +1,274 @@
+.container {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-2xl) var(--spacing-lg);
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+  mask-image: linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%);
+}
+
+/* Confidence warning */
+.confidenceWarning {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-md);
+  margin: 0 auto var(--spacing-md);
+  max-width: 520px;
+  background: rgba(255, 160, 0, 0.1);
+  border: 1px solid rgba(255, 160, 0, 0.25);
+  border-radius: var(--radius-sm);
+  color: #ffa000;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+}
+
+.confidenceWarning button {
+  background: none;
+  border: none;
+  color: #ffa000;
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0 2px;
+  margin-left: var(--spacing-xs);
+  opacity: 0.6;
+  transition: opacity 0.15s ease;
+  line-height: 1;
+}
+
+.confidenceWarning button:hover {
+  opacity: 1;
+}
+
+/* Empty state */
+.emptyState {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-lg);
+  color: var(--text-muted);
+  padding: var(--spacing-2xl);
+  text-align: center;
+  min-height: 400px;
+}
+
+.emptyIcon {
+  font-size: 4.5rem;
+  opacity: 0.08;
+  filter: grayscale(1);
+}
+
+.emptyState h3 {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.06em;
+}
+
+.emptyState p {
+  font-size: 0.88rem;
+  max-width: 280px;
+  line-height: 1.7;
+  opacity: 0.5;
+}
+
+/* Loading skeleton */
+.skeleton {
+  padding: var(--spacing-2xl);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.skeletonLine {
+  height: 22px;
+  background: linear-gradient(90deg, var(--surface) 25%, var(--surface-hover) 50%, var(--surface) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.8s infinite ease-in-out;
+  border-radius: var(--radius-xs);
+}
+
+.skeletonLine:nth-child(odd) { width: 55%; }
+.skeletonLine:nth-child(even) { width: 38%; }
+.skeletonLine:nth-child(3n) { width: 48%; }
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Lyrics lines — the spotlight effect */
+.line {
+  padding: 8px 24px;
+  margin: 1px auto;
+  max-width: 760px;
+  width: 100%;
+  text-align: center;
+  border-radius: var(--radius-sm);
+  border-left: 3px solid transparent;
+  transition:
+    opacity 0.5s var(--ease-out),
+    transform 0.5s var(--ease-spring),
+    filter 0.5s var(--ease-out),
+    background 0.3s ease;
+  cursor: pointer;
+  opacity: 0.15;
+  transform: scale(0.92) translateY(0);
+  transform-origin: center;
+  filter: blur(0.5px);
+}
+
+.lineActive {
+  opacity: 1;
+  transform: scale(1);
+  filter: blur(0);
+  background: var(--primary-glow);
+  padding: 12px 24px;
+  margin: 4px auto;
+}
+
+.lineNear {
+  opacity: 0.45;
+  transform: scale(0.96);
+  filter: blur(0);
+}
+
+.lineNext {
+  opacity: 0.65;
+  transform: scale(0.98);
+  filter: blur(0);
+  animation: pulseNext 1.5s ease-in-out infinite;
+}
+
+/* Break indicator expand/collapse wrapper */
+.breakWrapper {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 0.4s ease, opacity 0.35s ease;
+}
+
+.breakWrapperVisible {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  animation: breakExpand 0.4s ease;
+}
+
+.breakContent {
+  overflow: hidden;
+  min-height: 0;
+}
+
+@keyframes breakExpand {
+  from {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+}
+
+.breakIndicator {
+  text-align: center;
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  padding: 8px 0;
+  letter-spacing: 0.3em;
+  opacity: 0.5;
+  max-width: 760px;
+  margin: 0 auto;
+  user-select: none;
+}
+
+@keyframes pulseNext {
+  0%, 100% { border-left-color: var(--primary); }
+  50% { border-left-color: transparent; }
+}
+
+
+/* Words */
+.word {
+  display: inline;
+  padding: 1px 1px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: color 0.1s ease, text-shadow 0.15s ease;
+  font-size: 1.1rem;
+  line-height: 2;
+  font-weight: 400;
+}
+
+.lineActive .word {
+  display: inline-block;
+  font-size: 1.65rem;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+}
+
+.lineActive .word::after {
+  content: attr(data-text);
+  display: block;
+  font-weight: 700;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+}
+
+.wordActive {
+  color: var(--primary) !important;
+  font-weight: 700 !important;
+  text-shadow:
+    0 0 16px var(--primary-glow-strong),
+    0 0 40px var(--primary-glow),
+    0 0 80px var(--primary-glow);
+}
+
+.word:hover {
+  background: var(--surface-hover);
+}
+
+.wordEdit {
+  display: inline;
+  background: var(--primary-glow);
+  border: 1px solid var(--primary);
+  border-radius: 3px;
+  color: var(--primary);
+  font-family: var(--font-body);
+  font-size: inherit;
+  font-weight: 600;
+  padding: 1px 4px;
+  outline: none;
+  text-align: center;
+}
+
+/* Speaker accent colors */
+.speaker0 { border-left-color: #06d6a0; }
+.speaker1 { border-left-color: #ef476f; }
+.speaker2 { border-left-color: #ffd166; }
+.speaker3 { border-left-color: #118ab2; }
+.speaker4 { border-left-color: #8338ec; }
+.speaker5 { border-left-color: #ff6b6b; }
+
+@media (max-width: 768px) {
+  .container { padding: var(--spacing-lg) var(--spacing-sm); }
+  .word { font-size: 0.95rem; }
+  .lineActive .word { font-size: 1.25rem; }
+  .line { padding: 6px 12px; }
+  .lineActive { padding: 8px 12px; }
+}
+
+/* Large screens / projector / beamer */
+@media (min-width: 1440px) {
+  .word { font-size: 1.3rem; line-height: 2.2; }
+  .lineActive .word { font-size: 2rem; }
+  .line { padding: 10px 32px; }
+  .lineActive { padding: 16px 32px; margin: 6px auto; }
+  .breakIndicator { font-size: 0.8rem; padding: 12px 0; }
+  .emptyIcon { font-size: 6rem; }
+  .emptyState h3 { font-size: 1.6rem; }
+  .emptyState p { font-size: 1.05rem; max-width: 360px; }
+}

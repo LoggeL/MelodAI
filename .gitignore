@@ -6,11 +6,19 @@ songs
 
 # Python
 *.pyc
+__pycache__
 .venv
 venv
+melodai.egg-info
 
 # Database
 *.db
 
-# whatever this is
-melodai.egg-info
+# Node
+node_modules
+
+# Built frontend
+src/static
+
+# UV
+uv.lock

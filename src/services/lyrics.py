@@ -1,103 +1,63 @@
-from flask import current_app
-import replicate
-import json
 import os
-from ..utils.helpers import split_long_lyrics_lines
-from ..utils.status_checks import save_status_check, update_queue_item_status
-from ..utils.constants import STATUS_OK, STATUS_ERROR
-import librosa
-import soundfile as sf
-from pathlib import Path
+import json
+import logging
+import replicate
+from replicate.exceptions import ModelError
+
+logger = logging.getLogger(__name__)
 
 
-def process_lyrics(track_id):
-    """Process lyrics for a track using Whisper and other services."""
+def extract_lyrics_whisperx(audio_url):
+    """Run WhisperX on Replicate to get word-level timed lyrics with speaker diarization.
+    Falls back to running without diarization if the diarization pipeline fails."""
+    hf_token = os.getenv("HF_READ_TOKEN", "")
 
-    with current_app.app_context():
-        try:
-            # Check if lyrics already exist
-            if (
-                not os.path.isfile(f"src/songs/{track_id}/lyrics_raw.json")
-                or os.path.getsize(f"src/songs/{track_id}/lyrics_raw.json") == 0
-            ):
-                print("Extracting Lyrics")
+    try:
+        output = replicate.run(
+            "victor-upmeet/whisperx:84d2ad2d6194fe98a17d2b60bef1c7f910c46b2f6fd38996ca457afd9c8abfcb",
+            input={
+                "audio_file": audio_url,
+                "batch_size": 16,
+                "align_output": True,
+                "diarization": True,
+                "huggingface_access_token": hf_token,
+                "min_speakers": 1,
+                "max_speakers": 6,
+            },
+        )
+        return output
+    except ModelError as e:
+        logger.warning("WhisperX failed with diarization enabled: %s. Retrying without diarization.", e)
 
-                update_queue_item_status(track_id, "extracting_lyrics", 60)
+    output = replicate.run(
+        "victor-upmeet/whisperx:84d2ad2d6194fe98a17d2b60bef1c7f910c46b2f6fd38996ca457afd9c8abfcb",
+        input={
+            "audio_file": audio_url,
+            "batch_size": 16,
+            "align_output": True,
+            "diarization": False,
+        },
+    )
 
-                with open(f"src/songs/{track_id}/vocals.mp3", "rb") as vocals_file:
-                    output = replicate.run(
-                        "victor-upmeet/whisperx:84d2ad2d6194fe98a17d2b60bef1c7f910c46b2f6fd38996ca457afd9c8abfcb",
-                        input={
-                            "debug": False,
-                            "vad_onset": 0.5,
-                            "audio_file": vocals_file,
-                            "batch_size": 64,
-                            "vad_offset": 0.363,
-                            "diarization": True,
-                            "temperature": 0,
-                            "align_output": True,
-                            "language_detection_min_prob": 0,
-                            "language_detection_max_tries": 5,
-                            "huggingface_access_token": os.getenv("HF_READ_TOKEN"),
-                        },
-                    )
+    return output
 
-                # Save the lyrics
-                with open(f"src/songs/{track_id}/lyrics_raw.json", "w") as f:
-                    f.write(json.dumps(output))
 
-                # Log successful lyrics extraction
-                save_status_check(
-                    "Lyrics Extraction",
-                    STATUS_OK,
-                    f"Successfully extracted raw lyrics for track {track_id}",
-                )
+def upload_audio_to_replicate(file_path):
+    """Upload a local audio file to Replicate for processing."""
+    with open(file_path, "rb") as f:
+        file_obj = replicate.files.create(f)
+    # File object has urls dict with 'get' key for the download URL
+    return file_obj.urls.get("get", str(file_obj))
 
-            update_queue_item_status(track_id, "raw_lyrics_complete", 70)
 
-            # If the full lyrics don't exist or are empty, process them
-            if (
-                not os.path.isfile(f"src/songs/{track_id}/lyrics.json")
-                or os.path.getsize(f"src/songs/{track_id}/lyrics.json") == 0
-            ):
-                # Load the raw lyrics
-                with open(f"src/songs/{track_id}/lyrics_raw.json", "r") as f:
-                    raw_lyrics = json.load(f)
+def split_audio_demucs(audio_url):
+    """Run Demucs on Replicate to separate vocals from instrumental."""
+    output = replicate.run(
+        "cjwbw/demucs:25a173108cff36ef9f80f854c162d01df9e6528be175794b81158fa03836d953",
+        input={
+            "audio": audio_url,
+            "stem": "vocals",
+        },
+    )
 
-                print("Processing Lyrics")
-
-                update_queue_item_status(track_id, "processing_lyrics", 75)
-
-                update_queue_item_status(track_id, "lyrics_merged", 80)
-
-                # Split long lines into more manageable chunks
-                split_lyrics = split_long_lyrics_lines(track_id)
-
-                update_queue_item_status(track_id, "lyrics_split", 85)
-
-                # Save the processed lyrics
-                with open(f"src/songs/{track_id}/lyrics.json", "w") as f:
-                    json.dump(split_lyrics, f)
-
-                # Log successful lyrics processing
-                save_status_check(
-                    "Lyrics Processing",
-                    STATUS_OK,
-                    f"Successfully processed lyrics for track {track_id}",
-                )
-
-            update_queue_item_status(track_id, "lyrics_complete", 90)
-
-            return True
-
-        except Exception as e:
-            # Update queue status on error
-            update_queue_item_status(track_id, "lyrics_error", 0)
-
-            # Log error
-            save_status_check(
-                "Lyrics Processing",
-                STATUS_ERROR,
-                f"Error processing lyrics for track {track_id}: {str(e)}",
-            )
-            raise
+    return output

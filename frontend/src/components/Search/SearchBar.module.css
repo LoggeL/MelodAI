@@ -1,0 +1,136 @@
+.wrapper {
+  flex: 1;
+  max-width: 480px;
+  position: relative;
+}
+
+.icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  pointer-events: none;
+}
+
+.input {
+  width: 100%;
+  padding: 8px 36px 8px 38px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  transition: all var(--transition);
+  outline: none;
+}
+
+.input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-glow);
+  background: var(--bg-secondary);
+}
+
+.input::placeholder { color: var(--text-muted); }
+
+.clear {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 4px;
+  font-size: 0.9rem;
+  line-height: 1;
+  border-radius: 50%;
+  transition: all var(--transition);
+}
+
+.clear:hover { color: var(--text); background: var(--surface-hover); }
+
+.results {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  max-height: 400px;
+  overflow-y: auto;
+  z-index: 9000;
+  box-shadow: var(--shadow-lg);
+  backdrop-filter: blur(12px);
+}
+
+.resultItem {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-md);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.resultItem:hover { background: var(--surface-hover); }
+
+.resultItem img {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.resultInfo { flex: 1; min-width: 0; }
+
+.resultTitle {
+  font-weight: 600;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.resultArtist {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.libraryBadge {
+  flex-shrink: 0;
+  font-family: var(--font-heading);
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--success);
+  border: 1px solid var(--success);
+  border-radius: 0;
+  padding: 2px 6px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.spinner {
+  padding: var(--spacing-md);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+/* Large screens / projector / beamer */
+@media (min-width: 1440px) {
+  .icon { font-size: 1rem; left: 18px; }
+  .input { padding: 12px 42px 12px 46px; font-size: 1rem; }
+  .clear { font-size: 1.1rem; padding: 4px 6px; }
+  .resultItem img { width: 52px; height: 52px; }
+  .resultTitle { font-size: 0.95rem; }
+  .resultArtist { font-size: 0.82rem; }
+  .libraryBadge { font-size: 0.7rem; padding: 3px 8px; }
+}
