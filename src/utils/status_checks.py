@@ -85,6 +85,24 @@ def run_health_checks():
         else:
             results["queue"] = {"status": "ok", "message": f"{len(active)} tracks processing"}
 
+    # Genius check
+    try:
+        token = os.getenv("GENIUS_BEARER_TOKEN", "")
+        if not token:
+            results["genius"] = {"status": "error", "message": "GENIUS_BEARER_TOKEN not set"}
+        else:
+            resp = requests.get(
+                "https://api.genius.com/search?q=test",
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=10,
+            )
+            if resp.status_code == 200:
+                results["genius"] = {"status": "ok", "message": "Genius API accessible"}
+            else:
+                results["genius"] = {"status": "error", "message": f"HTTP {resp.status_code}"}
+    except Exception as e:
+        results["genius"] = {"status": "error", "message": str(e)}
+
     # OpenRouter check
     try:
         api_key = os.getenv("OPENROUTER_API_KEY", "")
