@@ -57,6 +57,9 @@ def fetch_lyrics(title, artist):
 
     try:
         song = client.search_song(title, artist)
+        # Fallback: search with title only if artist-specific search fails
+        if not song and artist:
+            song = client.search_song(title)
     except Exception as e:
         print(f"WARNING: Genius search failed for '{title}' by '{artist}': {e}")
         return None

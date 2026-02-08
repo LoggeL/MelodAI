@@ -91,8 +91,12 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
     setFetchingGenius(true)
     try {
       const result = await admin.fetchGeniusLyrics(trackId)
-      setData(prev => prev ? { ...prev, genius_lyrics: result } : prev)
-      toast.success('Genius lyrics fetched')
+      if ('error' in result) {
+        toast.error(String((result as Record<string, unknown>).error))
+      } else {
+        setData(prev => prev ? { ...prev, genius_lyrics: result } : prev)
+        toast.success('Genius lyrics fetched')
+      }
     } catch {
       toast.error('Failed to fetch Genius lyrics')
     }
