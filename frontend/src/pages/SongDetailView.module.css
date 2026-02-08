@@ -101,6 +101,8 @@
 }
 
 .actionBtn:hover { border-color: var(--primary); color: var(--primary); }
+.playBtn { border-color: var(--success); color: var(--success); }
+.playBtn:hover { border-color: var(--success); color: var(--success); background: rgba(34, 197, 94, 0.1); }
 .dangerBtn:hover { border-color: var(--danger); color: var(--danger); }
 
 /* ─── Tag ─── */
@@ -337,6 +339,54 @@
 
 .segmentText {
   color: var(--text);
+}
+
+/* ─── Word Confidence ─── */
+
+.wordLow {
+  color: var(--danger);
+  text-decoration: underline wavy var(--danger);
+  text-underline-offset: 3px;
+  cursor: help;
+}
+
+.wordMed {
+  color: var(--warning);
+  cursor: help;
+}
+
+/* ─── Genius Lyrics ─── */
+
+.geniusBlock {
+  font-size: 0.8rem;
+  line-height: 1.8;
+}
+
+.geniusLine {
+  padding: 1px 0;
+  color: var(--text);
+}
+
+.geniusLineNum {
+  display: inline-block;
+  font-family: monospace;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  min-width: 32px;
+  text-align: right;
+  margin-right: var(--spacing-sm);
+  user-select: none;
+}
+
+.geniusFetch {
+  text-align: center;
+  padding: var(--spacing-md);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.geniusFetch p {
+  margin-bottom: var(--spacing-sm);
 }
 
 /* ─── Error/Stack ─── */

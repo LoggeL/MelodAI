@@ -4,7 +4,8 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faArrowLeft, faPlay, faDownload, faHeart, faListOl,
   faCheck, faTimes, faRotateRight, faTrash, faFileAudio,
-  faFileLines, faChevronDown, faExclamationTriangle, faMusic
+  faFileLines, faChevronDown, faExclamationTriangle, faMusic,
+  faWandMagicSparkles
 } from '@fortawesome/free-solid-svg-icons'
 import { admin } from '../services/api'
 import { useToast } from '../hooks/useToast'
@@ -53,6 +54,7 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
   const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [expandedError, setExpandedError] = useState<number | null>(null)
+  const [fetchingGenius, setFetchingGenius] = useState(false)
   const navigate = useNavigate()
   const toast = useToast()
 
@@ -83,6 +85,18 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
     await admin.deleteSong(trackId)
     toast.success('Song deleted')
     navigate('/admin/songs')
+  }
+
+  const handleFetchGenius = async () => {
+    setFetchingGenius(true)
+    try {
+      const result = await admin.fetchGeniusLyrics(trackId)
+      setData(prev => prev ? { ...prev, genius_lyrics: result } : prev)
+      toast.success('Genius lyrics fetched')
+    } catch {
+      toast.error('Failed to fetch Genius lyrics')
+    }
+    setFetchingGenius(false)
   }
 
   if (loading) return (
@@ -165,6 +179,11 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
             </span>
           </div>
           <div className={styles.detailActions}>
+            {data.complete && (
+              <button className={`${styles.actionBtn} ${styles.playBtn}`} onClick={() => navigate('/song/' + trackId)}>
+                <FontAwesomeIcon icon={faPlay} /> Play Song
+              </button>
+            )}
             <button className={styles.actionBtn} onClick={handleReprocess}>
               <FontAwesomeIcon icon={faRotateRight} /> Reprocess
             </button>
@@ -266,7 +285,19 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
                       <span className={styles.segmentTime}>{formatTime(seg.start)}</span>
                       <span className={styles.segmentSpeaker}>{seg.speaker}</span>
                       <span className={styles.segmentText}>
-                        {seg.words.map(w => w.word).join(' ')}
+                        {seg.words.map((w, wi) => {
+                          const isLow = w.score != null && w.score < 0.5
+                          const isMed = w.score != null && w.score >= 0.5 && w.score < 0.7
+                          return (
+                            <span
+                              key={wi}
+                              className={isLow ? styles.wordLow : isMed ? styles.wordMed : undefined}
+                              title={w.score != null ? `${(w.score * 100).toFixed(0)}%` : undefined}
+                            >
+                              {wi > 0 ? ' ' : ''}{w.word}
+                            </span>
+                          )
+                        })}
                       </span>
                     </div>
                   ))}
@@ -277,6 +308,47 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
         ) : (
           <div className={styles.empty}>No processed lyrics available</div>
         )}
+
+        {/* Genius Lyrics */}
+        <div className={styles.collapsible}>
+          <div className={styles.collapsibleHeader} onClick={() => toggle('genius')}>
+            <span className={styles.collapsibleTitle}>
+              <FontAwesomeIcon icon={faWandMagicSparkles} style={{ fontSize: '0.75rem' }} />
+              Genius Lyrics
+              {data.genius_lyrics && (
+                <span className={styles.collapsibleBadge}>
+                  {data.genius_lyrics.lines.length} lines
+                </span>
+              )}
+            </span>
+            <FontAwesomeIcon
+              icon={faChevronDown}
+              className={`${styles.chevron} ${expanded['genius'] ? styles.chevronOpen : ''}`}
+            />
+          </div>
+          {expanded['genius'] && (
+            <div className={styles.collapsibleBody}>
+              {data.genius_lyrics ? (
+                <div className={styles.geniusBlock}>
+                  {data.genius_lyrics.lines.map((line, i) => (
+                    <div key={i} className={styles.geniusLine}>
+                      <span className={styles.geniusLineNum}>{i + 1}</span>
+                      {line}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className={styles.geniusFetch}>
+                  <p>No cached Genius lyrics.</p>
+                  <button className={styles.actionBtn} onClick={handleFetchGenius} disabled={fetchingGenius}>
+                    <FontAwesomeIcon icon={faWandMagicSparkles} />
+                    {fetchingGenius ? 'Fetching...' : 'Fetch from Genius'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         {data.lyrics_raw ? (
           <div className={styles.collapsible}>

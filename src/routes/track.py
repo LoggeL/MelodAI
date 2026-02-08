@@ -610,6 +610,10 @@ def _stage_process_lyrics(track_id):
                 from src.services.genius import fetch_lyrics
                 genius_lines = fetch_lyrics(title, artist)
                 if genius_lines:
+                    # Cache genius lyrics for admin view
+                    genius_path = os.path.join(get_song_dir(track_id), "genius_lyrics.json")
+                    with open(genius_path, "w") as gf:
+                        json.dump({"lines": genius_lines}, gf, indent=2)
                     segments = raw_data.get("segments", raw_data if isinstance(raw_data, list) else [])
                     corrected, genius_line_breaks = correct_lyrics_with_genius(segments, genius_lines)
                     raw_data["segments"] = corrected

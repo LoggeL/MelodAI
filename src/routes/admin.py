@@ -267,6 +267,12 @@ def song_details(track_id):
         with open(raw_path, "r") as f:
             lyrics_raw = json.load(f)
 
+    genius_lyrics = None
+    genius_path = os.path.join(song_dir, "genius_lyrics.json")
+    if os.path.exists(genius_path):
+        with open(genius_path, "r") as f:
+            genius_lyrics = json.load(f)
+
     failures = query_db(
         "SELECT * FROM processing_failures WHERE track_id = ? ORDER BY updated_at DESC",
         [track_id]
@@ -307,6 +313,7 @@ def song_details(track_id):
         "files": files,
         "lyrics": lyrics,
         "lyrics_raw": lyrics_raw,
+        "genius_lyrics": genius_lyrics,
         "processing_failures": [{
             "id": f["id"],
             "stage": f["stage"],
@@ -334,6 +341,38 @@ def song_details(track_id):
         "favorites_count": fav_count,
         "playlist_count": playlist_count,
     })
+
+
+@admin_bp.route("/songs/<track_id>/genius", methods=["POST"])
+@admin_required
+def fetch_genius_lyrics(track_id):
+    import json
+    from src.utils.file_handling import load_metadata, get_song_dir
+
+    meta = load_metadata(track_id)
+    if not meta:
+        return jsonify({"error": "Track not found"}), 404
+
+    title = meta.get("title", "")
+    artist = meta.get("artist", "")
+    if not title or not artist:
+        return jsonify({"error": "Missing title or artist in metadata"}), 400
+
+    try:
+        from src.services.genius import fetch_lyrics
+        lines = fetch_lyrics(title, artist)
+    except Exception as e:
+        return jsonify({"error": f"Genius fetch failed: {e}"}), 500
+
+    if not lines:
+        return jsonify({"error": "No lyrics found on Genius"}), 404
+
+    song_dir = get_song_dir(track_id)
+    genius_path = os.path.join(song_dir, "genius_lyrics.json")
+    with open(genius_path, "w") as f:
+        json.dump({"lines": lines}, f, indent=2)
+
+    return jsonify({"lines": lines})
 
 
 @admin_bp.route("/songs/<track_id>", methods=["DELETE"])

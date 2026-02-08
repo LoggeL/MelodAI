@@ -28,6 +28,7 @@ export interface LyricsWord {
   start: number
   end: number
   speaker: string
+  score?: number
 }
 
 export interface LyricsSegment {
@@ -189,6 +190,7 @@ export interface SongDetail {
   files: Record<string, SongFileInfo>
   lyrics: LyricsData | null
   lyrics_raw: { segments: Array<{ start: number; end: number; text: string; words: Array<{ word: string; start: number; end: number; score: number; speaker: string }> }> } | null
+  genius_lyrics: { lines: string[] } | null
   processing_failures: ProcessingFailure[]
   errors: SongError[]
   usage: SongUsage

@@ -155,6 +155,7 @@ export const admin = {
   deleteSong: (id: string) => request('/api/admin/songs/' + id, { method: 'DELETE' }),
   reprocessSong: (id: string) => request('/api/admin/songs/' + id + '/reprocess', { method: 'POST' }),
   songDetails: (id: string) => request<SongDetail>('/api/admin/songs/' + id + '/details'),
+  fetchGeniusLyrics: (id: string) => request<{ lines: string[] }>('/api/admin/songs/' + id + '/genius', { method: 'POST' }),
   runChecks: () => request<Record<string, HealthCheck>>('/api/admin/status/checks', { method: 'POST' }),
   statusHistory: () => request<Array<{ id: number; component: string; status: string; message: string; checked_at: string }>>('/api/admin/status/history'),
   processingQueue: () => request<Record<string, ProcessingStatus>>('/api/admin/status/queue'),
