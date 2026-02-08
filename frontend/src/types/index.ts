@@ -38,7 +38,7 @@ export interface LyricsSegment {
   speaker: string
 }
 
-export interface GeniusStats {
+export interface CorrectionStats {
   quality?: number
   total_words?: number
   applied?: boolean
@@ -50,8 +50,8 @@ export interface GeniusStats {
 export interface LyricsData {
   segments: LyricsSegment[]
   avg_confidence?: number
-  lyrics_source?: 'genius' | 'heuristic'
-  genius_stats?: GeniusStats
+  lyrics_source?: 'reference' | 'heuristic'
+  correction_stats?: CorrectionStats
   untimed?: boolean
   plain_lyrics?: string[]
 }
@@ -204,7 +204,7 @@ export interface SongDetail {
   files: Record<string, SongFileInfo>
   lyrics: LyricsData | null
   lyrics_raw: { segments: Array<{ start: number; end: number; text: string; words: Array<{ word: string; start: number; end: number; score: number; speaker: string }> }> } | null
-  genius_lyrics: { lines: string[] } | null
+  reference_lyrics: { lines: string[] } | null
   processing_failures: ProcessingFailure[]
   errors: SongError[]
   usage: SongUsage

@@ -409,7 +409,7 @@
   font-size: 0.8rem;
 }
 
-.lyricsSourceGenius {
+.lyricsSourceReference {
   border-color: var(--success);
   background: rgba(34, 197, 94, 0.08);
 }
@@ -426,7 +426,7 @@
   flex-shrink: 0;
 }
 
-.lyricsSourceGenius .lyricsSourceHeader {
+.lyricsSourceReference .lyricsSourceHeader {
   color: var(--success);
 }
 
@@ -498,19 +498,19 @@
   cursor: help;
 }
 
-/* ─── Genius Lyrics ─── */
+/* ─── Reference Lyrics ─── */
 
-.geniusBlock {
+.refBlock {
   font-size: 0.8rem;
   line-height: 1.8;
 }
 
-.geniusLine {
+.refLine {
   padding: 1px 0;
   color: var(--text);
 }
 
-.geniusLineNum {
+.refLineNum {
   display: inline-block;
   font-family: monospace;
   font-size: 0.7rem;
@@ -521,14 +521,14 @@
   user-select: none;
 }
 
-.geniusFetch {
+.refFetch {
   text-align: center;
   padding: var(--spacing-md);
   color: var(--text-muted);
   font-size: 0.85rem;
 }
 
-.geniusFetch p {
+.refFetch p {
   margin-bottom: var(--spacing-sm);
 }
 

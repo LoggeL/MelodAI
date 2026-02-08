@@ -573,11 +573,11 @@ def _stage_lyrics(track_id):
         artist = meta.get("artist", "")
         if title and artist:
             try:
-                from src.services.genius import fetch_lyrics
+                from src.services.reference_lyrics import fetch_lyrics
                 reference_lines = fetch_lyrics(title, artist)
                 if reference_lines:
-                    genius_path = os.path.join(get_song_dir(track_id), "genius_lyrics.json")
-                    with open(genius_path, "w") as gf:
+                    ref_lyrics_path = os.path.join(get_song_dir(track_id), "reference_lyrics.json")
+                    with open(ref_lyrics_path, "w") as gf:
                         json.dump({"lines": reference_lines}, gf, indent=2)
             except Exception as e:
                 print(f"WARNING: Reference lyrics fetch failed for {track_id}: {e}")
@@ -612,40 +612,40 @@ def _stage_process_lyrics(track_id):
 
     set_processing_status(track_id, STATUS_PROCESSING, 86, "Fetching reference lyrics...")
 
-    from src.utils.helpers import postprocess_lyrics_heuristic, correct_lyrics_with_genius
+    from src.utils.helpers import postprocess_lyrics_heuristic, correct_lyrics_with_reference
 
     # Load raw lyrics
     raw_path = get_track_file_path(track_id, "lyrics_raw")
     with open(raw_path, "r") as f:
         raw_data = json.load(f)
 
-    # Correct WhisperX transcription with Genius reference lyrics
-    genius_line_breaks = []
-    genius_lines = None
+    # Correct WhisperX transcription with reference lyrics
+    ref_line_breaks = []
+    ref_lines = None
 
-    # Load cached genius lyrics (saved in stage 4) or fetch fresh
-    genius_path = os.path.join(get_song_dir(track_id), "genius_lyrics.json")
-    if os.path.exists(genius_path):
+    # Load cached reference lyrics (saved in stage 4) or fetch fresh
+    ref_lyrics_path = os.path.join(get_song_dir(track_id), "reference_lyrics.json")
+    if os.path.exists(ref_lyrics_path):
         try:
-            with open(genius_path, "r") as gf:
-                genius_lines = json.load(gf).get("lines", [])
+            with open(ref_lyrics_path, "r") as gf:
+                ref_lines = json.load(gf).get("lines", [])
         except Exception:
             pass
 
-    if not genius_lines:
+    if not ref_lines:
         meta = load_metadata(track_id)
         if meta:
             title = meta.get("title", "")
             artist = meta.get("artist", "")
             if title and artist:
                 try:
-                    from src.services.genius import fetch_lyrics
-                    genius_lines = fetch_lyrics(title, artist)
-                    if genius_lines:
-                        with open(genius_path, "w") as gf:
-                            json.dump({"lines": genius_lines}, gf, indent=2)
+                    from src.services.reference_lyrics import fetch_lyrics
+                    ref_lines = fetch_lyrics(title, artist)
+                    if ref_lines:
+                        with open(ref_lyrics_path, "w") as gf:
+                            json.dump({"lines": ref_lines}, gf, indent=2)
                 except Exception as e:
-                    print(f"WARNING: Genius lyrics fetch failed for {track_id}: {e}")
+                    print(f"WARNING: Reference lyrics fetch failed for {track_id}: {e}")
 
     # Check if WhisperX returned empty segments
     raw_segments = raw_data.get("segments", raw_data if isinstance(raw_data, list) else [])
@@ -655,34 +655,34 @@ def _stage_process_lyrics(track_id):
         for w in seg.get("words", [])
     )
 
-    if not has_words and genius_lines:
+    if not has_words and ref_lines:
         # WhisperX failed but we have external lyrics — save as untimed
-        print(f"INFO: WhisperX returned no words for {track_id}, using untimed genius lyrics")
+        print(f"INFO: WhisperX returned no words for {track_id}, using untimed reference lyrics")
         set_processing_status(track_id, STATUS_PROCESSING, 89, "Using external lyrics (untimed)...")
         processed = {
             "segments": [],
             "untimed": True,
-            "plain_lyrics": genius_lines,
-            "lyrics_source": "genius",
+            "plain_lyrics": ref_lines,
+            "lyrics_source": "reference",
         }
         save_lyrics(track_id, processed)
         set_processing_status(track_id, STATUS_PROCESSING, PROGRESS[STATUS_PROCESSING], "Lyrics synced (untimed)")
         return
 
-    if genius_lines:
+    if ref_lines:
         try:
             segments = raw_data.get("segments", raw_data if isinstance(raw_data, list) else [])
-            corrected, genius_line_breaks = correct_lyrics_with_genius(segments, genius_lines)
+            corrected, ref_line_breaks = correct_lyrics_with_reference(segments, ref_lines)
             raw_data["segments"] = corrected
             # Save corrected raw data back
             save_lyrics_raw(track_id, raw_data)
         except Exception as e:
-            print(f"WARNING: Genius lyrics correction failed for {track_id}: {e}")
+            print(f"WARNING: Reference lyrics correction failed for {track_id}: {e}")
 
     set_processing_status(track_id, STATUS_PROCESSING, 89, "Processing lyrics...")
 
-    # Split into karaoke lines using Genius line breaks or heuristic fallback
-    processed = postprocess_lyrics_heuristic(raw_data, genius_line_breaks=genius_line_breaks)
+    # Split into karaoke lines using reference line breaks or heuristic fallback
+    processed = postprocess_lyrics_heuristic(raw_data, ref_line_breaks=ref_line_breaks)
 
     save_lyrics(track_id, processed)
     set_processing_status(track_id, STATUS_PROCESSING, PROGRESS[STATUS_PROCESSING], "Lyrics synced")

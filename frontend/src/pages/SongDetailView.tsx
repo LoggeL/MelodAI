@@ -54,7 +54,7 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
   const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [expandedError, setExpandedError] = useState<number | null>(null)
-  const [fetchingGenius, setFetchingGenius] = useState(false)
+  const [fetchingRef, setFetchingRef] = useState(false)
   const navigate = useNavigate()
   const toast = useToast()
 
@@ -90,20 +90,20 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
     navigate('/admin/songs')
   }
 
-  const handleFetchGenius = async () => {
-    setFetchingGenius(true)
+  const handleFetchRef = async () => {
+    setFetchingRef(true)
     try {
-      const result = await admin.fetchGeniusLyrics(trackId)
+      const result = await admin.fetchReferenceLyrics(trackId)
       if ('error' in result) {
         toast.error(String((result as Record<string, unknown>).error))
       } else {
-        setData(prev => prev ? { ...prev, genius_lyrics: result } : prev)
+        setData(prev => prev ? { ...prev, reference_lyrics: result } : prev)
         toast.success('Reference lyrics fetched')
       }
     } catch {
       toast.error('Failed to fetch reference lyrics')
     }
-    setFetchingGenius(false)
+    setFetchingRef(false)
   }
 
   if (loading) return (
@@ -288,29 +288,29 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
         {/* Lyrics source indicator */}
         {data.lyrics && (
           <div className={`${styles.lyricsSourceBanner} ${
-            data.lyrics.lyrics_source === 'genius' ? styles.lyricsSourceGenius : styles.lyricsSourceHeuristic
+            data.lyrics.lyrics_source === 'reference' ? styles.lyricsSourceReference : styles.lyricsSourceHeuristic
           }`}>
             <div className={styles.lyricsSourceHeader}>
-              <FontAwesomeIcon icon={data.lyrics.lyrics_source === 'genius' ? faCheck : faExclamationTriangle} />
+              <FontAwesomeIcon icon={data.lyrics.lyrics_source === 'reference' ? faCheck : faExclamationTriangle} />
               <span className={styles.lyricsSourceLabel}>
-                {data.lyrics.lyrics_source === 'genius' ? 'Lyrics corrected' : 'Heuristic fallback'}
+                {data.lyrics.lyrics_source === 'reference' ? 'Lyrics corrected' : 'Heuristic fallback'}
               </span>
             </div>
             <span className={styles.lyricsSourceDetail}>
-              {data.lyrics.lyrics_source === 'genius' && data.lyrics.genius_stats ? (
-                <>Alignment quality: {((data.lyrics.genius_stats.quality ?? 0) * 100).toFixed(1)}% &middot; {data.lyrics.genius_stats.total_words} words matched</>
-              ) : data.lyrics.genius_stats?.reason === 'not_found' ? (
-                <>No lyrics found on Genius for this track</>
-              ) : data.lyrics.genius_stats?.reason === 'fetch_error' ? (
-                <>Genius fetch failed: {data.lyrics.genius_stats.error}</>
-              ) : data.lyrics.genius_stats?.reason === 'low_quality' ? (
-                <>Genius match too low ({((data.lyrics.genius_stats.quality ?? 0) * 100).toFixed(1)}%), fell back to timing-based splitting</>
-              ) : data.lyrics.genius_stats?.reason === 'missing_metadata' ? (
-                <>Missing title/artist metadata for Genius lookup</>
+              {data.lyrics.lyrics_source === 'reference' && data.lyrics.correction_stats ? (
+                <>Alignment quality: {((data.lyrics.correction_stats.quality ?? 0) * 100).toFixed(1)}% &middot; {data.lyrics.correction_stats.total_words} words matched</>
+              ) : data.lyrics.correction_stats?.reason === 'not_found' ? (
+                <>No lyrics found for this track</>
+              ) : data.lyrics.correction_stats?.reason === 'fetch_error' ? (
+                <>Lyrics fetch failed: {data.lyrics.correction_stats.error}</>
+              ) : data.lyrics.correction_stats?.reason === 'low_quality' ? (
+                <>Match quality too low ({((data.lyrics.correction_stats.quality ?? 0) * 100).toFixed(1)}%), fell back to timing-based splitting</>
+              ) : data.lyrics.correction_stats?.reason === 'missing_metadata' ? (
+                <>Missing title/artist metadata for lyrics lookup</>
               ) : !data.lyrics.lyrics_source ? (
                 <>Processed before correction tracking was added</>
               ) : (
-                <>Lyrics split using timing gaps instead of Genius line breaks</>
+                <>Lyrics split using timing gaps instead of reference line breaks</>
               )}
             </span>
           </div>
@@ -372,38 +372,38 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
 
         {/* Reference Lyrics */}
         <div className={styles.collapsible}>
-          <div className={styles.collapsibleHeader} onClick={() => toggle('genius')}>
+          <div className={styles.collapsibleHeader} onClick={() => toggle('reference')}>
             <span className={styles.collapsibleTitle}>
               <FontAwesomeIcon icon={faWandMagicSparkles} style={{ fontSize: '0.75rem' }} />
               Reference Lyrics
-              {data.genius_lyrics && (
+              {data.reference_lyrics && (
                 <span className={styles.collapsibleBadge}>
-                  {data.genius_lyrics.lines.length} lines
+                  {data.reference_lyrics.lines.length} lines
                 </span>
               )}
             </span>
             <FontAwesomeIcon
               icon={faChevronDown}
-              className={`${styles.chevron} ${expanded['genius'] ? styles.chevronOpen : ''}`}
+              className={`${styles.chevron} ${expanded['reference'] ? styles.chevronOpen : ''}`}
             />
           </div>
-          {expanded['genius'] && (
+          {expanded['reference'] && (
             <div className={styles.collapsibleBody}>
-              {data.genius_lyrics ? (
-                <div className={styles.geniusBlock}>
-                  {data.genius_lyrics.lines.map((line, i) => (
-                    <div key={i} className={styles.geniusLine}>
-                      <span className={styles.geniusLineNum}>{i + 1}</span>
+              {data.reference_lyrics ? (
+                <div className={styles.refBlock}>
+                  {data.reference_lyrics.lines.map((line, i) => (
+                    <div key={i} className={styles.refLine}>
+                      <span className={styles.refLineNum}>{i + 1}</span>
                       {line}
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className={styles.geniusFetch}>
+                <div className={styles.refFetch}>
                   <p>No cached reference lyrics.</p>
-                  <button className={styles.actionBtn} onClick={handleFetchGenius} disabled={fetchingGenius}>
+                  <button className={styles.actionBtn} onClick={handleFetchRef} disabled={fetchingRef}>
                     <FontAwesomeIcon icon={faWandMagicSparkles} />
-                    {fetchingGenius ? 'Fetching...' : 'Fetch from lrclib'}
+                    {fetchingRef ? 'Fetching...' : 'Fetch from lrclib'}
                   </button>
                 </div>
               )}

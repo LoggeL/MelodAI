@@ -73,7 +73,7 @@ Vite dev server (port 3000) proxies `/api/*` and `/songs/*` to Flask (port 5000)
 - **Deezer** — Song search, download, metadata (requires `DEEZER_ARL` cookie)
 - **Replicate** — Demucs + WhisperX models (requires `REPLICATE_API_TOKEN`, `HF_READ_TOKEN`)
 - **OpenRouter** — LLM for lyrics processing (requires `OPENROUTER_API_KEY`, model set via `LLM_MODEL`)
-- **Genius** — Lyrics fetching (optional, requires `GENIUS_BEARER_TOKEN`)
+- **lrclib.net** — Reference lyrics fetching (no API key required)
 - **Resend** — Password reset emails (optional, requires `RESEND_API_KEY`)
 
 Copy `example.env` to `.env` and fill in the required values.

@@ -271,11 +271,11 @@ def song_details(track_id):
         with open(raw_path, "r") as f:
             lyrics_raw = json.load(f)
 
-    genius_lyrics = None
-    genius_path = os.path.join(song_dir, "genius_lyrics.json")
-    if os.path.exists(genius_path):
-        with open(genius_path, "r") as f:
-            genius_lyrics = json.load(f)
+    ref_lyrics = None
+    ref_lyrics_path = os.path.join(song_dir, "reference_lyrics.json")
+    if os.path.exists(ref_lyrics_path):
+        with open(ref_lyrics_path, "r") as f:
+            ref_lyrics = json.load(f)
 
     failures = query_db(
         "SELECT * FROM processing_failures WHERE track_id = ? ORDER BY updated_at DESC",
@@ -317,7 +317,7 @@ def song_details(track_id):
         "files": files,
         "lyrics": lyrics,
         "lyrics_raw": lyrics_raw,
-        "genius_lyrics": genius_lyrics,
+        "reference_lyrics": ref_lyrics,
         "processing_failures": [{
             "id": f["id"],
             "stage": f["stage"],
@@ -347,9 +347,9 @@ def song_details(track_id):
     })
 
 
-@admin_bp.route("/songs/<track_id>/genius", methods=["POST"])
+@admin_bp.route("/songs/<track_id>/reference-lyrics", methods=["POST"])
 @admin_required
-def fetch_genius_lyrics(track_id):
+def fetch_reference_lyrics(track_id):
     import json
     from src.utils.file_handling import load_metadata, get_song_dir
 
@@ -363,17 +363,17 @@ def fetch_genius_lyrics(track_id):
         return jsonify({"error": "Missing title or artist in metadata"}), 400
 
     try:
-        from src.services.genius import fetch_lyrics
+        from src.services.reference_lyrics import fetch_lyrics
         lines = fetch_lyrics(title, artist)
     except Exception as e:
-        return jsonify({"error": f"Genius fetch failed: {e}"}), 500
+        return jsonify({"error": f"Lyrics fetch failed: {e}"}), 500
 
     if not lines:
-        return jsonify({"error": "No lyrics found on Genius"}), 404
+        return jsonify({"error": "No lyrics found"}), 404
 
     song_dir = get_song_dir(track_id)
-    genius_path = os.path.join(song_dir, "genius_lyrics.json")
-    with open(genius_path, "w") as f:
+    ref_lyrics_path = os.path.join(song_dir, "reference_lyrics.json")
+    with open(ref_lyrics_path, "w") as f:
         json.dump({"lines": lines}, f, indent=2)
 
     return jsonify({"lines": lines})
@@ -424,11 +424,11 @@ def reprocess_song(track_id):
             path = get_track_file_path(track_id, file_key)
             if os.path.exists(path):
                 os.remove(path)
-        # Also remove genius_lyrics.json if re-running lyrics stage
+        # Also remove reference_lyrics.json if re-running lyrics stage
         if from_stage in ("splitting", "lyrics"):
-            genius_path = os.path.join(song_dir, "genius_lyrics.json")
-            if os.path.exists(genius_path):
-                os.remove(genius_path)
+            ref_lyrics_path = os.path.join(song_dir, "reference_lyrics.json")
+            if os.path.exists(ref_lyrics_path):
+                os.remove(ref_lyrics_path)
 
     set_processing_status(track_id, STATUS_METADATA, PROGRESS[STATUS_METADATA], "Reprocessing...")
 

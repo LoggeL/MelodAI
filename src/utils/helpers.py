@@ -219,10 +219,10 @@ def _merge_tiny_segments(segments, min_words=2, max_gap=0.5):
     return result
 
 
-def _tokenize_provider(genius_lines):
+def _tokenize_provider(ref_lines):
     """Tokenize provider lyrics into a flat list of (normalized, raw_text, line_idx) tuples."""
     tokens = []
-    for line_idx, line in enumerate(genius_lines):
+    for line_idx, line in enumerate(ref_lines):
         for word in line.split():
             word = word.strip()
             if word:
@@ -317,9 +317,9 @@ def _align_provider_tokens(asr_normalized, provider_tokens):
 
 
 def _extract_line_breaks_from_alignment(alignment, provider_tokens, quality):
-    """Extract Genius line break positions mapped to ASR word indices.
+    """Extract reference line break positions mapped to ASR word indices.
 
-    Walks the alignment and identifies ASR word indices where a new Genius line
+    Walks the alignment and identifies ASR word indices where a new reference line
     starts. Only considers well-matched pairs (sim >= 0.6). Returns an empty
     list if alignment quality is below 0.4.
 
@@ -330,7 +330,7 @@ def _extract_line_breaks_from_alignment(alignment, provider_tokens, quality):
     if quality < MIN_QUALITY:
         return []
 
-    # Map each ASR word to its best-matched Genius line index
+    # Map each ASR word to its best-matched reference line index
     asr_to_line = {}
     for asr_idx, prov_idx, sim in alignment:
         if asr_idx is None or prov_idx is None:
@@ -342,7 +342,7 @@ def _extract_line_breaks_from_alignment(alignment, provider_tokens, quality):
     if not asr_to_line:
         return []
 
-    # Walk ASR words in order, detect where the Genius line changes
+    # Walk ASR words in order, detect where the reference line changes
     sorted_asr_indices = sorted(asr_to_line.keys())
     line_breaks = []
     prev_line = None
@@ -392,7 +392,7 @@ def _rewrite_with_provider(raw_segments, asr_words, alignment, provider_tokens, 
     MIN_QUALITY = 0.4  # minimum global alignment quality to apply corrections
 
     if quality < MIN_QUALITY:
-        print(f"Genius correction: skipped (alignment quality {quality:.2f} < {MIN_QUALITY})")
+        print(f"Reference correction: skipped (alignment quality {quality:.2f} < {MIN_QUALITY})")
         return raw_segments
 
     corrections = 0
@@ -438,7 +438,7 @@ def _rewrite_with_provider(raw_segments, asr_words, alignment, provider_tokens, 
             raw_segments[seg_idx]["words"][word_idx]["word"] = corrected
             corrections += 1
 
-    print(f"Genius correction: {corrections} words corrected out of {len(asr_words)} "
+    print(f"Reference correction: {corrections} words corrected out of {len(asr_words)} "
           f"({context_corrections} context-trusted, alignment quality: {quality:.2f})")
 
     # Update segment-level text field if present
@@ -525,7 +525,7 @@ def _remove_compound_fragments(raw_segments, asr_words, asr_normalized, alignmen
     # Remove empty segments
     raw_segments[:] = [s for s in raw_segments if s.get("words")]
 
-    print(f"Genius compound fix: removed {len(to_remove)} fragment words")
+    print(f"Reference compound fix: removed {len(to_remove)} fragment words")
     return raw_segments, to_remove
 
 
@@ -544,23 +544,23 @@ def _adjust_line_breaks(line_breaks, removed_indices):
     return adjusted
 
 
-def correct_lyrics_with_genius(raw_segments, genius_lines):
-    """Correct WhisperX transcription using Genius lyrics as ground truth.
+def correct_lyrics_with_reference(raw_segments, ref_lines):
+    """Correct WhisperX transcription using reference lyrics as ground truth.
 
     Pipeline:
-      1. Tokenize provider (Genius) lyrics
+      1. Tokenize provider (reference) lyrics
       2. Align provider tokens to ASR words using Needleman-Wunsch
       3. Score alignment quality
       4. Rewrite ASR words with provider text (aggressive) while keeping timing
       4b. Remove compound word fragments left behind by rewrite
-      5. Extract line break positions from Genius alignment
+      5. Extract line break positions from reference alignment
 
     Returns (corrected_segments, line_breaks, stats) where line_breaks is a
-    sorted list of ASR word indices where new Genius lines begin, and stats
+    sorted list of ASR word indices where new reference lines begin, and stats
     is a dict with correction metadata (quality, corrections, total_words).
     """
-    if not genius_lines:
-        return raw_segments, [], {"skipped": True, "reason": "no_genius_lines"}
+    if not ref_lines:
+        return raw_segments, [], {"skipped": True, "reason": "no_ref_lines"}
 
     # Flatten ASR words with segment/word indices for write-back
     asr_words = []
@@ -576,7 +576,7 @@ def correct_lyrics_with_genius(raw_segments, genius_lines):
     asr_normalized = [_normalize_word(w[2]["word"]) for w in asr_words]
 
     # Step 1: Tokenize provider lyrics
-    provider_tokens = _tokenize_provider(genius_lines)
+    provider_tokens = _tokenize_provider(ref_lines)
     if not provider_tokens:
         return raw_segments, [], {"skipped": True, "reason": "no_provider_tokens"}
 
@@ -597,7 +597,7 @@ def correct_lyrics_with_genius(raw_segments, genius_lines):
     line_breaks = _adjust_line_breaks(line_breaks, removed_indices)
 
     if line_breaks:
-        print(f"Genius line breaks: {len(line_breaks)} break points extracted")
+        print(f"Reference line breaks: {len(line_breaks)} break points extracted")
 
     stats = {
         "quality": round(quality, 4),
@@ -610,8 +610,8 @@ def correct_lyrics_with_genius(raw_segments, genius_lines):
     return corrected, line_breaks, stats
 
 
-def _split_at_genius_breaks(flat_words, line_breaks):
-    """Split a flat word list into segments at Genius line break positions.
+def _split_at_ref_breaks(flat_words, line_breaks):
+    """Split a flat word list into segments at reference line break positions.
 
     line_breaks is a sorted list of word indices where new lines start.
     Returns a list of segments.
@@ -635,14 +635,14 @@ def _split_at_genius_breaks(flat_words, line_breaks):
     return segments
 
 
-def postprocess_lyrics_heuristic(raw_data, genius_line_breaks=None, genius_stats=None):
+def postprocess_lyrics_heuristic(raw_data, ref_line_breaks=None, ref_stats=None):
     """Process WhisperX output into karaoke-ready lyrics using heuristics.
 
-    When genius_line_breaks is provided and non-empty, uses Genius line
+    When ref_line_breaks is provided and non-empty, uses reference line
     boundaries for splitting instead of timing-gap heuristics.
 
-    genius_stats is an optional dict with correction metadata from
-    correct_lyrics_with_genius() to include in the output.
+    ref_stats is an optional dict with correction metadata from
+    correct_lyrics_with_reference() to include in the output.
 
     Heuristic pipeline (fallback):
       1. Merge raw WhisperX segments into our format
@@ -650,9 +650,9 @@ def postprocess_lyrics_heuristic(raw_data, genius_line_breaks=None, genius_stats
       3. Recursively split segments > 8 words at largest timing gaps
       4. Merge tiny (1-word) segments into neighbors when gap is small
 
-    Genius pipeline:
+    Reference pipeline:
       1. Flatten all words from raw segments
-      2. Split at Genius line break positions
+      2. Split at reference line break positions
       3. Split at speaker changes within lines
       4. Safety-net split lines > 12 words at timing gaps
       5. Merge tiny (1-word) segments into neighbors
@@ -670,21 +670,21 @@ def postprocess_lyrics_heuristic(raw_data, genius_line_breaks=None, genius_stats
                 all_scores.append(score)
     avg_confidence = round(sum(all_scores) / len(all_scores), 4) if all_scores else None
 
-    if genius_line_breaks:
-        # Genius-guided pipeline
+    if ref_line_breaks:
+        # Reference-guided pipeline
         flat_words = _flatten_raw_words(segments)
         if not flat_words:
             return merge_lyrics(segments)
 
-        # Split at Genius line boundaries
-        genius_segs = _split_at_genius_breaks(flat_words, genius_line_breaks)
+        # Split at reference line boundaries
+        ref_segs = _split_at_ref_breaks(flat_words, ref_line_breaks)
 
-        # Split at speaker changes within Genius lines
-        genius_segs = _split_at_speaker_changes(genius_segs)
+        # Split at speaker changes within reference lines
+        ref_segs = _split_at_speaker_changes(ref_segs)
 
         # Safety-net: split lines > 20 words at timing gaps
         final_segs = []
-        for seg in genius_segs:
+        for seg in ref_segs:
             words = seg.get("words", [])
             if len(words) <= 20:
                 final_segs.append(seg)
@@ -696,11 +696,11 @@ def postprocess_lyrics_heuristic(raw_data, genius_line_breaks=None, genius_stats
         # Merge tiny segments
         final_segs = _merge_tiny_segments(final_segs, min_words=2, max_gap=0.5)
 
-        result = {"segments": final_segs, "lyrics_source": "genius"}
+        result = {"segments": final_segs, "lyrics_source": "reference"}
         if avg_confidence is not None:
             result["avg_confidence"] = avg_confidence
-        if genius_stats:
-            result["genius_stats"] = genius_stats
+        if ref_stats:
+            result["ref_stats"] = ref_stats
         return result
 
     # Heuristic fallback pipeline
@@ -727,6 +727,6 @@ def postprocess_lyrics_heuristic(raw_data, genius_line_breaks=None, genius_stats
     result = {"segments": final_segs, "lyrics_source": "heuristic"}
     if avg_confidence is not None:
         result["avg_confidence"] = avg_confidence
-    if genius_stats:
-        result["genius_stats"] = genius_stats
+    if ref_stats:
+        result["ref_stats"] = ref_stats
     return result
