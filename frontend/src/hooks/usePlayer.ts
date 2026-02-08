@@ -383,11 +383,18 @@ export function usePlayer(options: UsePlayerOptions = {}) {
     }
   }, [])
 
-  const addToQueue = useCallback(async (trackId: string, meta?: { title?: string; artist?: string; img_url?: string }) => {
+  const addToQueue = useCallback(async (trackId: string, meta?: { title?: string; artist?: string; img_url?: string }, autoPlay?: boolean) => {
     initAudio()
 
     if (queueRef.current.find(q => q.id === trackId)) {
-      showToast('Song already in queue', 'warning')
+      if (autoPlay) {
+        const idx = queueRef.current.findIndex(q => q.id === trackId)
+        if (idx >= 0 && queueRef.current[idx].ready) {
+          playIndexRef.current(idx)
+        }
+      } else {
+        showToast('Song already in queue', 'warning')
+      }
       return
     }
 
@@ -442,8 +449,9 @@ export function usePlayer(options: UsePlayerOptions = {}) {
 
     setQueue([...queueRef.current])
 
-    if (queueRef.current.length === 1 && item.ready && currentIndexRef.current < 0) {
-      playIndexRef.current(0)
+    if (item.ready && (autoPlay || (queueRef.current.length === 1 && currentIndexRef.current < 0))) {
+      const idx = queueRef.current.indexOf(item)
+      if (idx >= 0) playIndexRef.current(idx)
     }
   }, [initAudio])
 

@@ -46,9 +46,9 @@ export function PlayerPage() {
           title: data.metadata?.title,
           artist: data.metadata?.artist,
           img_url: data.metadata?.img_url,
-        })
+        }, true)
       } catch {
-        player.addToQueue(id)
+        player.addToQueue(id, undefined, true)
       }
     }
 
