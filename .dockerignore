@@ -20,7 +20,6 @@ src/database.db
 *.pyc
 __pycache__
 melodai.egg-info
-uv.lock
 
 # Tests & docs
 frontend/e2e

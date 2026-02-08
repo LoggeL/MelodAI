@@ -20,5 +20,3 @@ node_modules
 # Built frontend
 src/static
 
-# UV
-uv.lock

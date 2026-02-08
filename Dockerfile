@@ -12,12 +12,15 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install ffmpeg for audio compression
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
 
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
 # Install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
 
 # Copy backend source
 COPY main.py .
@@ -38,4 +41,4 @@ RUN ln -s /data/db/database.db src/database.db \
 
 EXPOSE 5000
 
-CMD ["python", "main.py"]
+CMD ["uv", "run", "python", "main.py"]

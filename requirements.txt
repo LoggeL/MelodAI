@@ -1,9 +1,0 @@
-flask>=3.0
-flask-cors>=4.0
-pycryptodome>=3.20
-python-dotenv>=1.0
-replicate>=0.25
-requests>=2.31
-openai>=1.12
-resend>=0.8
-werkzeug>=3.0
