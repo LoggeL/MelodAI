@@ -112,24 +112,59 @@
   display: inline-flex;
 }
 
+.actionBtnOpen {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: rgba(217, 4, 41, 0.08);
+}
+
+.dropdownChevron {
+  font-size: 0.6rem;
+  margin-left: 2px;
+  transition: transform 0.2s ease;
+}
+
+.dropdownChevronOpen {
+  transform: rotate(180deg);
+}
+
+.reprocessBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+}
+
 .reprocessMenu {
   position: absolute;
-  top: 100%;
+  top: calc(100% + 6px);
   left: 0;
-  margin-top: 4px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.04);
   z-index: 10;
-  min-width: 200px;
+  min-width: 220px;
   overflow: hidden;
+  animation: fadeInUp 0.15s ease-out;
+}
+
+.reprocessMenuHeader {
+  padding: 8px 14px 6px;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
 }
 
 .reprocessMenu button {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
-  padding: 8px 14px;
+  padding: 10px 14px;
   border: none;
   background: transparent;
   color: var(--text);
@@ -137,7 +172,7 @@
   font-size: 0.8rem;
   text-align: left;
   cursor: pointer;
-  transition: background var(--transition);
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
 .reprocessMenu button:hover {
@@ -147,6 +182,17 @@
 
 .reprocessMenu button:not(:last-child) {
   border-bottom: 1px solid var(--border);
+}
+
+.reprocessMenuIcon {
+  width: 14px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.reprocessMenu button:hover .reprocessMenuIcon {
+  color: var(--primary);
 }
 
 /* ─── Tag ─── */

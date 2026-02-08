@@ -192,16 +192,29 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
               </button>
             )}
             <div className={styles.reprocessDropdown}>
-              <button className={styles.actionBtn} onClick={() => setShowReprocessMenu(prev => !prev)}>
+              <button className={`${styles.actionBtn} ${showReprocessMenu ? styles.actionBtnOpen : ''}`} onClick={() => setShowReprocessMenu(prev => !prev)}>
                 <FontAwesomeIcon icon={faRotateRight} /> Reprocess
+                <FontAwesomeIcon icon={faChevronDown} className={`${styles.dropdownChevron} ${showReprocessMenu ? styles.dropdownChevronOpen : ''}`} />
               </button>
               {showReprocessMenu && (
-                <div className={styles.reprocessMenu}>
-                  <button onClick={() => handleReprocess('all')}>Reprocess All</button>
-                  <button onClick={() => handleReprocess('splitting')}>Redo Vocal Split</button>
-                  <button onClick={() => handleReprocess('lyrics')}>Redo Lyrics Extraction</button>
-                  <button onClick={() => handleReprocess('processing')}>Redo Lyrics Processing</button>
-                </div>
+                <>
+                  <div className={styles.reprocessBackdrop} onClick={() => setShowReprocessMenu(false)} />
+                  <div className={styles.reprocessMenu}>
+                    <div className={styles.reprocessMenuHeader}>Reprocess from stage</div>
+                    <button onClick={() => handleReprocess('all')}>
+                      <FontAwesomeIcon icon={faRotateRight} className={styles.reprocessMenuIcon} /> Reprocess All
+                    </button>
+                    <button onClick={() => handleReprocess('splitting')}>
+                      <FontAwesomeIcon icon={faMusic} className={styles.reprocessMenuIcon} /> Redo Vocal Split
+                    </button>
+                    <button onClick={() => handleReprocess('lyrics')}>
+                      <FontAwesomeIcon icon={faFileLines} className={styles.reprocessMenuIcon} /> Redo Lyrics Extraction
+                    </button>
+                    <button onClick={() => handleReprocess('processing')}>
+                      <FontAwesomeIcon icon={faWandMagicSparkles} className={styles.reprocessMenuIcon} /> Redo Lyrics Processing
+                    </button>
+                  </div>
+                </>
               )}
             </div>
             <button className={`${styles.actionBtn} ${styles.dangerBtn}`} onClick={handleDelete}>
