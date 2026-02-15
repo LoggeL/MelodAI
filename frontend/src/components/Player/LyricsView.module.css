@@ -103,7 +103,7 @@
   100% { background-position: 200% 0; }
 }
 
-/* Lyrics lines — the spotlight effect */
+/* Lyrics lines — spotlight effect (opacity only, no size changes) */
 .line {
   padding: 8px 24px;
   margin: 1px auto;
@@ -112,10 +112,7 @@
   text-align: center;
   border-radius: var(--radius-sm);
   border-left: 3px solid transparent;
-  transition:
-    opacity 0.5s var(--ease-out),
-    filter 0.5s var(--ease-out),
-    background 0.3s ease;
+  transition: opacity 0.4s ease, filter 0.4s ease;
   cursor: pointer;
   opacity: 0.15;
   filter: blur(0.5px);
@@ -125,9 +122,6 @@
   opacity: 1;
   filter: blur(0);
   background: var(--primary-glow);
-  padding: 12px 24px;
-  margin: 4px auto;
-  transition: background 0.3s ease;
 }
 
 .lineNear {
@@ -138,40 +132,24 @@
 .lineNext {
   opacity: 0.65;
   filter: blur(0);
-  animation: pulseNext 1.5s ease-in-out infinite;
+  border-left-color: var(--primary);
 }
 
-/* Smooth approach ramp — driven by --approach (0→1) set per-frame in JS */
-.lineApproaching {
-  opacity: calc(0.65 + var(--approach, 0) * 0.35);
-  filter: blur(0);
-  transition: none;
-}
-
-/* Break indicator expand/collapse wrapper */
 .breakWrapper {
   display: grid;
   grid-template-rows: 0fr;
   opacity: 0;
-  transition: grid-template-rows 0.4s ease, opacity 0.35s ease;
+  transition: grid-template-rows 0.3s ease, opacity 0.3s ease;
 }
 
 .breakWrapperVisible {
   grid-template-rows: 1fr;
   opacity: 1;
-  animation: breakExpand 0.4s ease;
 }
 
 .breakContent {
   overflow: hidden;
   min-height: 0;
-}
-
-@keyframes breakExpand {
-  from {
-    grid-template-rows: 0fr;
-    opacity: 0;
-  }
 }
 
 .breakIndicator {
@@ -184,11 +162,6 @@
   max-width: 760px;
   margin: 0 auto;
   user-select: none;
-}
-
-@keyframes pulseNext {
-  0%, 100% { border-left-color: var(--primary); }
-  50% { border-left-color: transparent; }
 }
 
 
@@ -207,16 +180,6 @@
 
 .lineActive .word {
   font-weight: 500;
-  letter-spacing: 0.005em;
-}
-
-.lineActive .word::after {
-  content: attr(data-text);
-  display: block;
-  font-weight: 700;
-  height: 0;
-  overflow: hidden;
-  visibility: hidden;
 }
 
 .wordActive {
@@ -257,11 +220,7 @@
 @media (max-width: 768px) {
   .container { padding: var(--spacing-lg) var(--spacing-sm); }
   .word { font-size: 0.95rem; }
-  .lineActive .word { font-size: 1.25rem; }
   .line { padding: 6px 12px; }
-  .lineActive { padding: 8px 12px; }
-  .lineApproaching { padding: calc(6px + var(--approach, 0) * 2px) 12px; }
-  .lineApproaching .word { font-size: calc(0.95rem + var(--approach, 0) * 0.3rem); }
 }
 
 /* Untimed lyrics (no word-level timestamps) */
@@ -296,11 +255,7 @@
 /* Large screens / projector / beamer */
 @media (min-width: 1440px) {
   .word { font-size: 1.3rem; line-height: 2.2; }
-  .lineActive .word { font-size: 2rem; }
   .line { padding: 10px 32px; }
-  .lineActive { padding: 16px 32px; margin: 6px auto; }
-  .lineApproaching { padding: calc(10px + var(--approach, 0) * 6px) 32px; margin: calc(1px + var(--approach, 0) * 5px) auto; }
-  .lineApproaching .word { font-size: calc(1.3rem + var(--approach, 0) * 0.7rem); }
   .breakIndicator { font-size: 0.8rem; padding: 12px 0; }
   .emptyIcon { font-size: 6rem; }
   .emptyState h3 { font-size: 1.6rem; }
