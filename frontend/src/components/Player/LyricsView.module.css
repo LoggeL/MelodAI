@@ -114,19 +114,15 @@
   border-left: 3px solid transparent;
   transition:
     opacity 0.5s var(--ease-out),
-    transform 0.5s var(--ease-spring),
     filter 0.5s var(--ease-out),
     background 0.3s ease;
   cursor: pointer;
   opacity: 0.15;
-  transform: scale(0.92) translateY(0);
-  transform-origin: center;
   filter: blur(0.5px);
 }
 
 .lineActive {
   opacity: 1;
-  transform: scale(1);
   filter: blur(0);
   background: var(--primary-glow);
   padding: 12px 24px;
@@ -136,13 +132,11 @@
 
 .lineNear {
   opacity: 0.45;
-  transform: scale(0.96);
   filter: blur(0);
 }
 
 .lineNext {
   opacity: 0.65;
-  transform: scale(0.98);
   filter: blur(0);
   animation: pulseNext 1.5s ease-in-out infinite;
 }
@@ -150,19 +144,8 @@
 /* Smooth approach ramp — driven by --approach (0→1) set per-frame in JS */
 .lineApproaching {
   opacity: calc(0.65 + var(--approach, 0) * 0.35);
-  transform: scale(calc(0.98 + var(--approach, 0) * 0.02));
   filter: blur(0);
-  padding: calc(8px + var(--approach, 0) * 4px) 24px;
-  margin: calc(1px + var(--approach, 0) * 3px) auto;
   transition: none;
-}
-
-.lineApproaching .word {
-  font-size: calc(1.1rem + var(--approach, 0) * 0.55rem);
-  font-weight: calc(400 + var(--approach, 0) * 100);
-  padding: 1px calc(1px - var(--approach, 0) * 1px);
-  line-height: calc(2 - var(--approach, 0) * 0.5);
-  margin-right: calc(0.25em - var(--approach, 0) * 0.05em);
 }
 
 /* Break indicator expand/collapse wrapper */
@@ -217,18 +200,14 @@
   border-radius: 3px;
   cursor: pointer;
   transition: color 0.1s ease, text-shadow 0.15s ease;
-  font-size: 1.1rem;
-  line-height: 2;
+  font-size: 1.3rem;
+  line-height: 1.8;
   font-weight: 400;
 }
 
 .lineActive .word {
-  font-size: 1.65rem;
   font-weight: 500;
   letter-spacing: 0.005em;
-  padding: 1px 0;
-  line-height: 1.5;
-  margin-right: 0.2em;
 }
 
 .lineActive .word::after {

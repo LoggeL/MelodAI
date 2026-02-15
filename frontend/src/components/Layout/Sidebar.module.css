@@ -204,8 +204,8 @@
     position: fixed;
     top: 0;
     left: 0;
-    width: 85vw;
-    min-width: 85vw;
+    width: 85vw !important;
+    min-width: 85vw !important;
     max-width: 360px;
     z-index: 200;
     transform: translateX(-100%);

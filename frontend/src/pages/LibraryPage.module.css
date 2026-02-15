@@ -633,6 +633,33 @@
   color: var(--primary);
 }
 
+/* Play hint on album art hover */
+.karaokeHint {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 0.65rem;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: all 0.2s ease;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.cardArt:hover .karaokeHint {
+  opacity: 1;
+  transform: scale(1);
+}
+
 .favBadge {
   position: absolute;
   top: 8px;
@@ -779,12 +806,12 @@
 }
 
 .previewBtn,
-.playBtn,
 .addQueueBtn {
   flex: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 5px;
   padding: 7px 0;
   border-radius: 8px;
   font-size: 0.68rem;
@@ -812,17 +839,6 @@
   animation: pulse 1.5s ease infinite;
 }
 
-.playBtn {
-  background: var(--gradient);
-  color: #fff;
-  box-shadow: 0 2px 8px rgba(217, 4, 41, 0.25);
-}
-
-.playBtn:hover {
-  box-shadow: 0 4px 14px rgba(217, 4, 41, 0.4);
-  transform: translateY(-1px);
-}
-
 .cardMenuWrap {
   position: relative;
   flex: 1;
@@ -830,14 +846,15 @@
 
 .addQueueBtn {
   background: transparent;
-  border: 1.5px solid var(--primary);
-  color: var(--primary);
+  border: 1.5px solid var(--border);
+  color: var(--text-secondary);
   width: 100%;
 }
 
 .addQueueBtn:hover {
-  background: var(--primary);
-  color: #fff;
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-glow);
 }
 
 /* ─── Playlist Dropdown ─── */
@@ -1030,6 +1047,28 @@
   display: block;
 }
 
+.listThumbClickable {
+  cursor: pointer;
+}
+
+.listThumbPlayOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 0.65rem;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.listThumbClickable:hover .listThumbPlayOverlay {
+  opacity: 1;
+}
+
 .listThumbOverlay {
   position: absolute;
   inset: 0;
@@ -1162,18 +1201,6 @@
   border-color: var(--primary);
   color: var(--primary);
   animation: pulse 1.5s ease infinite;
-}
-
-.listPlayBtn {
-  background: var(--gradient);
-  color: #fff !important;
-  border: none !important;
-  box-shadow: 0 2px 6px rgba(217, 4, 41, 0.2);
-}
-
-.listPlayBtn:hover {
-  box-shadow: 0 3px 10px rgba(217, 4, 41, 0.35);
-  transform: translateY(-1px);
 }
 
 .listMenuWrap {

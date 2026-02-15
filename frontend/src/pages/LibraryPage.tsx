@@ -3,9 +3,9 @@ import { useNavigate, Link } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faArrowLeft, faRotateRight, faRecordVinyl,
-  faHeart as faHeartSolid, faMagnifyingGlass, faPlay, faPlus, faPause, faMicrophone,
-  faTableCells, faList, faVolumeLow, faTrash, faXmark, faMusic, faEllipsisVertical,
-  faCoins, faGlobe, faListUl, faChevronLeft,
+  faHeart as faHeartSolid, faMagnifyingGlass, faPlay, faPlus, faPause,
+  faTableCells, faList, faVolumeLow, faTrash, faXmark, faMusic,
+  faCoins, faGlobe, faListUl, faChevronLeft, faHeadphones,
 } from '@fortawesome/free-solid-svg-icons'
 import { useAuth } from '../hooks/useAuth'
 import { tracks } from '../services/api'
@@ -850,16 +850,25 @@ export function LibraryPage() {
               const isProcessing = !song.complete
               return (
                 <div key={song.id} className={`${styles.card} ${isPreviewing ? styles.cardPreviewing : ''} ${isProcessing ? styles.cardProcessing : ''}`}>
-                  <div className={styles.cardArt}>
+                  <div
+                    className={styles.cardArt}
+                    onClick={() => song.complete && handlePlay(song)}
+                    title={song.complete ? 'Open in karaoke' : undefined}
+                  >
                     <img src={song.img_url ? hiResCover(song.img_url) : '/logo.svg'} alt="" loading="lazy" />
                     {song.complete && (
-                      <HeartButton
-                        active={isFav}
-                        onClick={() => toggleFavorite(song.id)}
-                        className={styles.artFavBtn}
-                        activeClassName={styles.artFavBtnActive}
-                        title={isFav ? 'Remove from favorites' : 'Add to favorites'}
-                      />
+                      <>
+                        <HeartButton
+                          active={isFav}
+                          onClick={(e: React.MouseEvent) => { e.stopPropagation(); toggleFavorite(song.id) }}
+                          className={styles.artFavBtn}
+                          activeClassName={styles.artFavBtnActive}
+                          title={isFav ? 'Remove from favorites' : 'Add to favorites'}
+                        />
+                        <div className={styles.karaokeHint}>
+                          <FontAwesomeIcon icon={faPlay} />
+                        </div>
+                      </>
                     )}
                     {isFav && <div className={styles.favBadge} />}
 
@@ -907,16 +916,9 @@ export function LibraryPage() {
                       <button
                         className={`${styles.previewBtn} ${isPreviewing ? styles.previewBtnActive : ''}`}
                         onClick={() => togglePreview(song.id)}
-                        title={isPreviewing ? 'Stop preview' : 'Preview'}
+                        title={isPreviewing ? 'Stop preview' : 'Preview 30s'}
                       >
-                        <FontAwesomeIcon icon={isPreviewing ? faPause : faPlay} />
-                      </button>
-                      <button
-                        className={styles.playBtn}
-                        onClick={() => handlePlay(song)}
-                        title="Play in karaoke"
-                      >
-                        <FontAwesomeIcon icon={faMicrophone} />
+                        <FontAwesomeIcon icon={isPreviewing ? faPause : faHeadphones} />
                       </button>
                       <div className={styles.cardMenuWrap}>
                         <button
@@ -924,7 +926,7 @@ export function LibraryPage() {
                           onClick={() => setAddToPlaylistSongId(prev => prev === song.id ? null : song.id)}
                           title="Add to playlist"
                         >
-                          <FontAwesomeIcon icon={faEllipsisVertical} />
+                          <FontAwesomeIcon icon={faListUl} />
                         </button>
                         {addToPlaylistSongId === song.id && (
                           <div className={styles.playlistDropdown} ref={addToPlaylistRef}>
@@ -1000,13 +1002,22 @@ export function LibraryPage() {
                   className={`${styles.listRow} ${isPreviewing ? styles.listRowPreviewing : ''}`}
                 >
                   <div className={styles.listColArt}>
-                    <div className={styles.listThumbWrap}>
+                    <div
+                      className={`${styles.listThumbWrap} ${song.complete ? styles.listThumbClickable : ''}`}
+                      onClick={() => song.complete && handlePlay(song)}
+                      title={song.complete ? 'Open in karaoke' : undefined}
+                    >
                       <img
                         src={song.img_url || '/logo.svg'}
                         alt=""
                         loading="lazy"
                         className={styles.listThumb}
                       />
+                      {song.complete && (
+                        <div className={styles.listThumbPlayOverlay}>
+                          <FontAwesomeIcon icon={faPlay} />
+                        </div>
+                      )}
                       {isProcessing && (
                         <div className={styles.listThumbOverlay}>
                           <span className={styles.listThumbProgress}>
@@ -1046,16 +1057,9 @@ export function LibraryPage() {
                         <button
                           className={`${styles.listActionBtn} ${isPreviewing ? styles.listActionBtnActive : ''}`}
                           onClick={() => togglePreview(song.id)}
-                          title={isPreviewing ? 'Stop preview' : 'Preview'}
+                          title={isPreviewing ? 'Stop preview' : 'Preview 30s'}
                         >
-                          <FontAwesomeIcon icon={isPreviewing ? faPause : faPlay} />
-                        </button>
-                        <button
-                          className={`${styles.listActionBtn} ${styles.listPlayBtn}`}
-                          onClick={() => handlePlay(song)}
-                          title="Play in karaoke"
-                        >
-                          <FontAwesomeIcon icon={faMicrophone} />
+                          <FontAwesomeIcon icon={isPreviewing ? faPause : faHeadphones} />
                         </button>
                         <div className={styles.listMenuWrap}>
                           <button
@@ -1063,7 +1067,7 @@ export function LibraryPage() {
                             onClick={() => setAddToPlaylistSongId(prev => prev === song.id ? null : song.id)}
                             title="Add to playlist"
                           >
-                            <FontAwesomeIcon icon={faEllipsisVertical} />
+                            <FontAwesomeIcon icon={faListUl} />
                           </button>
                           {addToPlaylistSongId === song.id && (
                             <div className={styles.playlistDropdown} ref={addToPlaylistRef}>
