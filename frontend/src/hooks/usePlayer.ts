@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import type { QueueItem, LyricsData } from '../types'
 import { tracks } from '../services/api'
 import { showToast } from './useToast'
+import type { SyncState, SyncCommand } from './useSync'
 
 interface UsePlayerOptions {
   isAdmin?: boolean
@@ -119,6 +120,11 @@ export function usePlayer(options: UsePlayerOptions = {}) {
   // Ref for playIndex so onended can call it without circular deps
   const playIndexRef = useRef<(index: number) => void>(() => {})
 
+  // Sync refs — populated by PlayerPage to wire useSync ↔ usePlayer
+  const syncSourceRef = useRef(false)
+  const syncPushRef = useRef<(() => void) | null>(null)
+  const syncCommandRef = useRef<((cmd: string, payload?: Record<string, unknown>) => void) | null>(null)
+
   // Credit tracking refs
   const creditChargedRef = useRef<Set<string>>(new Set())
   const optionsRef = useRef(options)
@@ -129,7 +135,7 @@ export function usePlayer(options: UsePlayerOptions = {}) {
     tracks.favorites().then(ids => setFavorites(new Set(ids))).catch(() => {})
   }, [])
 
-  // Debounced save queue to localStorage
+  // Debounced save queue to localStorage + sync push
   useEffect(() => {
     if (saveQueueTimerRef.current) clearTimeout(saveQueueTimerRef.current)
     saveQueueTimerRef.current = setTimeout(() => {
@@ -144,6 +150,11 @@ export function usePlayer(options: UsePlayerOptions = {}) {
         })),
         currentIndex,
       }))
+      // Push to sync server (skip if this change originated from sync)
+      if (!syncSourceRef.current) {
+        syncPushRef.current?.()
+      }
+      syncSourceRef.current = false
     }, 500)
     return () => { if (saveQueueTimerRef.current) clearTimeout(saveQueueTimerRef.current) }
   }, [queue, currentIndex])
@@ -483,6 +494,8 @@ export function usePlayer(options: UsePlayerOptions = {}) {
     const item = q[index]
     if (!item.ready) return
 
+    if (!syncSourceRef.current) syncCommandRef.current?.('playIndex', { index })
+
     if (audioCtxRef.current?.state === 'suspended') {
       await audioCtxRef.current.resume()
     }
@@ -546,6 +559,7 @@ export function usePlayer(options: UsePlayerOptions = {}) {
       instSourceRef.current = null
       isPlayingRef.current = false
       setIsPlaying(false)
+      if (!syncSourceRef.current) syncCommandRef.current?.('pause')
     } else {
       // If buffers aren't loaded yet (e.g. restored from localStorage), do a full playIndex
       if (!vocalsBufferRef.current || !instBufferRef.current) {
@@ -555,6 +569,7 @@ export function usePlayer(options: UsePlayerOptions = {}) {
       if (audioCtxRef.current?.state === 'suspended') audioCtxRef.current.resume()
       startPlayback(pausedAtRef.current)
       setIsPlaying(true)
+      if (!syncSourceRef.current) syncCommandRef.current?.('play')
     }
   }, [isPlaying, startPlayback, playIndex])
 
@@ -566,6 +581,7 @@ export function usePlayer(options: UsePlayerOptions = {}) {
       pausedAtRef.current = time
       setCurrentTime(time)
     }
+    if (!syncSourceRef.current) syncCommandRef.current?.('seek', { time })
   }, [startPlayback])
 
   const prev = useCallback(() => {
@@ -721,6 +737,110 @@ export function usePlayer(options: UsePlayerOptions = {}) {
     await tracks.add(item.id)
   }, [])
 
+  // Apply incoming sync state from another device
+  const applySyncState = useCallback((state: SyncState) => {
+    syncSourceRef.current = true
+    const newQueue: QueueItem[] = state.queue.map(item => ({
+      id: item.id,
+      title: item.title,
+      artist: item.artist,
+      thumbnail: item.thumbnail,
+      vocalsUrl: `/songs/${item.id}/vocals.mp3`,
+      musicUrl: `/songs/${item.id}/no_vocals.mp3`,
+      lyricsUrl: `/api/track/${item.id}/lyrics`,
+      ready: true,
+      progress: 100,
+      status: 'ready',
+      error: false,
+    }))
+    queueRef.current = newQueue
+    setQueue(newQueue)
+    setCurrentIndex(state.currentIndex)
+
+    // If current track changed, load and play it
+    const currentItem = currentIndexRef.current >= 0 ? queueRef.current[currentIndexRef.current] : null
+    const newItem = state.currentIndex >= 0 ? newQueue[state.currentIndex] : null
+    if (newItem && newItem.id !== currentItem?.id) {
+      playIndex(state.currentIndex)
+    } else if (state.isPlaying && !isPlayingRef.current && newItem) {
+      // Same track but should be playing
+      if (vocalsBufferRef.current && instBufferRef.current) {
+        if (audioCtxRef.current?.state === 'suspended') audioCtxRef.current.resume()
+        startPlayback(pausedAtRef.current)
+        setIsPlaying(true)
+      } else {
+        playIndex(state.currentIndex)
+      }
+    } else if (!state.isPlaying && isPlayingRef.current) {
+      // Should be paused
+      if (audioCtxRef.current) {
+        const elapsed = audioCtxRef.current.currentTime - startCtxTimeRef.current
+        pausedAtRef.current = startOffsetRef.current + elapsed
+      }
+      try { vocalsSourceRef.current?.stop() } catch { /* */ }
+      try { instSourceRef.current?.stop() } catch { /* */ }
+      vocalsSourceRef.current = null
+      instSourceRef.current = null
+      isPlayingRef.current = false
+      setIsPlaying(false)
+    }
+  }, [playIndex, startPlayback])
+
+  // Apply incoming sync command from another device
+  const applySyncCommand = useCallback((cmd: SyncCommand) => {
+    syncSourceRef.current = true
+    switch (cmd.command) {
+      case 'play':
+        if (!isPlayingRef.current && currentIndexRef.current >= 0) {
+          if (!vocalsBufferRef.current || !instBufferRef.current) {
+            playIndex(currentIndexRef.current)
+          } else {
+            if (audioCtxRef.current?.state === 'suspended') audioCtxRef.current.resume()
+            startPlayback(pausedAtRef.current)
+            setIsPlaying(true)
+          }
+        }
+        break
+      case 'pause':
+        if (isPlayingRef.current) {
+          if (audioCtxRef.current) {
+            const elapsed = audioCtxRef.current.currentTime - startCtxTimeRef.current
+            pausedAtRef.current = startOffsetRef.current + elapsed
+          }
+          try { vocalsSourceRef.current?.stop() } catch { /* */ }
+          try { instSourceRef.current?.stop() } catch { /* */ }
+          vocalsSourceRef.current = null
+          instSourceRef.current = null
+          isPlayingRef.current = false
+          setIsPlaying(false)
+        }
+        break
+      case 'next':
+        next()
+        break
+      case 'prev':
+        prev()
+        break
+      case 'seek': {
+        const time = (cmd.payload as { time?: number }).time
+        if (time !== undefined) {
+          if (isPlayingRef.current) {
+            startPlayback(time)
+          } else {
+            pausedAtRef.current = time
+            setCurrentTime(time)
+          }
+        }
+        break
+      }
+      case 'playIndex': {
+        const index = (cmd.payload as { index?: number }).index
+        if (index !== undefined) playIndex(index)
+        break
+      }
+    }
+  }, [playIndex, startPlayback, next, prev])
+
   const currentTrack = currentIndex >= 0 ? queue[currentIndex] : null
   const initialVocalsVolume = storedPlayerData.current ? storedPlayerData.current.vocalsVolume : 50
   const initialInstrumentalVolume = storedPlayerData.current ? storedPlayerData.current.instrumentalVolume : 50
@@ -733,5 +853,7 @@ export function usePlayer(options: UsePlayerOptions = {}) {
     removeFromQueue, setVocalsVolume, setInstrumentalVolume,
     toggleKaraokeMode, toggleFavorite, editWord,
     shuffle, clearQueue, reorderQueue, retryTrack,
+    // Sync integration
+    syncPushRef, syncCommandRef, applySyncState, applySyncCommand,
   }
 }

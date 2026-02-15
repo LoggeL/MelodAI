@@ -60,6 +60,18 @@ def _run_migrations(db):
     )""")
     db.commit()
 
+    # Ensure sync_state table exists
+    db.execute("""CREATE TABLE IF NOT EXISTS sync_state (
+        user_id INTEGER PRIMARY KEY,
+        queue_data TEXT NOT NULL DEFAULT '[]',
+        current_index INTEGER NOT NULL DEFAULT -1,
+        is_playing INTEGER NOT NULL DEFAULT 0,
+        version INTEGER NOT NULL DEFAULT 0,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    )""")
+    db.commit()
+
 
 def query_db(query, args=(), one=False):
     db = get_db()

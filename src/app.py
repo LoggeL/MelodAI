@@ -22,10 +22,12 @@ def create_app():
     from src.routes.track import track_bp
     from src.routes.static import static_bp
     from src.routes.admin import admin_bp
+    from src.routes.sync import sync_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(track_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(sync_bp)
     app.register_blueprint(static_bp)
 
     @app.errorhandler(500)

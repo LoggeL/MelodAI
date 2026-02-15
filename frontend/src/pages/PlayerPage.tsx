@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { usePlayer } from '../hooks/usePlayer'
+import { useSync } from '../hooks/useSync'
+import type { SyncState, SyncCommand } from '../hooks/useSync'
 import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
 import { useAlbumColors } from '../hooks/useAlbumColors'
@@ -29,6 +31,32 @@ export function PlayerPage() {
   useAlbumColors(player.currentTrack?.thumbnail)
   const searchRef = useRef<SearchBarHandle>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  // Cross-device queue sync
+  const onSyncState = useCallback((state: SyncState) => {
+    player.applySyncState(state)
+  }, [player.applySyncState])
+
+  const onCommand = useCallback((cmd: SyncCommand) => {
+    player.applySyncCommand(cmd)
+  }, [player.applySyncCommand])
+
+  const sync = useSync({ enabled: authenticated, onSyncState, onCommand })
+
+  // Wire sync functions into player refs
+  useEffect(() => {
+    player.syncPushRef.current = () => {
+      const readyItems = player.queue.filter(q => q.ready)
+      sync.pushQueue(
+        readyItems.map(q => ({ id: q.id, title: q.title, artist: q.artist, thumbnail: q.thumbnail })),
+        player.currentIndex,
+        player.isPlaying,
+      )
+    }
+    player.syncCommandRef.current = (cmd: string, payload?: Record<string, unknown>) => {
+      sync.sendCommand(cmd, payload ?? {})
+    }
+  }, [player.queue, player.currentIndex, player.isPlaying, sync.pushQueue, sync.sendCommand])
 
   useEffect(() => {
     if (checked && !authenticated) {
