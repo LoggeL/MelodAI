@@ -369,9 +369,19 @@
 }
 
 @media (max-width: 768px) {
+  .controls {
+    position: sticky;
+    bottom: 0;
+    z-index: 100;
+  }
   .progressRow { padding: var(--spacing-xs) var(--spacing-md) 0; }
   .buttonsRow { padding: var(--spacing-xs) var(--spacing-md) var(--spacing-xs); gap: var(--spacing-sm); }
-  .rightControls { display: none; }
+  .rightControls {
+    position: static;
+    gap: var(--spacing-xs);
+  }
+  .volumeStack { display: none; }
+  .slider { display: none; }
 }
 
 /* Large screens / projector / beamer */
