@@ -1,5 +1,5 @@
+import base64
 import os
-import re
 
 import requests
 
@@ -32,114 +32,125 @@ def _fetch_lrclib(title, artist):
     return None
 
 
-def _fetch_gemini(raw_text=None, vocals_path=None):
-    """Use Gemini Flash to produce formatted lyric lines from ASR transcript + vocals audio.
+def _fetch_openrouter(raw_text=None, vocals_path=None):
+    """Use Gemini Flash via OpenRouter to produce formatted lyric lines.
 
-    Falls back gracefully if the package is missing or GOOGLE_API_KEY is unset.
+    Sends the WhisperX plain-text transcript and, optionally, the isolated
+    vocals audio (base64-encoded) so Gemini can correct transcription errors
+    and group words into proper lyric lines.
 
-    Args:
-        raw_text:    Plain-text WhisperX transcript (all words joined, may have errors).
-        vocals_path: Path to the vocals .mp3 file for audio-grounded correction.
+    Falls back to text-only if the audio payload is rejected by the API.
 
     Returns a list of lyric line strings, or None on failure.
     """
+    api_key = os.getenv("OPENROUTER_API_KEY", "")
+    if not api_key:
+        print("WARNING: OPENROUTER_API_KEY not set — Gemini lyrics fallback skipped")
+        return None
+
     if not raw_text and not vocals_path:
         return None
 
-    try:
-        import google.generativeai as genai
-    except ImportError:
-        print("WARNING: google-generativeai not installed — Gemini lyrics fallback unavailable")
-        return None
+    model = os.getenv("LYRICS_GEMINI_MODEL", "google/gemini-3-flash-preview")
 
-    api_key = os.getenv("GOOGLE_API_KEY", "")
-    if not api_key:
-        print("WARNING: GOOGLE_API_KEY not set — Gemini lyrics fallback skipped")
-        return None
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "HTTP-Referer": "https://melodai.logge.top",
+        "X-Title": "MelodAI",
+        "Content-Type": "application/json",
+    }
 
-    genai.configure(api_key=api_key)
-    model_name = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
-
-    parts = []
-    uploaded_file = None
-
-    # Upload vocals audio via the Files API
-    if vocals_path and os.path.exists(vocals_path):
-        try:
-            import time
-            print(f"INFO: Uploading vocals to Gemini Files API ({os.path.basename(vocals_path)})…")
-            uploaded_file = genai.upload_file(vocals_path, mime_type="audio/mpeg")
-            # Poll until the file is ready
-            while uploaded_file.state.name == "PROCESSING":
-                time.sleep(2)
-                uploaded_file = genai.get_file(uploaded_file.name)
-            if uploaded_file.state.name != "ACTIVE":
-                print(f"WARNING: Gemini file upload finished with state {uploaded_file.state.name!r}")
-                uploaded_file = None
-            else:
-                parts.append(uploaded_file)
-                print("INFO: Vocals uploaded to Gemini successfully")
-        except Exception as e:
-            print(f"WARNING: Gemini audio upload failed: {e}")
-            uploaded_file = None
-
-    # Build the text prompt
+    # Build the text prompt once — shared across both attempts
     prompt_parts = ["You are a lyrics transcription assistant."]
     if raw_text:
         prompt_parts.append(
-            "Below is a rough automatic speech recognition (ASR) transcript of the song's "
-            "vocals. It may contain errors, wrong words, or incorrect punctuation.\n\n"
+            "Below is a rough automatic speech recognition (ASR) transcript of the "
+            "song's vocals. It may contain errors, wrong words, or broken punctuation.\n\n"
             f"ASR transcript:\n{raw_text}"
         )
-    if uploaded_file:
+    if vocals_path and os.path.exists(vocals_path):
         prompt_parts.append(
             "I have also attached the isolated vocals audio track. "
             "Use it to verify and correct the transcript."
         )
     prompt_parts.append(
-        "Output the correct, cleaned-up song lyrics formatted as one lyric line per text line. "
-        "Do NOT include timestamps, line numbers, section labels (like [Chorus]), "
-        "or any other formatting — just the lyric lines themselves. "
+        "Output the correct, cleaned-up song lyrics formatted as one lyric line per "
+        "text line. Do NOT include timestamps, line numbers, or section labels like "
+        "[Chorus] — just the lyric lines themselves. "
         "If a line repeats (e.g. a chorus), include it each time it is sung."
     )
-    parts.append("\n\n".join(prompt_parts))
+    prompt = "\n\n".join(prompt_parts)
 
-    try:
-        model = genai.GenerativeModel(model_name)
-        response = model.generate_content(parts)
-        text = response.text.strip()
-        lines = [l.strip() for l in text.split("\n") if l.strip()]
-        print(f"INFO: Gemini lyrics fallback produced {len(lines)} lines")
-        return lines if lines else None
-    except Exception as e:
-        print(f"WARNING: Gemini generate_content failed: {e}")
-        return None
-    finally:
-        if uploaded_file:
+    # Try with audio first, then fall back to text-only
+    attempts = []
+    if vocals_path and os.path.exists(vocals_path):
+        attempts.append("audio")
+    attempts.append("text_only")
+
+    for attempt in attempts:
+        if attempt == "audio":
             try:
-                genai.delete_file(uploaded_file.name)
-            except Exception:
-                pass
+                with open(vocals_path, "rb") as f:
+                    audio_b64 = base64.b64encode(f.read()).decode()
+                content = [
+                    {"type": "text", "text": prompt},
+                    {"type": "input_audio", "input_audio": {"data": audio_b64, "format": "mp3"}},
+                ]
+            except Exception as e:
+                print(f"WARNING: Audio encoding for OpenRouter failed: {e}")
+                continue
+        else:
+            content = prompt  # plain string — OpenRouter accepts both forms
+
+        payload = {
+            "model": model,
+            "messages": [{"role": "user", "content": content}],
+            "max_tokens": 2048,
+        }
+
+        try:
+            resp = requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=120,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            if "error" in data:
+                raise RuntimeError(data["error"])
+            text = data["choices"][0]["message"]["content"].strip()
+            lines = [l.strip() for l in text.split("\n") if l.strip()]
+            print(f"INFO: OpenRouter Gemini fallback produced {len(lines)} lines (attempt={attempt})")
+            return lines if lines else None
+        except Exception as e:
+            if attempt == "audio":
+                print(f"WARNING: OpenRouter audio attempt failed ({e}), retrying text-only")
+                continue
+            print(f"WARNING: OpenRouter Gemini lyrics fallback failed: {e}")
+            return None
+
+    return None
 
 
 def fetch_lyrics(title, artist, vocals_path=None, raw_text=None):
-    """Fetch lyrics from lrclib.net, with a Gemini Flash fallback.
+    """Fetch lyrics from lrclib.net, with an OpenRouter Gemini Flash fallback.
 
     Returns a list of lyric line strings, or None if all sources fail.
 
     Args:
         title:       Song title.
         artist:      Artist name.
-        vocals_path: Path to the vocals .mp3 (for Gemini fallback).
-        raw_text:    WhisperX plain-text transcript (for Gemini fallback).
+        vocals_path: Path to the vocals .mp3 (used in Gemini fallback).
+        raw_text:    WhisperX plain-text transcript (used in Gemini fallback).
     """
     result = _fetch_lrclib(title, artist)
     if result:
         return result
 
-    # lrclib returned nothing — try Gemini if we have something to work with
+    # lrclib returned nothing — fall back to OpenRouter/Gemini
     if vocals_path or raw_text:
         print(f"INFO: lrclib found no lyrics for '{title}' by '{artist}', trying Gemini fallback")
-        return _fetch_gemini(raw_text=raw_text, vocals_path=vocals_path)
+        return _fetch_openrouter(raw_text=raw_text, vocals_path=vocals_path)
 
     return None
