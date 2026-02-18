@@ -28,11 +28,163 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
-function sliderTrackStyle(value: number): React.CSSProperties {
-  return {
-    background: `linear-gradient(to right, var(--primary) 0%, var(--primary) ${value}%, var(--surface-hover) ${value}%, var(--surface-hover) 100%)`,
-  }
+// ── Arc Knob ──────────────────────────────────────────────────────────────────
+const K = { size: 66, cx: 33, cy: 33, r: 23, stroke: 4.5, start: 225, sweep: 270 }
+
+function kPt(deg: number, r: number = K.r) {
+  const rad = (deg * Math.PI) / 180
+  return { x: K.cx + r * Math.sin(rad), y: K.cy - r * Math.cos(rad) }
 }
+
+function kPath(from: number, to: number): string {
+  if (to - from < 0.5) return ''
+  const s = kPt(from)
+  const e = kPt(to)
+  const large = to - from > 180 ? 1 : 0
+  return `M ${s.x.toFixed(2)} ${s.y.toFixed(2)} A ${K.r} ${K.r} 0 ${large} 1 ${e.x.toFixed(2)} ${e.y.toFixed(2)}`
+}
+
+function kValueFromPointer(e: React.PointerEvent<SVGSVGElement>): number {
+  const rect = e.currentTarget.getBoundingClientRect()
+  const scaleX = K.size / rect.width
+  const scaleY = K.size / rect.height
+  const dx = (e.clientX - rect.left) * scaleX - K.cx
+  const dy = (e.clientY - rect.top) * scaleY - K.cy
+  let deg = Math.atan2(dx, -dy) * (180 / Math.PI)
+  if (deg < 0) deg += 360
+  let norm = deg - K.start
+  if (norm < -(K.sweep / 2 + 45)) norm += 360
+  return Math.max(0, Math.min(100, Math.round((Math.max(0, norm) / K.sweep) * 100)))
+}
+
+interface KnobProps {
+  value: number
+  disabled?: boolean
+  label: string
+  knobId: string
+  onChange: (v: number) => void
+}
+
+function ArcKnob({ value, disabled, label, knobId, onChange }: KnobProps) {
+  const dragging = useRef(false)
+  const endDeg = K.start + (value / 100) * K.sweep
+  const dot = kPt(endDeg)
+  const dotStart = kPt(K.start)
+  const bgPath = kPath(K.start, K.start + K.sweep)
+  const fillPath = value > 0 && !disabled ? kPath(K.start, endDeg) : ''
+  const gradId = `knob-grad-${knobId}`
+  const glowId = `knob-glow-${knobId}`
+
+  return (
+    <div className={`${styles.knobContainer} ${disabled ? styles.knobDisabled : ''}`}>
+      <svg
+        width={K.size}
+        height={K.size}
+        viewBox={`0 0 ${K.size} ${K.size}`}
+        className={styles.knobSvg}
+        onPointerDown={(e) => {
+          if (disabled) return
+          e.currentTarget.setPointerCapture(e.pointerId)
+          dragging.current = true
+          onChange(kValueFromPointer(e))
+        }}
+        onPointerMove={(e) => {
+          if (!dragging.current || disabled) return
+          onChange(kValueFromPointer(e))
+        }}
+        onPointerUp={() => { dragging.current = false }}
+        onPointerCancel={() => { dragging.current = false }}
+        style={{ cursor: disabled ? 'not-allowed' : 'grab', touchAction: 'none', userSelect: 'none' }}
+      >
+        <defs>
+          <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="var(--accent)" />
+            <stop offset="100%" stopColor="var(--primary-dark)" />
+          </linearGradient>
+          <filter id={glowId} x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="2" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+
+        {/* Subtle inner shadow ring */}
+        <circle cx={K.cx} cy={K.cy} r={K.r + 3} fill="none" stroke="rgba(0,0,0,0.35)" strokeWidth="6" />
+
+        {/* Background track */}
+        <path
+          d={bgPath}
+          fill="none"
+          stroke="rgba(255,255,255,0.05)"
+          strokeWidth={K.stroke}
+          strokeLinecap="round"
+        />
+
+        {/* Filled track */}
+        {fillPath && (
+          <path
+            d={fillPath}
+            fill="none"
+            stroke={`url(#${gradId})`}
+            strokeWidth={K.stroke}
+            strokeLinecap="round"
+            filter={`url(#${glowId})`}
+          />
+        )}
+
+        {/* Track tick marks */}
+        {[0, 25, 50, 75, 100].map((tick) => {
+          const tickDeg = K.start + (tick / 100) * K.sweep
+          const inner = kPt(tickDeg, K.r - 6)
+          const outer = kPt(tickDeg, K.r - 3)
+          const active = !disabled && tick <= value
+          return (
+            <line
+              key={tick}
+              x1={inner.x} y1={inner.y}
+              x2={outer.x} y2={outer.y}
+              stroke={active ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.1)'}
+              strokeWidth="1"
+              strokeLinecap="round"
+            />
+          )
+        })}
+
+        {/* Indicator dot */}
+        {!disabled ? (
+          <circle
+            cx={dot.x}
+            cy={dot.y}
+            r={3.5}
+            fill={value > 0 ? '#fff' : 'rgba(255,255,255,0.15)'}
+            filter={value > 0 ? `url(#${glowId})` : undefined}
+          />
+        ) : (
+          <circle cx={dotStart.x} cy={dotStart.y} r={2.5} fill="rgba(255,255,255,0.08)" />
+        )}
+
+        {/* Center value */}
+        <text
+          x={K.cx}
+          y={K.cy + 5}
+          textAnchor="middle"
+          fontSize="13"
+          fontWeight="700"
+          fontFamily="'Barlow Condensed', sans-serif"
+          fill={disabled ? 'rgba(255,255,255,0.12)' : value > 0 ? 'var(--text)' : 'var(--text-muted)'}
+          letterSpacing="0.5"
+        >
+          {disabled ? '—' : value}
+        </text>
+      </svg>
+      <span className={styles.knobLabel}>{label}</span>
+    </div>
+  )
+}
+
+// ── Controls ──────────────────────────────────────────────────────────────────
 
 export function Controls({
   isPlaying, currentTime, duration, karaokeMode, analyserRef, thumbnail,
@@ -62,12 +214,11 @@ export function Controls({
     let prevW = 0
     let prevH = 0
     const smoothBars = smoothBarsRef.current
-    const decay = 0.92 // how fast bars shrink when paused
+    const decay = 0.92
 
     const draw = () => {
       const analyser = analyserRef.current
 
-      // Resize canvas to match parent
       const parent = canvas.parentElement
       if (parent) {
         const w = parent.clientWidth
@@ -86,7 +237,6 @@ export function Controls({
 
       ctx.clearRect(0, 0, prevW, prevH)
 
-      // Refresh cached color every ~30 frames
       if (rgbFrame++ % 30 === 0) {
         const v = getComputedStyle(document.documentElement).getPropertyValue('--primary-rgb').trim()
         if (v) cachedRgb = v
@@ -102,31 +252,22 @@ export function Controls({
         const data = new Uint8Array(analyser.frequencyBinCount)
         analyser.getByteFrequencyData(data)
 
-        // Bass kick energy for play button pulsation (sub-bass + kick bins 0-4)
         let bassSum = 0
         const bassBins = Math.min(5, data.length)
-        for (let i = 0; i < bassBins; i++) {
-          bassSum += data[i]
-        }
+        for (let i = 0; i < bassBins; i++) bassSum += data[i]
         const bassEnergy = bassSum / (bassBins * 255)
-        // Apply a power curve to emphasize peaks (kicks) over sustained bass
         const kick = bassEnergy * bassEnergy
         const scale = 1 + kick * 0.45
         wrapper.style.transform = `scale(${scale})`
         wrapper.style.filter = `drop-shadow(0 0 ${8 + kick * 40}px rgba(${cachedRgb}, ${0.25 + kick * 0.65}))`
 
-        // Update smooth bars with live data
         const step = Math.max(1, Math.floor(data.length / barCount))
         for (let i = 0; i < barCount; i++) {
           const target = data[i * step] / 255
-          // Smooth rise + fall
-          smoothBars[i] = target > smoothBars[i]
-            ? target
-            : smoothBars[i] * decay
+          smoothBars[i] = target > smoothBars[i] ? target : smoothBars[i] * decay
         }
         hasActivity = true
       } else {
-        // Decay bars smoothly when paused
         wrapper.style.transform = ''
         wrapper.style.filter = ''
         for (let i = 0; i < barCount; i++) {
@@ -135,7 +276,6 @@ export function Controls({
         }
       }
 
-      // Draw bars (both playing and during fade-out)
       for (let i = 0; i < barCount; i++) {
         const value = smoothBars[i]
         if (value < 0.001) continue
@@ -146,7 +286,6 @@ export function Controls({
         ctx.fillRect(x, prevH - barHeight, barWidth, barHeight)
       }
 
-      // Keep animating during fade-out even when paused
       if (isPlaying || hasActivity) {
         vizAnimRef.current = requestAnimationFrame(draw)
       } else {
@@ -162,16 +301,14 @@ export function Controls({
     }
   }, [isPlaying, analyserRef])
 
-  const handleVocalsChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = Number(e.target.value)
-    setVocalsVol(val)
-    onVocalsVolume(val)
+  const handleVocalsChange = useCallback((v: number) => {
+    setVocalsVol(v)
+    onVocalsVolume(v)
   }, [onVocalsVolume])
 
-  const handleInstrumentalChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = Number(e.target.value)
-    setInstrumentalVol(val)
-    onInstrumentalVolume(val)
+  const handleInstrumentalChange = useCallback((v: number) => {
+    setInstrumentalVol(v)
+    onInstrumentalVolume(v)
   }, [onInstrumentalVolume])
 
   const isDraggingRef = useRef(false)
@@ -268,36 +405,20 @@ export function Controls({
 
       <div className={styles.buttonsRow}>
         <div className={styles.leftControls}>
-          <div className={styles.volumeStack}>
-            <div className={styles.volumeGroup}>
-              <div className={styles.volumeLabelRow}>
-                <span className={styles.volumeLabel}>Vocals</span>
-                <span className={styles.volumeValue}>{vocalsVol}%</span>
-              </div>
-              <input
-                type="range"
-                className={styles.slider}
-                min="0" max="100" value={vocalsVol}
-                title="Vocals volume"
-                disabled={karaokeMode}
-                style={sliderTrackStyle(karaokeMode ? 0 : vocalsVol)}
-                onChange={handleVocalsChange}
-              />
-            </div>
-            <div className={styles.volumeGroup}>
-              <div className={styles.volumeLabelRow}>
-                <span className={styles.volumeLabel}>Instrumental</span>
-                <span className={styles.volumeValue}>{instrumentalVol}%</span>
-              </div>
-              <input
-                type="range"
-                className={styles.slider}
-                min="0" max="100" value={instrumentalVol}
-                title="Instrumental volume"
-                style={sliderTrackStyle(instrumentalVol)}
-                onChange={handleInstrumentalChange}
-              />
-            </div>
+          <div className={styles.knobPanel}>
+            <ArcKnob
+              value={karaokeMode ? 0 : vocalsVol}
+              disabled={karaokeMode}
+              label="VOX"
+              knobId="vocals"
+              onChange={handleVocalsChange}
+            />
+            <ArcKnob
+              value={instrumentalVol}
+              label="INST"
+              knobId="inst"
+              onChange={handleInstrumentalChange}
+            />
           </div>
         </div>
 
@@ -331,7 +452,13 @@ export function Controls({
             onClick={onToggleKaraoke}
             title="Karaoke mode (K)"
           >
-            <FontAwesomeIcon icon={faMicrophone} />
+            <span className={styles.karaokeIndicator} />
+            <span className={styles.karaokeMicWrap}>
+              <FontAwesomeIcon icon={faMicrophone} className={styles.karaokeMicIcon} />
+            </span>
+            <span className={styles.karaokeBtnLabel}>
+              {karaokeMode ? 'SINGING' : 'KARAOKE'}
+            </span>
           </button>
           <button className={styles.controlBtn} onClick={toggleFullscreen} title="Fullscreen (F)">
             <FontAwesomeIcon icon={faExpand} />
