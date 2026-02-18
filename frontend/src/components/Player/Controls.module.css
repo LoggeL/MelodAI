@@ -319,127 +319,6 @@
   right: var(--spacing-xl);
 }
 
-/* ── Karaoke button ──────────────────────────────────────────────────────── */
-
-.karaokeBtn {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  padding: 9px 14px 8px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-strong);
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-family: var(--font-heading);
-  transition: border-color 0.25s ease, color 0.25s ease, background 0.25s ease, box-shadow 0.25s ease;
-  overflow: visible;
-  min-width: 68px;
-}
-
-.karaokeBtn:hover {
-  border-color: var(--primary);
-  color: var(--primary);
-}
-
-/* Indicator dot */
-.karaokeIndicator {
-  position: absolute;
-  top: 6px;
-  right: 7px;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--text-muted);
-  transition: background 0.25s ease, box-shadow 0.25s ease;
-}
-
-/* Mic icon ring container */
-.karaokeMicWrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-}
-
-.karaokeMicIcon {
-  font-size: 0.95rem;
-  position: relative;
-  z-index: 1;
-  transition: transform 0.3s var(--ease-spring), color 0.25s ease;
-}
-
-.karaokeBtnLabel {
-  font-size: 0.65rem;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  line-height: 1;
-  transition: color 0.25s ease;
-}
-
-/* ── Active state ── */
-
-.karaokeBtnActive {
-  background: linear-gradient(160deg, rgba(255, 45, 85, 0.18) 0%, rgba(204, 0, 51, 0.08) 100%);
-  border-color: var(--primary);
-  color: var(--primary);
-  box-shadow:
-    0 0 0 1px rgba(255, 45, 85, 0.2),
-    0 0 18px rgba(255, 45, 85, 0.2),
-    inset 0 1px 0 rgba(255, 45, 85, 0.15);
-}
-
-.karaokeBtnActive .karaokeIndicator {
-  background: #ff4466;
-  box-shadow: 0 0 6px rgba(255, 68, 102, 0.8), 0 0 12px rgba(255, 68, 102, 0.4);
-  animation: indicatorBlink 1.4s ease-in-out infinite;
-}
-
-.karaokeBtnActive .karaokeMicIcon {
-  transform: scale(1.15);
-  color: var(--primary);
-}
-
-.karaokeBtnActive .karaokeBtnLabel {
-  color: var(--accent);
-}
-
-/* Pulsing rings — only visible when active, rendered via ::before/::after */
-.karaokeBtnActive::before,
-.karaokeBtnActive::after {
-  content: '';
-  position: absolute;
-  inset: -5px;
-  border-radius: calc(var(--radius-sm) + 5px);
-  border: 1px solid rgba(255, 45, 85, 0.35);
-  animation: karaokePulse 2s ease-out infinite;
-  pointer-events: none;
-}
-
-.karaokeBtnActive::after {
-  inset: -10px;
-  border-radius: calc(var(--radius-sm) + 10px);
-  border-color: rgba(255, 45, 85, 0.18);
-  animation-delay: 0.7s;
-}
-
-@keyframes indicatorBlink {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  45%       { opacity: 0.3; transform: scale(0.75); }
-  55%       { opacity: 0.3; transform: scale(0.75); }
-}
-
-@keyframes karaokePulse {
-  0%   { opacity: 0.8; transform: scale(1); }
-  100% { opacity: 0;   transform: scale(1.5); }
-}
-
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 
 @media (max-width: 768px) {
@@ -471,10 +350,6 @@
   .barFill { height: 6px; }
   .barWrapper:hover .barFill { height: 9px; }
   .thumb { width: 18px; height: 18px; right: -9px; }
-  .karaokeBtn { padding: 11px 18px 9px; min-width: 78px; }
-  .karaokeMicIcon { font-size: 1.1rem; }
-  .karaokeBtnLabel { font-size: 0.72rem; }
-  .karaokeIndicator { width: 6px; height: 6px; top: 7px; right: 8px; }
   .leftControls { left: var(--spacing-2xl); }
   .rightControls { right: var(--spacing-2xl); }
   .progressRow { padding: var(--spacing-md) var(--spacing-2xl) 0; }

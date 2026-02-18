@@ -212,7 +212,6 @@ export function PlayerPage() {
           isPlaying={player.isPlaying}
           currentTime={player.currentTime}
           duration={player.duration}
-          karaokeMode={player.karaokeMode}
           analyserRef={player.analyserRef}
           thumbnail={player.currentTrack?.thumbnail}
           initialVocalsVolume={player.initialVocalsVolume}
@@ -223,7 +222,6 @@ export function PlayerPage() {
           onNext={player.next}
           onVocalsVolume={player.setVocalsVolume}
           onInstrumentalVolume={player.setInstrumentalVolume}
-          onToggleKaraoke={player.toggleKaraokeMode}
         />
       </main>
     </div>

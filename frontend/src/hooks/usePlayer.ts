@@ -218,7 +218,7 @@ export function usePlayer(options: UsePlayerOptions = {}) {
     iGain.connect(ctx.destination)
     const vVol = stored ? stored.vocalsVolume / 100 : 0.5
     const iVol = stored ? stored.instrumentalVolume / 100 : 0.5
-    vGain.gain.value = stored?.karaokeMode ? 0 : vVol
+    vGain.gain.value = vVol
     iGain.gain.value = iVol
     savedVocalsVolRef.current = vVol
 
@@ -629,7 +629,7 @@ export function usePlayer(options: UsePlayerOptions = {}) {
 
   const setVocalsVolume = useCallback((v: number) => {
     savedVocalsVolRef.current = v / 100
-    if (vocalsGainRef.current && !karaokeModeRef.current) {
+    if (vocalsGainRef.current) {
       vocalsGainRef.current.gain.value = v / 100
     }
     savePlayerState()
