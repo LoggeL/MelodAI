@@ -81,14 +81,14 @@ def _fetch_openrouter(raw_text=None, vocals_path=None):
     )
     prompt = "\n\n".join(prompt_parts)
 
-    # Try with audio first, then fall back to text-only
+    # Try hybrid (audio + text) first, then fall back to text-only
     attempts = []
     if vocals_path and os.path.exists(vocals_path):
-        attempts.append("audio")
+        attempts.append("hybrid")
     attempts.append("text_only")
 
     for attempt in attempts:
-        if attempt == "audio":
+        if attempt == "hybrid":
             try:
                 with open(vocals_path, "rb") as f:
                     audio_b64 = base64.b64encode(f.read()).decode()
@@ -124,8 +124,8 @@ def _fetch_openrouter(raw_text=None, vocals_path=None):
             print(f"INFO: OpenRouter Gemini fallback produced {len(lines)} lines (attempt={attempt})")
             return lines if lines else None
         except Exception as e:
-            if attempt == "audio":
-                print(f"WARNING: OpenRouter audio attempt failed ({e}), retrying text-only")
+            if attempt == "hybrid":
+                print(f"WARNING: OpenRouter hybrid attempt failed ({e}), retrying text-only")
                 continue
             print(f"WARNING: OpenRouter Gemini lyrics fallback failed: {e}")
             return None
