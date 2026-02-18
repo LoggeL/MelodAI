@@ -74,12 +74,12 @@ interface KnobProps {
   centerMark?: boolean
   /** Custom text to render in the knob centre */
   centerText?: string
-  /** Labels at arc start [value=0] and arc end [value=100] */
-  endLabels?: [string, string]
+  /** Two labels rendered inside the knob, scaled by value (0→left dominates, 100→right dominates) */
+  innerLabels?: [string, string]
   onChange: (v: number) => void
 }
 
-function ArcKnob({ value, label, knobId, centerMark, centerText, endLabels, onChange }: KnobProps) {
+function ArcKnob({ value, label, knobId, centerMark, centerText, innerLabels, onChange }: KnobProps) {
   const dragging = useRef(false)
   const endDeg = K.start + (value / 100) * K.sweep
   const dot = kPt(endDeg)
@@ -173,22 +173,6 @@ function ArcKnob({ value, label, knobId, centerMark, centerText, endLabels, onCh
           />
         )}
 
-        {/* Arc endpoint labels (e.g. VOX / INST) */}
-        {endLabels && (
-          <>
-            <text x="3" y="63" textAnchor="start" fontSize="7" fontWeight="800"
-              fontFamily="'Barlow Condensed', sans-serif" letterSpacing="0.5"
-              fill={value < 50 ? 'var(--accent)' : 'rgba(255,255,255,0.25)'}>
-              {endLabels[0]}
-            </text>
-            <text x="63" y="63" textAnchor="end" fontSize="7" fontWeight="800"
-              fontFamily="'Barlow Condensed', sans-serif" letterSpacing="0.5"
-              fill={value > 50 ? 'var(--accent)' : 'rgba(255,255,255,0.25)'}>
-              {endLabels[1]}
-            </text>
-          </>
-        )}
-
         {/* Indicator dot */}
         <circle
           cx={dot.x}
@@ -199,18 +183,47 @@ function ArcKnob({ value, label, knobId, centerMark, centerText, endLabels, onCh
         />
 
         {/* Centre value / label */}
-        <text
-          x={K.cx}
-          y={K.cy + 5}
-          textAnchor="middle"
-          fontSize="12"
-          fontWeight="700"
-          fontFamily="'Barlow Condensed', sans-serif"
-          fill={value > 0 ? 'var(--text)' : 'var(--text-muted)'}
-          letterSpacing="0.5"
-        >
-          {centerText ?? value}
-        </text>
+        {innerLabels ? (
+          <>
+            <text
+              x={K.cx} y={K.cy - 2}
+              textAnchor="middle"
+              fontSize={Math.round(5 + ((100 - value) / 100) * 7)}
+              fontWeight="800"
+              fontFamily="'Barlow Condensed', sans-serif"
+              letterSpacing="0.5"
+              opacity={0.15 + ((100 - value) / 100) * 0.85}
+              fill="var(--text)"
+            >
+              {innerLabels[0]}
+            </text>
+            <text
+              x={K.cx} y={K.cy + 8}
+              textAnchor="middle"
+              fontSize={Math.round(5 + (value / 100) * 7)}
+              fontWeight="800"
+              fontFamily="'Barlow Condensed', sans-serif"
+              letterSpacing="0.5"
+              opacity={0.15 + (value / 100) * 0.85}
+              fill="var(--text)"
+            >
+              {innerLabels[1]}
+            </text>
+          </>
+        ) : (
+          <text
+            x={K.cx}
+            y={K.cy + 5}
+            textAnchor="middle"
+            fontSize="12"
+            fontWeight="700"
+            fontFamily="'Barlow Condensed', sans-serif"
+            fill={value > 0 ? 'var(--text)' : 'var(--text-muted)'}
+            letterSpacing="0.5"
+          >
+            {centerText ?? value}
+          </text>
+        )}
       </svg>
       <span className={styles.knobLabel}>{label}</span>
     </div>
@@ -375,9 +388,6 @@ export function Controls({
     return () => window.removeEventListener('keydown', handler)
   }, [onTogglePlay, onSeek, onNext, onPrev, toggleFullscreen, currentTime, duration])
 
-  // Label for mix knob centre text
-  const mixCenterText = mix < 50 ? 'VOX' : mix === 50 ? 'EVEN' : 'INST'
-
   return (
     <div className={styles.controls}>
       <canvas ref={canvasRef} className={`${styles.visualizerBg} ${styles.visualizerBgActive}`} />
@@ -426,8 +436,7 @@ export function Controls({
               label="MIX"
               knobId="mix"
               centerMark
-              centerText={mixCenterText}
-              endLabels={['VOX', 'INST']}
+              innerLabels={['VOX', 'INST']}
               onChange={setMix}
             />
             <ArcKnob

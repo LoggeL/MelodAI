@@ -574,7 +574,7 @@ def _stage_lyrics(track_id):
         if title and artist:
             try:
                 from src.services.reference_lyrics import fetch_lyrics
-                reference_lines = fetch_lyrics(title, artist)
+                reference_lines = fetch_lyrics(title, artist, track_id=track_id)
                 if reference_lines:
                     ref_lyrics_path = os.path.join(get_song_dir(track_id), "reference_lyrics.json")
                     with open(ref_lyrics_path, "w") as gf:
@@ -660,6 +660,7 @@ def _stage_process_lyrics(track_id):
                         title, artist,
                         vocals_path=vocals_path,
                         raw_text=raw_text or None,
+                        track_id=track_id,
                     )
                     if ref_lines:
                         with open(ref_lyrics_path, "w") as gf:

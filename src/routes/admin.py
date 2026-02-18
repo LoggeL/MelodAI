@@ -364,7 +364,7 @@ def fetch_reference_lyrics(track_id):
 
     try:
         from src.services.reference_lyrics import fetch_lyrics
-        lines = fetch_lyrics(title, artist)
+        lines = fetch_lyrics(title, artist, track_id=track_id)
     except Exception as e:
         return jsonify({"error": f"Lyrics fetch failed: {e}"}), 500
 
@@ -414,7 +414,7 @@ def fetch_reference_lyrics_ai(track_id):
         return jsonify({"error": "No vocals file or raw lyrics available for this track"}), 400
 
     try:
-        lines = _fetch_openrouter(raw_text=raw_text, vocals_path=vp)
+        lines = _fetch_openrouter(raw_text=raw_text, vocals_path=vp, track_id=track_id)
     except Exception as e:
         return jsonify({"error": f"AI lyrics fetch failed: {e}"}), 500
 

@@ -4,8 +4,9 @@ import os
 import requests
 
 
-def _fetch_lrclib(title, artist):
+def _fetch_lrclib(title, artist, track_id=None):
     """Fetch lyrics from lrclib.net (free, no API key, no Cloudflare)."""
+    from src.utils.error_logging import log_event
     try:
         resp = requests.get(
             "https://lrclib.net/api/search",
@@ -15,7 +16,7 @@ def _fetch_lrclib(title, artist):
         resp.raise_for_status()
         results = resp.json()
     except Exception as e:
-        print(f"WARNING: lrclib search failed for '{title}' by '{artist}': {e}")
+        log_event("WARNING", "lrclib", f"lrclib search failed for '{title}' by '{artist}': {e}", track_id=track_id)
         return None
 
     if not results:
@@ -32,7 +33,7 @@ def _fetch_lrclib(title, artist):
     return None
 
 
-def _fetch_openrouter(raw_text=None, vocals_path=None):
+def _fetch_openrouter(raw_text=None, vocals_path=None, track_id=None):
     """Use Gemini Flash via OpenRouter to produce formatted lyric lines.
 
     Sends the WhisperX plain-text transcript and, optionally, the isolated
@@ -43,9 +44,10 @@ def _fetch_openrouter(raw_text=None, vocals_path=None):
 
     Returns a list of lyric line strings, or None on failure.
     """
+    from src.utils.error_logging import log_event
     api_key = os.getenv("OPENROUTER_API_KEY", "")
     if not api_key:
-        print("WARNING: OPENROUTER_API_KEY not set — Gemini lyrics fallback skipped")
+        log_event("WARNING", "openrouter", "OPENROUTER_API_KEY not set — Gemini lyrics fallback skipped", track_id=track_id)
         return None
 
     if not raw_text and not vocals_path:
@@ -97,7 +99,7 @@ def _fetch_openrouter(raw_text=None, vocals_path=None):
                     {"type": "input_audio", "input_audio": {"data": audio_b64, "format": "mp3"}},
                 ]
             except Exception as e:
-                print(f"WARNING: Audio encoding for OpenRouter failed: {e}")
+                log_event("WARNING", "openrouter", f"Audio encoding for OpenRouter failed: {e}", track_id=track_id)
                 continue
         else:
             content = prompt  # plain string — OpenRouter accepts both forms
@@ -121,19 +123,19 @@ def _fetch_openrouter(raw_text=None, vocals_path=None):
                 raise RuntimeError(data["error"])
             text = data["choices"][0]["message"]["content"].strip()
             lines = [l.strip() for l in text.split("\n") if l.strip()]
-            print(f"INFO: OpenRouter Gemini fallback produced {len(lines)} lines (attempt={attempt})")
+            log_event("INFO", "openrouter", f"Gemini fallback produced {len(lines)} lines (attempt={attempt})", track_id=track_id)
             return lines if lines else None
         except Exception as e:
             if attempt == "hybrid":
-                print(f"WARNING: OpenRouter hybrid attempt failed ({e}), retrying text-only")
+                log_event("WARNING", "openrouter", f"OpenRouter hybrid attempt failed, retrying text-only: {e}", track_id=track_id)
                 continue
-            print(f"WARNING: OpenRouter Gemini lyrics fallback failed: {e}")
+            log_event("ERROR", "openrouter", f"OpenRouter Gemini lyrics fallback failed: {e}", track_id=track_id)
             return None
 
     return None
 
 
-def fetch_lyrics(title, artist, vocals_path=None, raw_text=None):
+def fetch_lyrics(title, artist, vocals_path=None, raw_text=None, track_id=None):
     """Fetch lyrics from lrclib.net, with an OpenRouter Gemini Flash fallback.
 
     Returns a list of lyric line strings, or None if all sources fail.
@@ -143,14 +145,16 @@ def fetch_lyrics(title, artist, vocals_path=None, raw_text=None):
         artist:      Artist name.
         vocals_path: Path to the vocals .mp3 (used in Gemini fallback).
         raw_text:    WhisperX plain-text transcript (used in Gemini fallback).
+        track_id:    Track ID for log correlation.
     """
-    result = _fetch_lrclib(title, artist)
+    from src.utils.error_logging import log_event
+    result = _fetch_lrclib(title, artist, track_id=track_id)
     if result:
         return result
 
     # lrclib returned nothing — fall back to OpenRouter/Gemini
     if vocals_path or raw_text:
-        print(f"INFO: lrclib found no lyrics for '{title}' by '{artist}', trying Gemini fallback")
-        return _fetch_openrouter(raw_text=raw_text, vocals_path=vocals_path)
+        log_event("INFO", "lrclib", f"lrclib found no lyrics for '{title}' by '{artist}', trying Gemini fallback", track_id=track_id)
+        return _fetch_openrouter(raw_text=raw_text, vocals_path=vocals_path, track_id=track_id)
 
     return None
