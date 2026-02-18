@@ -481,7 +481,7 @@ export function usePlayer(options: UsePlayerOptions = {}) {
 
     setQueue([...queueRef.current])
 
-    if (item.ready && (autoPlay || (queueRef.current.length === 1 && currentIndexRef.current < 0))) {
+    if (item.ready && autoPlay) {
       const idx = queueRef.current.indexOf(item)
       if (idx >= 0) playIndexRef.current(idx)
     }

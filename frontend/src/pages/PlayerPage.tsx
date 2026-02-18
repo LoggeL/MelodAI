@@ -74,9 +74,9 @@ export function PlayerPage() {
           title: data.metadata?.title,
           artist: data.metadata?.artist,
           img_url: data.metadata?.img_url,
-        }, true)
+        })
       } catch {
-        player.addToQueue(id, undefined, true)
+        player.addToQueue(id)
       }
     }
 
@@ -101,7 +101,7 @@ export function PlayerPage() {
   }, [player.currentTrack?.id, navigate])
 
   const handleSearchSelect = useCallback((id: string, meta: { title: string; artist: string; img_url: string }) => {
-    player.addToQueue(id, meta)
+    player.addToQueue(id, meta, true)
   }, [player])
 
   const handlePlayNow = useCallback(async (id: string, meta: { title: string; artist: string; img_url: string }) => {

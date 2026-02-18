@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type PointerEvent } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faBackwardStep, faPlay, faForwardStep, faExpand, faMicrophone } from '@fortawesome/free-solid-svg-icons'
 import styles from './Controls.module.css'
@@ -174,11 +174,28 @@ export function Controls({
     onInstrumentalVolume(val)
   }, [onInstrumentalVolume])
 
-  const handleBarClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+  const isDraggingRef = useRef(false)
+
+  const seekFromPointer = useCallback((e: PointerEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect()
-    const ratio = (e.clientX - rect.left) / rect.width
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
     onSeek(ratio * duration)
   }, [duration, onSeek])
+
+  const handlePointerDown = useCallback((e: PointerEvent<HTMLDivElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId)
+    isDraggingRef.current = true
+    seekFromPointer(e)
+  }, [seekFromPointer])
+
+  const handlePointerMove = useCallback((e: PointerEvent<HTMLDivElement>) => {
+    if (!isDraggingRef.current) return
+    seekFromPointer(e)
+  }, [seekFromPointer])
+
+  const handlePointerUp = useCallback(() => {
+    isDraggingRef.current = false
+  }, [])
 
   const toggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
@@ -234,7 +251,13 @@ export function Controls({
       <div className={styles.progressRow}>
         <div className={styles.progress}>
           <span className={styles.time}>{formatTime(currentTime)}</span>
-          <div className={styles.barWrapper} onClick={handleBarClick}>
+          <div
+            className={styles.barWrapper}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+          >
             <div className={styles.barFill} style={{ width: `${pct}%` }}>
               <div className={styles.thumb} />
             </div>
