@@ -604,6 +604,18 @@ def _stage_lyrics(track_id):
     set_processing_status(track_id, STATUS_LYRICS, PROGRESS[STATUS_LYRICS], "Lyrics extracted")
 
 
+def _extract_whisperx_text(raw_data):
+    """Concatenate all words from WhisperX output into a plain-text string."""
+    words = []
+    segments = raw_data.get("segments", raw_data if isinstance(raw_data, list) else [])
+    for seg in (segments if isinstance(segments, list) else []):
+        for w in seg.get("words", []):
+            text = w.get("word", "").strip()
+            if text:
+                words.append(text)
+    return " ".join(words)
+
+
 def _stage_process_lyrics(track_id):
     """Stage 5: Split lyrics into karaoke lines (85-90%)"""
     if track_file_exists(track_id, "lyrics"):
@@ -621,6 +633,7 @@ def _stage_process_lyrics(track_id):
 
     # Correct WhisperX transcription with reference lyrics
     ref_line_breaks = []
+    ref_stats = None
     ref_lines = None
 
     # Load cached reference lyrics (saved in stage 4) or fetch fresh
@@ -640,7 +653,14 @@ def _stage_process_lyrics(track_id):
             if title and artist:
                 try:
                     from src.services.reference_lyrics import fetch_lyrics
-                    ref_lines = fetch_lyrics(title, artist)
+                    vocals_path = get_track_file_path(track_id, "vocals")
+                    raw_text = _extract_whisperx_text(raw_data)
+                    set_processing_status(track_id, STATUS_PROCESSING, 87, "Fetching reference lyrics (Gemini fallback)...")
+                    ref_lines = fetch_lyrics(
+                        title, artist,
+                        vocals_path=vocals_path,
+                        raw_text=raw_text or None,
+                    )
                     if ref_lines:
                         with open(ref_lyrics_path, "w") as gf:
                             json.dump({"lines": ref_lines}, gf, indent=2)
@@ -672,7 +692,7 @@ def _stage_process_lyrics(track_id):
     if ref_lines:
         try:
             segments = raw_data.get("segments", raw_data if isinstance(raw_data, list) else [])
-            corrected, ref_line_breaks = correct_lyrics_with_reference(segments, ref_lines)
+            corrected, ref_line_breaks, ref_stats = correct_lyrics_with_reference(segments, ref_lines)
             raw_data["segments"] = corrected
             # Save corrected raw data back
             save_lyrics_raw(track_id, raw_data)
@@ -682,7 +702,9 @@ def _stage_process_lyrics(track_id):
     set_processing_status(track_id, STATUS_PROCESSING, 89, "Processing lyrics...")
 
     # Split into karaoke lines using reference line breaks or heuristic fallback
-    processed = postprocess_lyrics_heuristic(raw_data, ref_line_breaks=ref_line_breaks)
+    processed = postprocess_lyrics_heuristic(
+        raw_data, ref_line_breaks=ref_line_breaks, ref_stats=ref_stats
+    )
 
     save_lyrics(track_id, processed)
     set_processing_status(track_id, STATUS_PROCESSING, PROGRESS[STATUS_PROCESSING], "Lyrics synced")
