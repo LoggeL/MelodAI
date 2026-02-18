@@ -319,6 +319,12 @@
   right: var(--spacing-xl);
 }
 
+/* ── Mobile volume row (hidden on desktop) ───────────────────────────────── */
+
+.volumeRow {
+  display: none;
+}
+
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 
 @media (max-width: 768px) {
@@ -335,6 +341,65 @@
     gap: var(--spacing-xs);
   }
   .knobPanel { display: none; }
+
+  .volumeRow {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px var(--spacing-md) 2px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .volLabel {
+    font-size: 0.6rem;
+    font-weight: 800;
+    font-family: var(--font-heading);
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    white-space: nowrap;
+  }
+
+  .volSlider {
+    flex: 1;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--surface-hover);
+    accent-color: var(--primary);
+    outline: none;
+    cursor: pointer;
+  }
+
+  .volSlider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 0 6px var(--primary-glow);
+    cursor: pointer;
+  }
+
+  .volSlider::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 0 6px var(--primary-glow);
+    border: none;
+    cursor: pointer;
+  }
+
+  .volDivider {
+    width: 1px;
+    height: 14px;
+    background: var(--border);
+    flex-shrink: 0;
+  }
 }
 
 /* ── Large screens / projector ───────────────────────────────────────────── */

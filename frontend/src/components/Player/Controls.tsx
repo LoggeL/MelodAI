@@ -400,6 +400,24 @@ export function Controls({
         </div>
       </div>
 
+      {/* Mobile-only volume row */}
+      <div className={styles.volumeRow}>
+        <span className={styles.volLabel}>VOX</span>
+        <input
+          type="range" min={0} max={100} value={mix}
+          className={styles.volSlider}
+          onChange={e => setMix(Number(e.target.value))}
+        />
+        <span className={styles.volLabel}>INST</span>
+        <span className={styles.volDivider} />
+        <span className={styles.volLabel}>VOL</span>
+        <input
+          type="range" min={0} max={100} value={masterVol}
+          className={styles.volSlider}
+          onChange={e => setMasterVol(Number(e.target.value))}
+        />
+      </div>
+
       <div className={styles.buttonsRow}>
         <div className={styles.leftControls}>
           <div className={styles.knobPanel}>
