@@ -160,6 +160,7 @@ export const admin = {
   }),
   songDetails: (id: string) => request<SongDetail>('/api/admin/songs/' + id + '/details'),
   fetchReferenceLyrics: (id: string) => request<{ lines: string[] }>('/api/admin/songs/' + id + '/reference-lyrics', { method: 'POST' }),
+  fetchReferenceLyricsAI: (id: string) => request<{ lines: string[] }>('/api/admin/songs/' + id + '/reference-lyrics/ai', { method: 'POST' }),
   runChecks: () => request<Record<string, HealthCheck>>('/api/admin/status/checks', { method: 'POST' }),
   statusHistory: () => request<Array<{ id: number; component: string; status: string; message: string; checked_at: string }>>('/api/admin/status/history'),
   processingQueue: () => request<Record<string, ProcessingStatus>>('/api/admin/status/queue'),

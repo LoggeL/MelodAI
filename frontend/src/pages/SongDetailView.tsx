@@ -55,6 +55,7 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [expandedError, setExpandedError] = useState<number | null>(null)
   const [fetchingRef, setFetchingRef] = useState(false)
+  const [fetchingRefAI, setFetchingRefAI] = useState(false)
   const navigate = useNavigate()
   const toast = useToast()
 
@@ -104,6 +105,22 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
       toast.error('Failed to fetch reference lyrics')
     }
     setFetchingRef(false)
+  }
+
+  const handleFetchRefAI = async () => {
+    setFetchingRefAI(true)
+    try {
+      const result = await admin.fetchReferenceLyricsAI(trackId)
+      if ('error' in result) {
+        toast.error(String((result as Record<string, unknown>).error))
+      } else {
+        setData(prev => prev ? { ...prev, reference_lyrics: result } : prev)
+        toast.success('AI reference lyrics generated')
+      }
+    } catch {
+      toast.error('Failed to generate AI reference lyrics')
+    }
+    setFetchingRefAI(false)
   }
 
   if (loading) return (
@@ -397,13 +414,27 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
                       {line}
                     </div>
                   ))}
+                  <div className={styles.refFetch} style={{ marginTop: 12 }}>
+                    <button className={styles.actionBtn} onClick={handleFetchRef} disabled={fetchingRef || fetchingRefAI}>
+                      <FontAwesomeIcon icon={faWandMagicSparkles} />
+                      {fetchingRef ? 'Fetching...' : 'Re-fetch lrclib'}
+                    </button>
+                    <button className={styles.actionBtn} onClick={handleFetchRefAI} disabled={fetchingRef || fetchingRefAI}>
+                      <FontAwesomeIcon icon={faWandMagicSparkles} />
+                      {fetchingRefAI ? 'Generating...' : 'Generate with AI'}
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className={styles.refFetch}>
                   <p>No cached reference lyrics.</p>
-                  <button className={styles.actionBtn} onClick={handleFetchRef} disabled={fetchingRef}>
+                  <button className={styles.actionBtn} onClick={handleFetchRef} disabled={fetchingRef || fetchingRefAI}>
                     <FontAwesomeIcon icon={faWandMagicSparkles} />
                     {fetchingRef ? 'Fetching...' : 'Fetch from lrclib'}
+                  </button>
+                  <button className={styles.actionBtn} onClick={handleFetchRefAI} disabled={fetchingRef || fetchingRefAI}>
+                    <FontAwesomeIcon icon={faWandMagicSparkles} />
+                    {fetchingRefAI ? 'Generating...' : 'Generate with AI'}
                   </button>
                 </div>
               )}

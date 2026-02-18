@@ -379,6 +379,55 @@ def fetch_reference_lyrics(track_id):
     return jsonify({"lines": lines})
 
 
+@admin_bp.route("/songs/<track_id>/reference-lyrics/ai", methods=["POST"])
+@admin_required
+def fetch_reference_lyrics_ai(track_id):
+    """Trigger the OpenRouter/Gemini fallback to generate reference lyrics from
+    the isolated vocals audio + WhisperX transcript, bypassing lrclib."""
+    import json
+    from src.utils.file_handling import load_metadata, get_song_dir
+    from src.services.reference_lyrics import _fetch_openrouter
+
+    meta = load_metadata(track_id)
+    if not meta:
+        return jsonify({"error": "Track not found"}), 404
+
+    song_dir = get_song_dir(track_id)
+    vocals_path = os.path.join(song_dir, "vocals.mp3")
+    lyrics_raw_path = os.path.join(song_dir, "lyrics_raw.json")
+
+    raw_text = None
+    if os.path.exists(lyrics_raw_path):
+        with open(lyrics_raw_path) as f:
+            raw_data = json.load(f)
+        words = []
+        segments = raw_data.get("segments", raw_data if isinstance(raw_data, list) else [])
+        for seg in (segments if isinstance(segments, list) else []):
+            for w in seg.get("words", []):
+                t = w.get("word", "").strip()
+                if t:
+                    words.append(t)
+        raw_text = " ".join(words) or None
+
+    vp = vocals_path if os.path.exists(vocals_path) else None
+    if not vp and not raw_text:
+        return jsonify({"error": "No vocals file or raw lyrics available for this track"}), 400
+
+    try:
+        lines = _fetch_openrouter(raw_text=raw_text, vocals_path=vp)
+    except Exception as e:
+        return jsonify({"error": f"AI lyrics fetch failed: {e}"}), 500
+
+    if not lines:
+        return jsonify({"error": "AI returned no lyrics"}), 404
+
+    ref_lyrics_path = os.path.join(song_dir, "reference_lyrics.json")
+    with open(ref_lyrics_path, "w") as f:
+        json.dump({"lines": lines}, f, indent=2)
+
+    return jsonify({"lines": lines})
+
+
 @admin_bp.route("/songs/<track_id>", methods=["DELETE"])
 @admin_required
 def delete_song(track_id):

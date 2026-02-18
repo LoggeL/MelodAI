@@ -62,8 +62,8 @@ function kValueFromPointer(e: React.PointerEvent<SVGSVGElement>): number {
   let deg = Math.atan2(dx, -dy) * (180 / Math.PI)
   if (deg < 0) deg += 360
   let norm = deg - K.start
-  if (norm < -(K.sweep / 2 + 45)) norm += 360
-  return Math.max(0, Math.min(100, Math.round((Math.max(0, norm) / K.sweep) * 100)))
+  if (norm < 0) norm += 360
+  return Math.max(0, Math.min(100, Math.round((norm / K.sweep) * 100)))
 }
 
 interface KnobProps {
@@ -74,10 +74,12 @@ interface KnobProps {
   centerMark?: boolean
   /** Custom text to render in the knob centre */
   centerText?: string
+  /** Labels at arc start [value=0] and arc end [value=100] */
+  endLabels?: [string, string]
   onChange: (v: number) => void
 }
 
-function ArcKnob({ value, label, knobId, centerMark, centerText, onChange }: KnobProps) {
+function ArcKnob({ value, label, knobId, centerMark, centerText, endLabels, onChange }: KnobProps) {
   const dragging = useRef(false)
   const endDeg = K.start + (value / 100) * K.sweep
   const dot = kPt(endDeg)
@@ -169,6 +171,22 @@ function ArcKnob({ value, label, knobId, centerMark, centerText, onChange }: Kno
             strokeWidth="1.5"
             strokeLinecap="round"
           />
+        )}
+
+        {/* Arc endpoint labels (e.g. VOX / INST) */}
+        {endLabels && (
+          <>
+            <text x="3" y="63" textAnchor="start" fontSize="7" fontWeight="800"
+              fontFamily="'Barlow Condensed', sans-serif" letterSpacing="0.5"
+              fill={value < 50 ? 'var(--accent)' : 'rgba(255,255,255,0.25)'}>
+              {endLabels[0]}
+            </text>
+            <text x="63" y="63" textAnchor="end" fontSize="7" fontWeight="800"
+              fontFamily="'Barlow Condensed', sans-serif" letterSpacing="0.5"
+              fill={value > 50 ? 'var(--accent)' : 'rgba(255,255,255,0.25)'}>
+              {endLabels[1]}
+            </text>
+          </>
         )}
 
         {/* Indicator dot */}
@@ -357,8 +375,8 @@ export function Controls({
     return () => window.removeEventListener('keydown', handler)
   }, [onTogglePlay, onSeek, onNext, onPrev, toggleFullscreen, currentTime, duration])
 
-  // Label for mix knob centre text: show direction at extremes
-  const mixCenterText = mix <= 5 ? 'VOX' : mix >= 95 ? 'INST' : String(mix)
+  // Label for mix knob centre text
+  const mixCenterText = mix < 50 ? 'VOX' : mix === 50 ? 'EVEN' : 'INST'
 
   return (
     <div className={styles.controls}>
@@ -391,6 +409,7 @@ export function Controls({
               knobId="mix"
               centerMark
               centerText={mixCenterText}
+              endLabels={['VOX', 'INST']}
               onChange={setMix}
             />
             <ArcKnob
