@@ -288,6 +288,14 @@
   box-shadow: 0 0 12px var(--primary-glow);
 }
 
+.leftControls {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  position: absolute;
+  left: var(--spacing-xl);
+}
+
 .rightControls {
   display: flex;
   align-items: center;
@@ -394,6 +402,7 @@
   }
   .progressRow { padding: var(--spacing-xs) var(--spacing-md) 0; }
   .buttonsRow { padding: var(--spacing-xs) var(--spacing-md) var(--spacing-xs); gap: var(--spacing-sm); }
+  .leftControls { display: none; }
   .rightControls {
     position: static;
     gap: var(--spacing-xs);
@@ -420,6 +429,8 @@
   .slider::-moz-range-thumb { width: 18px; height: 18px; }
   .volumeLabel { font-size: 0.8rem; }
   .volumeValue { font-size: 0.75rem; }
+  .leftControls { left: var(--spacing-2xl); }
+  .rightControls { right: var(--spacing-2xl); }
   .progressRow { padding: var(--spacing-md) var(--spacing-2xl) 0; }
   .buttonsRow { padding: var(--spacing-sm) var(--spacing-2xl) var(--spacing-md); gap: var(--spacing-xl); }
 }

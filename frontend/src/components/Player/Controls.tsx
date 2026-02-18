@@ -267,6 +267,40 @@ export function Controls({
       </div>
 
       <div className={styles.buttonsRow}>
+        <div className={styles.leftControls}>
+          <div className={styles.volumeStack}>
+            <div className={styles.volumeGroup}>
+              <div className={styles.volumeLabelRow}>
+                <span className={styles.volumeLabel}>Vocals</span>
+                <span className={styles.volumeValue}>{vocalsVol}%</span>
+              </div>
+              <input
+                type="range"
+                className={styles.slider}
+                min="0" max="100" value={vocalsVol}
+                title="Vocals volume"
+                disabled={karaokeMode}
+                style={sliderTrackStyle(karaokeMode ? 0 : vocalsVol)}
+                onChange={handleVocalsChange}
+              />
+            </div>
+            <div className={styles.volumeGroup}>
+              <div className={styles.volumeLabelRow}>
+                <span className={styles.volumeLabel}>Instrumental</span>
+                <span className={styles.volumeValue}>{instrumentalVol}%</span>
+              </div>
+              <input
+                type="range"
+                className={styles.slider}
+                min="0" max="100" value={instrumentalVol}
+                title="Instrumental volume"
+                style={sliderTrackStyle(instrumentalVol)}
+                onChange={handleInstrumentalChange}
+              />
+            </div>
+          </div>
+        </div>
+
         <div className={styles.playback}>
           <button className={styles.controlBtn} onClick={onPrev} title="Previous (P)">
             <FontAwesomeIcon icon={faBackwardStep} />
@@ -299,37 +333,6 @@ export function Controls({
           >
             <FontAwesomeIcon icon={faMicrophone} />
           </button>
-          <div className={styles.volumeStack}>
-            <div className={styles.volumeGroup}>
-              <div className={styles.volumeLabelRow}>
-                <span className={styles.volumeLabel}>Vocals</span>
-                <span className={styles.volumeValue}>{vocalsVol}%</span>
-              </div>
-              <input
-                type="range"
-                className={styles.slider}
-                min="0" max="100" value={vocalsVol}
-                title="Vocals volume"
-                disabled={karaokeMode}
-                style={sliderTrackStyle(karaokeMode ? 0 : vocalsVol)}
-                onChange={handleVocalsChange}
-              />
-            </div>
-            <div className={styles.volumeGroup}>
-              <div className={styles.volumeLabelRow}>
-                <span className={styles.volumeLabel}>Instrumental</span>
-                <span className={styles.volumeValue}>{instrumentalVol}%</span>
-              </div>
-              <input
-                type="range"
-                className={styles.slider}
-                min="0" max="100" value={instrumentalVol}
-                title="Instrumental volume"
-                style={sliderTrackStyle(instrumentalVol)}
-                onChange={handleInstrumentalChange}
-              />
-            </div>
-          </div>
           <button className={styles.controlBtn} onClick={toggleFullscreen} title="Fullscreen (F)">
             <FontAwesomeIcon icon={faExpand} />
           </button>
