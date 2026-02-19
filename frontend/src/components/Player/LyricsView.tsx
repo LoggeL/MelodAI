@@ -30,7 +30,7 @@ export function LyricsView({ lyrics, loading, currentTime, duration, onSeek, onE
   const speakerMap = useMemo(() => {
     const map: Record<string, string> = {}
     let idx = 0
-    lyrics?.segments.forEach(seg => {
+    lyrics?.segments?.forEach(seg => {
       if (seg.speaker && !(seg.speaker in map)) {
         map[seg.speaker] = SPEAKER_CLASSES[idx % SPEAKER_CLASSES.length]
         idx++
