@@ -104,6 +104,10 @@ export function PlayerPage() {
     player.addToQueue(id, meta, true)
   }, [player])
 
+  const handleAddToQueue = useCallback((id: string, meta: { title: string; artist: string; img_url: string }) => {
+    player.addToQueue(id, meta)
+  }, [player])
+
   const handlePlayNow = useCallback(async (id: string, meta: { title: string; artist: string; img_url: string }) => {
     await player.addToQueue(id, meta)
     const idx = player.queue.findIndex(q => q.id === id)
@@ -160,7 +164,7 @@ export function PlayerPage() {
         }
         libraryContent={
           <LibraryPanel
-            onAddToQueue={handleSearchSelect}
+            onAddToQueue={handleAddToQueue}
             onPlayNow={handlePlayNow}
             favorites={player.favorites}
             onToggleFavorite={player.toggleFavorite}
