@@ -8,7 +8,6 @@ const REGULAR_USER = `testuser_${Date.now()}`
 const REGULAR_PASS = 'testpass456'
 
 let adminCookie = ''
-let regularUserId = 0
 
 async function extractCookie(resp: Response): Promise<string> {
   const setCookie = resp.headers.get('set-cookie') || ''
@@ -47,7 +46,7 @@ describe('Auth API - /auth/*', () => {
       const resp = await post('/api/auth/register', { username: 'test', password: 'ab' })
       expect(resp.status).toBe(400)
       const data = await resp.json()
-      expect(data.error).toContain('4 characters')
+      expect(data.error).toContain('8 characters')
     })
 
     it('should reject duplicate of existing admin username', async () => {
@@ -185,7 +184,7 @@ describe('Auth API - /auth/*', () => {
       const resp = await post('/api/auth/reset-password', { token: 'some-token', password: 'ab' })
       expect(resp.status).toBe(400)
       const data = await resp.json()
-      expect(data.error).toContain('4 characters')
+      expect(data.error).toContain('8 characters')
     })
   })
 

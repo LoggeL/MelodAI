@@ -120,16 +120,16 @@ describe('Track API', () => {
     })
   })
 
-  describe('GET /add', () => {
+  describe('POST /add', () => {
     it('should reject missing track ID', async () => {
-      const resp = await get('/api/add')
+      const resp = await post('/api/add', {})
       expect(resp.status).toBe(400)
       const data = await resp.json()
       expect(data.error).toContain('Track ID required')
     })
 
     it('should reject unauthenticated request', async () => {
-      const resp = await get('/api/add?id=12345', '')
+      const resp = await post('/api/add', { id: '12345' }, '')
       expect([401, 302]).toContain(resp.status)
     })
   })
@@ -180,7 +180,7 @@ describe('Track API', () => {
     })
 
     it('should return "ready" when adding already-complete track', async () => {
-      const resp = await get('/api/add?id=139470659')
+      const resp = await post('/api/add', { id: '139470659' })
       if (resp.status === 200) {
         const data = await resp.json()
         expect(['ready', 'processing', 'already_processing']).toContain(data.status)

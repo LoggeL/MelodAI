@@ -66,10 +66,11 @@ def search():
     return jsonify(results)
 
 
-@track_bp.route("/add")
+@track_bp.route("/add", methods=["POST"])
 @login_required
 def add():
-    track_id = request.args.get("id", "").strip()
+    data = request.get_json(silent=True) or {}
+    track_id = str(data.get("id") or request.args.get("id", "")).strip()
     if not track_id:
         return jsonify({"error": "Track ID required"}), 400
 
@@ -91,13 +92,19 @@ def add():
 
     # Credit check for new processing (5 credits)
     from src.utils.decorators import _get_current_user
-    from src.models.db import query_db as _qdb, execute_db as _edb
+    from src.models.db import query_db as _qdb, get_db
     user = _get_current_user()
     if user and not user["is_admin"]:
-        credits = user["credits"] or 0
-        if credits < 5:
+        db = get_db()
+        cur = db.execute(
+            "UPDATE users SET credits = credits - 5 WHERE id = ? AND credits >= 5",
+            [user["id"]],
+        )
+        db.commit()
+        if cur.rowcount != 1:
+            refreshed = _qdb("SELECT credits FROM users WHERE id = ?", [user["id"]], one=True)
+            credits = refreshed["credits"] if refreshed else 0
             return jsonify({"error": "insufficient_credits", "credits": credits, "required": 5}), 403
-        _edb("UPDATE users SET credits = credits - 5 WHERE id = ?", [user["id"]])
 
     _log_usage("download", track_id)
 
@@ -259,7 +266,7 @@ def log_play(track_id):
 def play_credit(track_id):
     """Deduct 1 credit for playing a song (after 15s). Admins are exempt."""
     from src.utils.decorators import _get_current_user
-    from src.models.db import query_db, execute_db
+    from src.models.db import query_db, get_db
     user = _get_current_user()
     if not user:
         return jsonify({"error": "Not authenticated"}), 401
@@ -267,11 +274,17 @@ def play_credit(track_id):
     if user["is_admin"]:
         return jsonify({"success": True, "credits": user["credits"] or 0})
 
-    credits = user["credits"] or 0
-    if credits < 1:
+    db = get_db()
+    cur = db.execute(
+        "UPDATE users SET credits = credits - 1 WHERE id = ? AND credits >= 1",
+        [user["id"]],
+    )
+    db.commit()
+    if cur.rowcount != 1:
+        refreshed = query_db("SELECT credits FROM users WHERE id = ?", [user["id"]], one=True)
+        credits = refreshed["credits"] if refreshed else 0
         return jsonify({"error": "insufficient_credits", "credits": credits}), 403
 
-    execute_db("UPDATE users SET credits = credits - 1 WHERE id = ?", [user["id"]])
     refreshed = query_db("SELECT credits FROM users WHERE id = ?", [user["id"]], one=True)
     updated = refreshed["credits"] if refreshed else 0
     return jsonify({"success": True, "credits": updated})
@@ -551,6 +564,10 @@ def _stage_split(track_id):
                 print(f"Compressed {file_key} for track {track_id}")
             except Exception as e:
                 print(f"WARNING: Failed to compress {file_key} for track {track_id}: {e}")
+
+    missing = [file_key for file_key in ("vocals", "no_vocals") if not track_file_exists(track_id, file_key)]
+    if missing:
+        raise RuntimeError(f"Demucs did not produce required split file(s): {', '.join(missing)}")
 
     set_processing_status(track_id, STATUS_SPLITTING, PROGRESS[STATUS_SPLITTING], "Vocals separated")
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import type { Browser, Page } from 'puppeteer'
+import type { Browser } from 'puppeteer'
 import { launchBrowser, newPage, BASE, ADMIN_USER, ADMIN_PASS, exists, waitForIdle } from '../helpers'
 
 const TEST_USER = `e2euser_${Date.now()}`

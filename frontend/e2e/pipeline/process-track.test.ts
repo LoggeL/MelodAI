@@ -90,7 +90,7 @@ describe('Song Processing Pipeline', () => {
     })
 
     it('should trigger processing for a track', async () => {
-      const resp = await get(`/api/add?id=${TEST_TRACK_ID}`)
+      const resp = await post('/api/add', { id: TEST_TRACK_ID })
       expect(resp.status).toBe(200)
       const data = await resp.json()
       expect(['processing', 'ready', 'already_processing']).toContain(data.status)
@@ -176,7 +176,7 @@ describe('Song Processing Pipeline', () => {
     it('should show track as "ready" when adding again', async () => {
       expect(pipelineComplete).toBe(true)
 
-      const resp = await get(`/api/add?id=${TEST_TRACK_ID}`)
+      const resp = await post('/api/add', { id: TEST_TRACK_ID })
       expect(resp.status).toBe(200)
       const data = await resp.json()
       expect(data.status).toBe('ready')
@@ -263,7 +263,7 @@ describe('Song Processing Pipeline', () => {
 
   describe('Error handling', () => {
     it('should handle invalid track ID gracefully', async () => {
-      const resp = await get('/api/add?id=99999999999')
+      const resp = await post('/api/add', { id: '99999999999' })
       // Should start processing and eventually fail, or fail immediately
       expect([200, 400, 500]).toContain(resp.status)
 

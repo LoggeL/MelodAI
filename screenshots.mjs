@@ -64,7 +64,11 @@ async function main() {
   // Load a complete track into the queue via the app's API
   await page.evaluate(async () => {
     // Trigger adding a known complete track to the queue
-    await fetch('/api/add?id=3135556')
+    await fetch('/api/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: '3135556' }),
+    })
   })
   await delay(3000)
   await page.screenshot({ path: `${SCREENSHOTS_DIR}/02-player.png` })

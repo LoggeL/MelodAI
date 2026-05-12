@@ -11,8 +11,13 @@ def create_app():
     app = Flask(__name__, static_folder=None)
     app.secret_key = os.getenv("SECRET_KEY", os.urandom(32).hex())
     app.permanent_session_lifetime = timedelta(days=30)
+    app.config.update(
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE="Lax",
+        SESSION_COOKIE_SECURE=os.getenv("SESSION_COOKIE_SECURE", "1") != "0",
+    )
 
-    CORS(app)
+    CORS(app, supports_credentials=True)
 
     from src.models.db import init_db, close_db
     init_db()

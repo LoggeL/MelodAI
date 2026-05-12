@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import type { Browser, Page } from 'puppeteer'
-import { launchBrowser, newPage, loginViaUI, BASE, ADMIN_USER, ADMIN_PASS, exists, waitForIdle } from '../helpers'
+import { launchBrowser, newPage, loginViaUI, ADMIN_USER, ADMIN_PASS, exists, waitForIdle } from '../helpers'
 
 let browser: Browser
 let page: Page

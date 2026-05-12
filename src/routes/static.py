@@ -2,6 +2,7 @@ import os
 from html import escape
 from flask import Blueprint, send_from_directory, request
 
+from ..utils.decorators import login_required
 from ..utils.file_handling import load_metadata
 
 static_bp = Blueprint("static", __name__)
@@ -102,5 +103,6 @@ def favicon():
 
 
 @static_bp.route("/songs/<path:filename>")
+@login_required
 def song_file(filename):
     return send_from_directory(SONGS_DIR, filename)

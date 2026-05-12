@@ -206,7 +206,7 @@ describe('Credits, Profile Stats & Change Password API', () => {
       }, userCookie)
       expect(resp.status).toBe(400)
       const data = await resp.json()
-      expect(data.error).toContain('4 characters')
+      expect(data.error).toContain('8 characters')
     })
 
     it('should reject incorrect current password', async () => {

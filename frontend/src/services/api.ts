@@ -104,7 +104,7 @@ export const auth = {
 
 export const tracks = {
   search: (q: string) => request<SearchResult[]>(`/api/search?q=${encodeURIComponent(q)}`),
-  add: (id: string) => request<{ status: string; progress: number; metadata?: TrackMetadata; error?: string; credits?: number; required?: number }>(`/api/add?id=${id}`),
+  add: (id: string) => request<{ status: string; progress: number; metadata?: TrackMetadata; error?: string; credits?: number; required?: number }>('/api/add', { method: 'POST', body: JSON.stringify({ id }) }),
   info: (id: string) => request<{ metadata: TrackMetadata; complete: boolean; status: ProcessingStatus | null }>(`/api/track/${id}`),
   lyrics: (id: string) => request<LyricsData>(`/api/track/${id}/lyrics`),
   library: () => request<LibraryTrack[]>('/api/track/library'),

@@ -1,5 +1,7 @@
 import os
 import secrets
+import time
+from collections import defaultdict, deque
 from datetime import datetime, timedelta
 from flask import Blueprint, request, jsonify, session, make_response
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -8,6 +10,37 @@ from src.services.email import send_password_reset_email
 from src.utils.decorators import login_required
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
+
+MIN_PASSWORD_LENGTH = 8
+LOGIN_ATTEMPT_WINDOW_SECONDS = 15 * 60
+MAX_LOGIN_ATTEMPTS = 8
+_login_attempts = defaultdict(deque)
+
+
+def _password_length_error(prefix="Password"):
+    return f"{prefix} must be at least {MIN_PASSWORD_LENGTH} characters"
+
+
+def _login_rate_key(username):
+    forwarded_for = request.headers.get("X-Forwarded-For", "")
+    ip = forwarded_for.split(",", 1)[0].strip() or request.remote_addr or "unknown"
+    return f"{ip}:{username.lower()}"
+
+
+def _is_login_rate_limited(username):
+    now = time.time()
+    attempts = _login_attempts[_login_rate_key(username)]
+    while attempts and now - attempts[0] > LOGIN_ATTEMPT_WINDOW_SECONDS:
+        attempts.popleft()
+    return len(attempts) >= MAX_LOGIN_ATTEMPTS
+
+
+def _record_failed_login(username):
+    _login_attempts[_login_rate_key(username)].append(time.time())
+
+
+def _clear_failed_logins(username):
+    _login_attempts.pop(_login_rate_key(username), None)
 
 
 @auth_bp.route("/register", methods=["POST"])
@@ -20,8 +53,8 @@ def register():
 
     if not username or not password:
         return jsonify({"error": "Username and password required"}), 400
-    if len(password) < 4:
-        return jsonify({"error": "Password must be at least 4 characters"}), 400
+    if len(password) < MIN_PASSWORD_LENGTH:
+        return jsonify({"error": _password_length_error()}), 400
 
     existing = query_db("SELECT id FROM users WHERE username = ?", [username], one=True)
     if existing:
@@ -89,15 +122,20 @@ def login():
     if not username or not password:
         return jsonify({"error": "Username and password required"}), 400
 
+    if _is_login_rate_limited(username):
+        return jsonify({"error": "Too many failed login attempts. Please try again later."}), 429
+
     user = query_db("SELECT * FROM users WHERE username = ? OR email = ?", [username, username], one=True)
     if not user or not check_password_hash(user["password_hash"], password):
         from src.utils.error_logging import log_event
         log_event("warning", "auth", f"Failed login attempt for '{username}'")
+        _record_failed_login(username)
         return jsonify({"error": "Invalid credentials"}), 401
 
     if not user["is_approved"]:
         return jsonify({"error": "Account pending approval"}), 403
 
+    _clear_failed_logins(username)
     session.permanent = True
     session["user_id"] = user["id"]
 
@@ -191,8 +229,8 @@ def reset_password():
 
     if not token or not new_password:
         return jsonify({"error": "Token and new password required"}), 400
-    if len(new_password) < 4:
-        return jsonify({"error": "Password must be at least 4 characters"}), 400
+    if len(new_password) < MIN_PASSWORD_LENGTH:
+        return jsonify({"error": _password_length_error()}), 400
 
     reset = query_db(
         "SELECT * FROM password_resets WHERE token = ? AND used = 0 AND expires_at > ?",
@@ -352,8 +390,8 @@ def change_password():
 
     if not current_password or not new_password:
         return jsonify({"error": "Both passwords required"}), 400
-    if len(new_password) < 4:
-        return jsonify({"error": "New password must be at least 4 characters"}), 400
+    if len(new_password) < MIN_PASSWORD_LENGTH:
+        return jsonify({"error": _password_length_error("New password")}), 400
     if not check_password_hash(user["password_hash"], current_password):
         return jsonify({"error": "Current password is incorrect"}), 401
 

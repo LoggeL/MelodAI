@@ -102,8 +102,8 @@ export function ProfilePage() {
       toast.error('Fill in all password fields')
       return
     }
-    if (newPw.length < 4) {
-      toast.error('New password must be at least 4 characters')
+    if (newPw.length < 8) {
+      toast.error('New password must be at least 8 characters')
       return
     }
     if (newPw !== confirmPw) {

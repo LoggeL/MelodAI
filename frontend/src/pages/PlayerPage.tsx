@@ -35,11 +35,11 @@ export function PlayerPage() {
   // Cross-device queue sync
   const onSyncState = useCallback((state: SyncState) => {
     player.applySyncState(state)
-  }, [player.applySyncState])
+  }, [player])
 
   const onCommand = useCallback((cmd: SyncCommand) => {
     player.applySyncCommand(cmd)
-  }, [player.applySyncCommand])
+  }, [player])
 
   const sync = useSync({ enabled: authenticated, onSyncState, onCommand })
 
@@ -56,7 +56,7 @@ export function PlayerPage() {
     player.syncCommandRef.current = (cmd: string, payload?: Record<string, unknown>) => {
       sync.sendCommand(cmd, payload ?? {})
     }
-  }, [player.queue, player.currentIndex, player.isPlaying, sync.pushQueue, sync.sendCommand])
+  }, [player, sync])
 
   useEffect(() => {
     if (checked && !authenticated) {
