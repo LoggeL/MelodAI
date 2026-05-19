@@ -21,8 +21,8 @@ function formatDuration(seconds: number): string {
 }
 
 /** Upgrade Deezer cover URL to 500x500 for grid view. */
-function hiResCover(url: string): string {
-  return url.replace(/\/\d+x\d+/, '/500x500')
+function hiResCover(url?: string | null): string {
+  return url ? url.replace(/\/\d+x\d+/, '/500x500') : '/logo.svg'
 }
 
 type LibraryTab = 'all' | 'favorites' | 'playlists'

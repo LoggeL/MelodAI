@@ -6,7 +6,7 @@ import type { LibraryTrack } from '../../types'
 import styles from './SuggestedSongs.module.css'
 
 interface Props {
-  onSelect: (id: string, meta: { title: string; artist: string; img_url: string }) => void
+  onSelect: (id: string, meta: { title: string; artist: string; img_url: string | null }) => void
 }
 
 function LmfLogo({ className }: { className?: string }) {

@@ -10,8 +10,8 @@ import { HeartButton } from '../HeartButton/HeartButton'
 import styles from './LibraryPanel.module.css'
 
 interface Props {
-  onAddToQueue: (id: string, meta: { title: string; artist: string; img_url: string }) => void
-  onPlayNow: (id: string, meta: { title: string; artist: string; img_url: string }) => void
+  onAddToQueue: (id: string, meta: { title: string; artist: string; img_url: string | null }) => void
+  onPlayNow: (id: string, meta: { title: string; artist: string; img_url: string | null }) => void
   favorites?: Set<string>
   onToggleFavorite?: (trackId: string) => void
   onSearchDeezer?: (query: string) => void

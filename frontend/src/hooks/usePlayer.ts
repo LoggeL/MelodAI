@@ -415,7 +415,7 @@ export function usePlayer(options: UsePlayerOptions = {}) {
     }
   }, [])
 
-  const addToQueue = useCallback(async (trackId: string, meta?: { title?: string; artist?: string; img_url?: string }, autoPlay?: boolean) => {
+  const addToQueue = useCallback(async (trackId: string, meta?: { title?: string; artist?: string; img_url?: string | null }, autoPlay?: boolean) => {
     initAudio()
 
     if (queueRef.current.find(q => q.id === trackId)) {

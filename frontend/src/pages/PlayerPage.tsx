@@ -100,15 +100,15 @@ export function PlayerPage() {
     }
   }, [player.currentTrack?.id, navigate])
 
-  const handleSearchSelect = useCallback((id: string, meta: { title: string; artist: string; img_url: string }) => {
+  const handleSearchSelect = useCallback((id: string, meta: { title: string; artist: string; img_url: string | null }) => {
     player.addToQueue(id, meta, true)
   }, [player])
 
-  const handleAddToQueue = useCallback((id: string, meta: { title: string; artist: string; img_url: string }) => {
+  const handleAddToQueue = useCallback((id: string, meta: { title: string; artist: string; img_url: string | null }) => {
     player.addToQueue(id, meta)
   }, [player])
 
-  const handlePlayNow = useCallback(async (id: string, meta: { title: string; artist: string; img_url: string }) => {
+  const handlePlayNow = useCallback(async (id: string, meta: { title: string; artist: string; img_url: string | null }) => {
     await player.addToQueue(id, meta)
     const idx = player.queue.findIndex(q => q.id === id)
     if (idx >= 0 && player.queue[idx].ready) {

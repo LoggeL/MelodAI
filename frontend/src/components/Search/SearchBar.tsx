@@ -6,7 +6,7 @@ import type { SearchResult } from '../../types'
 import styles from './SearchBar.module.css'
 
 interface Props {
-  onSelect: (id: string, meta: { title: string; artist: string; img_url: string }) => void
+  onSelect: (id: string, meta: { title: string; artist: string; img_url: string | null }) => void
 }
 
 export interface SearchBarHandle {
@@ -104,7 +104,7 @@ export const SearchBar = forwardRef<SearchBarHandle, Props>(function SearchBar({
           {!loading && results.length === 0 && <div className={styles.spinner}>No results found</div>}
           {!loading && results.map(item => (
             <div key={item.id} className={styles.resultItem} onClick={() => handleSelect(item)}>
-              <img src={item.img_url} alt="" loading="lazy" />
+              <img src={item.img_url || '/logo.svg'} alt="" loading="lazy" />
               <div className={styles.resultInfo}>
                 <div className={styles.resultTitle}>{item.title}</div>
                 <div className={styles.resultArtist}>{item.artist}</div>

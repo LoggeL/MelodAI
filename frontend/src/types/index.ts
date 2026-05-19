@@ -5,8 +5,8 @@ export interface SearchResult {
   artist: string
   album: string
   album_id: number
-  img_url: string
-  preview_url: string
+  img_url: string | null
+  preview_url: string | null
 }
 
 export interface QueueItem {
@@ -62,7 +62,7 @@ export interface TrackMetadata {
   artist: string
   album: string
   duration: number
-  img_url: string
+  img_url: string | null
 }
 
 export interface LibraryTrack {
@@ -71,7 +71,7 @@ export interface LibraryTrack {
   artist: string
   album: string
   duration: number
-  img_url: string
+  img_url: string | null
   complete: boolean
 }
 
