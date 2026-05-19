@@ -67,7 +67,18 @@ def get_file_extension() -> str:
     return "flac" if sound_format == "FLAC" else "mp3"
 
 
-def init_deezer_session(proxy_server: str = "", quality: str = "mp3"):
+def get_deezer_arl() -> str:
+    try:
+        from src.services.app_config import get_config_value
+        configured = get_config_value("deezer_arl")
+        if configured:
+            return configured
+    except Exception as e:
+        print(f"WARNING: Could not read configured Deezer ARL: {e}")
+    return os.getenv("DEEZER_ARL", "")
+
+
+def init_deezer_session(proxy_server: str = "", quality: str = "mp3", arl: str | None = None):
     global session, license_token, web_sound_quality
     header = {
         "Pragma": "no-cache",
@@ -85,7 +96,7 @@ def init_deezer_session(proxy_server: str = "", quality: str = "mp3"):
     }
     session = requests.session()
     session.headers.update(header)
-    session.cookies.update({"arl": os.getenv("DEEZER_ARL"), "comeback": "1"})
+    session.cookies.update({"arl": arl or get_deezer_arl(), "comeback": "1"})
 
     if proxy_server and len(proxy_server.strip()) > 0:
         print(f"Using proxy {proxy_server}")

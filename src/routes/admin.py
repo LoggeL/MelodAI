@@ -504,6 +504,70 @@ def run_checks():
     return jsonify(results)
 
 
+@admin_bp.route("/config/deezer", methods=["GET"])
+@admin_required
+def get_deezer_config():
+    from src.services.app_config import get_config_value, mask_secret
+    from src.services.deezer import get_deezer_arl
+
+    configured = get_config_value("deezer_arl")
+    active = get_deezer_arl()
+    return jsonify({
+        "configured": bool(configured),
+        "masked": mask_secret(active),
+    })
+
+
+@admin_bp.route("/config/deezer", methods=["POST"])
+@admin_required
+def set_deezer_config():
+    data = request.get_json() or {}
+    arl = str(data.get("arl", "")).strip()
+    if len(arl) < 64:
+        return jsonify({"error": "Valid Deezer ARL required"}), 400
+
+    from src.services.app_config import mask_secret, set_config_value
+    from src.services.deezer import init_deezer_session, test_deezer_login
+
+    set_config_value("deezer_arl", arl)
+    os.environ["DEEZER_ARL"] = arl
+    init_deezer_session(arl=arl)
+    ok = test_deezer_login()
+
+    insert_db(
+        "INSERT INTO system_status (component, status, message) VALUES (?, ?, ?)",
+        ["deezer", "ok" if ok else "error", "Deezer ARL updated and tested" if ok else "Deezer ARL updated but login test failed"],
+    )
+
+    return jsonify({
+        "success": True,
+        "status": "ok" if ok else "error",
+        "message": "Deezer login active" if ok else "Deezer login failed",
+        "masked": mask_secret(arl),
+    })
+
+
+@admin_bp.route("/config/deezer/test", methods=["POST"])
+@admin_required
+def test_deezer_config():
+    data = request.get_json() or {}
+    arl = str(data.get("arl", "")).strip() or None
+
+    from src.services.app_config import get_config_value
+    from src.services.deezer import init_deezer_session, test_deezer_login
+
+    test_arl = arl or get_config_value("deezer_arl") or os.getenv("DEEZER_ARL", "")
+    if not test_arl:
+        return jsonify({"status": "error", "message": "No Deezer ARL configured"}), 400
+
+    init_deezer_session(arl=test_arl)
+    ok = test_deezer_login()
+    return jsonify({
+        "status": "ok" if ok else "error",
+        "message": "Deezer login active" if ok else "Deezer login failed",
+    })
+
+
 @admin_bp.route("/status/history")
 @admin_required
 def status_history():

@@ -2,7 +2,7 @@ import type {
   SearchResult, LyricsData, LibraryTrack, TrackMetadata,
   User, InviteKey, UsageLog, AdminStats, HealthCheck, StorageStats,
   AdminSong, UnfinishedTrack, ProcessingStatus, LyricsEditPayload, Playlist,
-  ErrorLogResponse, AppLogResponse, SongDetail, ActivityResponse,
+  ErrorLogResponse, AppLogResponse, SongDetail, ActivityResponse, DeezerConfigStatus,
 } from '../types'
 
 const MAX_RETRIES = 3
@@ -162,6 +162,9 @@ export const admin = {
   fetchReferenceLyrics: (id: string) => request<{ lines: string[] }>('/api/admin/songs/' + id + '/reference-lyrics', { method: 'POST' }),
   fetchReferenceLyricsAI: (id: string) => request<{ lines: string[] }>('/api/admin/songs/' + id + '/reference-lyrics/ai', { method: 'POST' }),
   runChecks: () => request<Record<string, HealthCheck>>('/api/admin/status/checks', { method: 'POST' }),
+  deezerConfig: () => request<DeezerConfigStatus>('/api/admin/config/deezer'),
+  setDeezerArl: (arl: string) => request<DeezerConfigStatus>('/api/admin/config/deezer', { method: 'POST', body: JSON.stringify({ arl }) }),
+  testDeezerArl: (arl?: string) => request<DeezerConfigStatus>('/api/admin/config/deezer/test', { method: 'POST', body: JSON.stringify({ arl: arl || '' }) }),
   statusHistory: () => request<Array<{ id: number; component: string; status: string; message: string; checked_at: string }>>('/api/admin/status/history'),
   processingQueue: () => request<Record<string, ProcessingStatus>>('/api/admin/status/queue'),
   unfinished: () => request<UnfinishedTrack[]>('/api/admin/status/unfinished'),

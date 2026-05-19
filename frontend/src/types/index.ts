@@ -133,6 +133,15 @@ export interface HealthCheck {
   message: string
 }
 
+export interface DeezerConfigStatus {
+  configured?: boolean
+  masked?: string
+  success?: boolean
+  status?: 'ok' | 'error'
+  message?: string
+  error?: string
+}
+
 export interface ProcessingStatus {
   status: string
   progress: number

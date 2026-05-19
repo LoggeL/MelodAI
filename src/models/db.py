@@ -72,6 +72,13 @@ def _run_migrations(db):
     )""")
     db.commit()
 
+    db.execute("""CREATE TABLE IF NOT EXISTS app_config (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )""")
+    db.commit()
+
 
 def query_db(query, args=(), one=False):
     db = get_db()

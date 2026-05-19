@@ -10,7 +10,7 @@ import {
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
 import { admin } from '../services/api'
-import type { User, InviteKey, AdminStats, UsageLog, AdminSong, HealthCheck, StorageStats, UnfinishedTrack, ProcessingStatus, ErrorLogEntry, AppLogEntry } from '../types'
+import type { User, InviteKey, AdminStats, UsageLog, AdminSong, HealthCheck, StorageStats, UnfinishedTrack, ProcessingStatus, ErrorLogEntry, AppLogEntry, DeezerConfigStatus } from '../types'
 import { CustomSelect } from '../components/common/CustomSelect'
 import { SongDetailView } from './SongDetailView'
 import styles from './AdminPage.module.css'
@@ -656,6 +656,10 @@ function StatusTab() {
   const [queue, setQueue] = useState<Record<string, ProcessingStatus>>({})
   const [unfinished, setUnfinished] = useState<UnfinishedTrack[]>([])
   const [storage, setStorage] = useState<StorageStats | null>(null)
+  const [deezerConfig, setDeezerConfig] = useState<DeezerConfigStatus | null>(null)
+  const [deezerArl, setDeezerArl] = useState('')
+  const [deezerSaving, setDeezerSaving] = useState(false)
+  const [deezerTesting, setDeezerTesting] = useState(false)
   const [running, setRunning] = useState(false)
   const [compressing, setCompressing] = useState(false)
   const [unfinishedPage, setUnfinishedPage] = useState(1)
@@ -664,10 +668,11 @@ function StatusTab() {
 
   useEffect(() => {
     const loadQueue = async () => {
-      const [q, u, s] = await Promise.all([admin.processingQueue(), admin.unfinished(), admin.storage()])
+      const [q, u, s, d] = await Promise.all([admin.processingQueue(), admin.unfinished(), admin.storage(), admin.deezerConfig()])
       setQueue(q)
       setUnfinished(u)
       setStorage(s)
+      setDeezerConfig(d)
       setLoading(false)
     }
     loadQueue()
@@ -708,6 +713,40 @@ function StatusTab() {
       toast.error('Failed to start compression')
     }
     setCompressing(false)
+  }
+
+  const handleSaveDeezerArl = async () => {
+    if (!deezerArl.trim()) {
+      toast.error('Paste a Deezer ARL first')
+      return
+    }
+    setDeezerSaving(true)
+    try {
+      const result = await admin.setDeezerArl(deezerArl.trim())
+      if (result.error || result.status === 'error') {
+        toast.error(result.error || result.message || 'Deezer login failed')
+      } else {
+        toast.success('Deezer ARL saved and tested')
+        setDeezerArl('')
+      }
+      setDeezerConfig(result)
+    } catch {
+      toast.error('Failed to save Deezer ARL')
+    }
+    setDeezerSaving(false)
+  }
+
+  const handleTestDeezerArl = async () => {
+    setDeezerTesting(true)
+    try {
+      const result = await admin.testDeezerArl(deezerArl.trim() || undefined)
+      if (result.status === 'ok') toast.success('Deezer login active')
+      else toast.error(result.message || result.error || 'Deezer login failed')
+      setDeezerConfig(prev => ({ ...(prev || {}), ...result }))
+    } catch {
+      toast.error('Deezer test failed')
+    }
+    setDeezerTesting(false)
   }
 
   const unfinishedPages = Math.ceil(unfinished.length / PAGE_SIZE) || 1
@@ -811,6 +850,38 @@ function StatusTab() {
           </div>
         </div>
       )}
+
+      <div className={styles.section}>
+        <h3>Deezer ARL</h3>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: 'var(--spacing-md)' }}>
+          Current: {deezerConfig?.masked || 'not configured'}
+          {deezerConfig?.status && ` · Last test: ${deezerConfig.status}${deezerConfig.message ? ` (${deezerConfig.message})` : ''}`}
+        </p>
+        <div style={{ display: 'flex', gap: 'var(--spacing-sm)', alignItems: 'center', flexWrap: 'wrap' }}>
+          <input
+            type="password"
+            value={deezerArl}
+            onChange={e => setDeezerArl(e.target.value)}
+            placeholder="Paste new Deezer ARL"
+            autoComplete="off"
+            style={{
+              flex: '1 1 360px',
+              minWidth: 0,
+              padding: '0.65rem 0.75rem',
+              borderRadius: 8,
+              border: '1px solid var(--border)',
+              background: 'var(--surface)',
+              color: 'var(--text)',
+            }}
+          />
+          <button className={styles.primaryBtn} onClick={handleSaveDeezerArl} disabled={deezerSaving}>
+            {deezerSaving ? 'Saving...' : 'Save & Test'}
+          </button>
+          <button className={styles.actionBtn} onClick={handleTestDeezerArl} disabled={deezerTesting}>
+            {deezerTesting ? 'Testing...' : 'Test'}
+          </button>
+        </div>
+      </div>
 
       <div className={styles.section}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-md)' }}>
