@@ -18,6 +18,7 @@ from src.utils.file_handling import (
     get_song_dir, load_metadata, save_metadata, load_lyrics,
     save_lyrics, save_lyrics_raw, track_file_exists, get_track_file_path,
     is_track_complete, get_all_track_ids, SONGS_PATH, compress_audio_file,
+    is_valid_track_id,
 )
 from src.utils.status_checks import set_processing_status, get_processing_status, remove_from_queue
 
@@ -73,6 +74,8 @@ def add():
     track_id = str(data.get("id") or request.args.get("id", "")).strip()
     if not track_id:
         return jsonify({"error": "Track ID required"}), 400
+    if not is_valid_track_id(track_id):
+        return jsonify({"error": "Invalid track ID"}), 400
 
     # Check if already in queue
     status = get_processing_status(track_id)
@@ -136,6 +139,9 @@ def add():
 @track_bp.route("/track/<track_id>")
 @login_required
 def track_info(track_id):
+    if not is_valid_track_id(track_id):
+        return jsonify({"error": "Invalid track ID"}), 400
+
     meta = load_metadata(track_id)
     if not meta:
         return jsonify({"error": "Track not found"}), 404
@@ -156,6 +162,9 @@ def track_info(track_id):
 @track_bp.route("/track/<track_id>/lyrics")
 @login_required
 def track_lyrics(track_id):
+    if not is_valid_track_id(track_id):
+        return jsonify({"error": "Invalid track ID"}), 400
+
     lyrics = load_lyrics(track_id)
     if not lyrics:
         return jsonify({"error": "Lyrics not found"}), 404
@@ -187,6 +196,9 @@ def library():
 def status():
     track_id = request.args.get("id")
     if track_id:
+        if not is_valid_track_id(track_id):
+            return jsonify({"error": "Invalid track ID"}), 400
+
         s = get_processing_status(track_id)
         if not s:
             if is_track_complete(track_id):
@@ -200,6 +212,9 @@ def status():
 @login_required
 def update_lyrics(track_id):
     """Update a single word in the lyrics."""
+    if not is_valid_track_id(track_id):
+        return jsonify({"error": "Invalid track ID"}), 400
+
     data = request.get_json()
     seg_idx = data.get("segmentIndex")
     word_idx = data.get("wordIndex")
@@ -238,6 +253,9 @@ def get_favorites():
 @login_required
 def add_favorite(track_id):
     from src.models.db import query_db, insert_db
+    if not is_valid_track_id(track_id):
+        return jsonify({"error": "Invalid track ID"}), 400
+
     user_id = session.get("user_id")
     existing = query_db("SELECT id FROM favorites WHERE user_id = ? AND track_id = ?", [user_id, str(track_id)], one=True)
     if not existing:
@@ -249,6 +267,9 @@ def add_favorite(track_id):
 @login_required
 def remove_favorite(track_id):
     from src.models.db import execute_db
+    if not is_valid_track_id(track_id):
+        return jsonify({"error": "Invalid track ID"}), 400
+
     user_id = session.get("user_id")
     execute_db("DELETE FROM favorites WHERE user_id = ? AND track_id = ?", [user_id, str(track_id)])
     return jsonify({"success": True})
@@ -257,6 +278,9 @@ def remove_favorite(track_id):
 @track_bp.route("/play/<track_id>")
 @login_required
 def log_play(track_id):
+    if not is_valid_track_id(track_id):
+        return jsonify({"error": "Invalid track ID"}), 400
+
     _log_usage("play", track_id)
     return jsonify({"success": True})
 
@@ -267,6 +291,9 @@ def play_credit(track_id):
     """Deduct 1 credit for playing a song (after 15s). Admins are exempt."""
     from src.utils.decorators import _get_current_user
     from src.models.db import query_db, get_db
+    if not is_valid_track_id(track_id):
+        return jsonify({"error": "Invalid track ID"}), 400
+
     user = _get_current_user()
     if not user:
         return jsonify({"error": "Not authenticated"}), 401
@@ -397,6 +424,8 @@ def add_to_playlist(playlist_id):
     track_id = data.get("track_id", "").strip()
     if not track_id:
         return jsonify({"error": "track_id required"}), 400
+    if not is_valid_track_id(track_id):
+        return jsonify({"error": "Invalid track ID"}), 400
     # Get next position
     last = query_db("SELECT MAX(position) as p FROM playlist_tracks WHERE playlist_id = ?", [playlist_id], one=True)
     pos = (last["p"] or 0) + 1
@@ -411,6 +440,9 @@ def add_to_playlist(playlist_id):
 @login_required
 def remove_from_playlist(playlist_id, track_id):
     from src.models.db import execute_db, query_db
+    if not is_valid_track_id(track_id):
+        return jsonify({"error": "Invalid track ID"}), 400
+
     user_id = session.get("user_id")
     pl = query_db("SELECT id FROM playlists WHERE id = ? AND user_id = ?", [playlist_id, user_id], one=True)
     if not pl:

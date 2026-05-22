@@ -8,13 +8,32 @@ from src.utils.constants import SONGS_DIR, TRACK_FILES
 SONGS_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), SONGS_DIR)
 
 
+def normalize_track_id(track_id):
+    """Return a safe Deezer track id for filesystem use."""
+    track_id = str(track_id).strip()
+    if not track_id.isdigit():
+        raise ValueError("Invalid track ID")
+    return track_id
+
+
+def is_valid_track_id(track_id):
+    try:
+        normalize_track_id(track_id)
+        return True
+    except ValueError:
+        return False
+
+
 def get_song_dir(track_id):
-    path = os.path.join(SONGS_PATH, str(track_id))
+    track_id = normalize_track_id(track_id)
+    path = os.path.join(SONGS_PATH, track_id)
     os.makedirs(path, exist_ok=True)
     return path
 
 
 def load_metadata(track_id):
+    if not is_valid_track_id(track_id):
+        return None
     path = os.path.join(get_song_dir(track_id), TRACK_FILES["metadata"])
     if os.path.exists(path):
         with open(path, "r") as f:
@@ -29,6 +48,8 @@ def save_metadata(track_id, data):
 
 
 def load_lyrics(track_id):
+    if not is_valid_track_id(track_id):
+        return None
     path = os.path.join(get_song_dir(track_id), TRACK_FILES["lyrics"])
     if os.path.exists(path):
         with open(path, "r") as f:
@@ -49,6 +70,8 @@ def save_lyrics_raw(track_id, data):
 
 
 def track_file_exists(track_id, file_key):
+    if not is_valid_track_id(track_id):
+        return False
     path = os.path.join(get_song_dir(track_id), TRACK_FILES.get(file_key, file_key))
     return os.path.exists(path)
 
@@ -58,6 +81,8 @@ def get_track_file_path(track_id, file_key):
 
 
 def is_track_complete(track_id):
+    if not is_valid_track_id(track_id):
+        return False
     song_dir = get_song_dir(track_id)
     required = ["metadata", "song", "vocals", "no_vocals", "lyrics"]
     return all(
@@ -75,6 +100,8 @@ def get_all_track_ids():
 
 
 def get_track_file_sizes(track_id):
+    if not is_valid_track_id(track_id):
+        return {}
     song_dir = get_song_dir(track_id)
     sizes = {}
     for key, filename in TRACK_FILES.items():
@@ -85,7 +112,8 @@ def get_track_file_sizes(track_id):
 
 
 def delete_track(track_id):
-    song_dir = os.path.join(SONGS_PATH, str(track_id))
+    track_id = normalize_track_id(track_id)
+    song_dir = os.path.join(SONGS_PATH, track_id)
     if os.path.exists(song_dir):
         shutil.rmtree(song_dir)
         return True

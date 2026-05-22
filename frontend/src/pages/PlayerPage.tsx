@@ -7,6 +7,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
 import { useAlbumColors } from '../hooks/useAlbumColors'
 import { tracks as tracksApi } from '../services/api'
+import { isValidTrackId, normalizeTrackId } from '../utils/trackId'
 import { Sidebar } from '../components/Layout/Sidebar'
 import { Header } from '../components/Layout/Header'
 import { SearchBar, type SearchBarHandle } from '../components/Search/SearchBar'
@@ -68,15 +69,20 @@ export function PlayerPage() {
   // Load song from URL on mount (route param or legacy hash)
   useEffect(() => {
     async function loadFromUrl(id: string) {
+      if (!isValidTrackId(id)) {
+        navigate('/', { replace: true })
+        return
+      }
+      const trackId = normalizeTrackId(id)
       try {
-        const data = await tracksApi.info(id)
-        player.addToQueue(id, {
+        const data = await tracksApi.info(trackId)
+        player.addToQueue(trackId, {
           title: data.metadata?.title,
           artist: data.metadata?.artist,
           img_url: data.metadata?.img_url,
         })
       } catch {
-        player.addToQueue(id)
+        player.addToQueue(trackId)
       }
     }
 
@@ -84,7 +90,9 @@ export function PlayerPage() {
     if (hash.startsWith('#song=')) {
       const id = hash.slice(6)
       loadFromUrl(id)
-      navigate(`/song/${id}`, { replace: true })
+      if (isValidTrackId(id)) {
+        navigate(`/song/${normalizeTrackId(id)}`, { replace: true })
+      }
     } else if (urlTrackId) {
       loadFromUrl(urlTrackId)
     }

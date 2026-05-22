@@ -3,6 +3,7 @@ import type { QueueItem, LyricsData } from '../types'
 import { tracks } from '../services/api'
 import { showToast } from './useToast'
 import type { SyncState, SyncCommand } from './useSync'
+import { isValidTrackId, normalizeTrackId, trackPathSegment } from '../utils/trackId'
 
 interface UsePlayerOptions {
   isAdmin?: boolean
@@ -30,14 +31,14 @@ function loadStoredQueue(): { queue: QueueItem[]; currentIndex: number } {
     if (!raw) return { queue: [], currentIndex: -1 }
     const data: StoredQueueData = JSON.parse(raw)
     if (!data.items?.length) return { queue: [], currentIndex: -1 }
-    const queue: QueueItem[] = data.items.map(item => ({
-      id: item.id,
+    const queue: QueueItem[] = data.items.filter(item => isValidTrackId(item.id)).map(item => ({
+      id: normalizeTrackId(item.id),
       title: item.title,
       artist: item.artist,
       thumbnail: item.thumbnail,
-      vocalsUrl: `/songs/${item.id}/vocals.mp3`,
-      musicUrl: `/songs/${item.id}/no_vocals.mp3`,
-      lyricsUrl: `/api/track/${item.id}/lyrics`,
+      vocalsUrl: `/songs/${trackPathSegment(item.id)}/vocals.mp3`,
+      musicUrl: `/songs/${trackPathSegment(item.id)}/no_vocals.mp3`,
+      lyricsUrl: `/api/track/${trackPathSegment(item.id)}/lyrics`,
       ready: true,
       progress: 100,
       status: 'ready',
@@ -417,6 +418,11 @@ export function usePlayer(options: UsePlayerOptions = {}) {
 
   const addToQueue = useCallback(async (trackId: string, meta?: { title?: string; artist?: string; img_url?: string | null }, autoPlay?: boolean) => {
     initAudio()
+    if (!isValidTrackId(trackId)) {
+      showToast('Invalid track ID', 'error')
+      return
+    }
+    trackId = normalizeTrackId(trackId)
 
     if (queueRef.current.find(q => q.id === trackId)) {
       if (autoPlay) {
@@ -435,9 +441,9 @@ export function usePlayer(options: UsePlayerOptions = {}) {
       title: meta?.title || 'Loading...',
       artist: meta?.artist || '',
       thumbnail: meta?.img_url || '',
-      vocalsUrl: `/songs/${trackId}/vocals.mp3`,
-      musicUrl: `/songs/${trackId}/no_vocals.mp3`,
-      lyricsUrl: `/api/track/${trackId}/lyrics`,
+      vocalsUrl: `/songs/${trackPathSegment(trackId)}/vocals.mp3`,
+      musicUrl: `/songs/${trackPathSegment(trackId)}/no_vocals.mp3`,
+      lyricsUrl: `/api/track/${trackPathSegment(trackId)}/lyrics`,
       ready: false,
       progress: 0,
       status: 'processing',

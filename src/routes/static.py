@@ -3,7 +3,7 @@ from html import escape
 from flask import Blueprint, send_from_directory, request
 
 from ..utils.decorators import login_required
-from ..utils.file_handling import load_metadata
+from ..utils.file_handling import is_valid_track_id, load_metadata
 
 static_bp = Blueprint("static", __name__)
 
@@ -59,6 +59,9 @@ def admin_page(**_kwargs):
 
 @static_bp.route("/song/<track_id>")
 def song_page(track_id):
+    if not is_valid_track_id(track_id):
+        return _serve_spa()
+
     meta = load_metadata(track_id)
     if meta:
         origin = request.host_url.rstrip("/")

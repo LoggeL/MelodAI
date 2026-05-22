@@ -5,6 +5,7 @@ from flask import Blueprint, request, jsonify
 
 from src.utils.decorators import admin_required
 from src.models.db import query_db, execute_db, insert_db
+from src.utils.file_handling import is_valid_track_id
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/api/admin")
 
@@ -248,6 +249,8 @@ def song_details(track_id):
         load_metadata, load_lyrics, is_track_complete, get_song_dir
     )
     from src.utils.constants import TRACK_FILES
+    if not is_valid_track_id(track_id):
+        return jsonify({"error": "Invalid track ID"}), 400
 
     meta = load_metadata(track_id)
     if not meta:
@@ -352,6 +355,8 @@ def song_details(track_id):
 def fetch_reference_lyrics(track_id):
     import json
     from src.utils.file_handling import load_metadata, get_song_dir
+    if not is_valid_track_id(track_id):
+        return jsonify({"error": "Invalid track ID"}), 400
 
     meta = load_metadata(track_id)
     if not meta:
@@ -387,6 +392,8 @@ def fetch_reference_lyrics_ai(track_id):
     import json
     from src.utils.file_handling import load_metadata, get_song_dir
     from src.services.reference_lyrics import _fetch_openrouter
+    if not is_valid_track_id(track_id):
+        return jsonify({"error": "Invalid track ID"}), 400
 
     meta = load_metadata(track_id)
     if not meta:
@@ -433,6 +440,9 @@ def fetch_reference_lyrics_ai(track_id):
 def delete_song(track_id):
     from src.utils.file_handling import delete_track
     from src.utils.status_checks import remove_from_queue
+    if not is_valid_track_id(track_id):
+        return jsonify({"error": "Invalid track ID"}), 400
+
     deleted = delete_track(track_id)
     if deleted:
         remove_from_queue(track_id)
@@ -453,6 +463,8 @@ def reprocess_song(track_id):
     from src.utils.constants import STATUS_METADATA, PROGRESS
     from src.utils.file_handling import get_song_dir, get_track_file_path
     import threading
+    if not is_valid_track_id(track_id):
+        return jsonify({"error": "Invalid track ID"}), 400
 
     app = current_app._get_current_object()
 

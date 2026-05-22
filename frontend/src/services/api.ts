@@ -4,6 +4,7 @@ import type {
   AdminSong, UnfinishedTrack, ProcessingStatus, LyricsEditPayload, Playlist,
   ErrorLogResponse, AppLogResponse, SongDetail, ActivityResponse, DeezerConfigStatus,
 } from '../types'
+import { normalizeTrackId, trackPathSegment } from '../utils/trackId'
 
 const MAX_RETRIES = 3
 const INITIAL_DELAY = 1000
@@ -104,31 +105,34 @@ export const auth = {
 
 export const tracks = {
   search: (q: string) => request<SearchResult[]>(`/api/search?q=${encodeURIComponent(q)}`),
-  add: (id: string) => request<{ status: string; progress: number; metadata?: TrackMetadata; error?: string; credits?: number; required?: number }>('/api/add', { method: 'POST', body: JSON.stringify({ id }) }),
-  info: (id: string) => request<{ metadata: TrackMetadata; complete: boolean; status: ProcessingStatus | null }>(`/api/track/${id}`),
-  lyrics: (id: string) => request<LyricsData>(`/api/track/${id}/lyrics`),
+  add: (id: string) => request<{ status: string; progress: number; metadata?: TrackMetadata; error?: string; credits?: number; required?: number }>('/api/add', { method: 'POST', body: JSON.stringify({ id: normalizeTrackId(id) }) }),
+  info: (id: string) => request<{ metadata: TrackMetadata; complete: boolean; status: ProcessingStatus | null }>(`/api/track/${trackPathSegment(id)}`),
+  lyrics: (id: string) => request<LyricsData>(`/api/track/${trackPathSegment(id)}/lyrics`),
   library: () => request<LibraryTrack[]>('/api/track/library'),
   status: (id?: string) => {
-    const url = id ? `/api/track/status?id=${id}` : '/api/track/status'
+    const url = id ? `/api/track/status?id=${trackPathSegment(id)}` : '/api/track/status'
     return request<ProcessingStatus | Record<string, ProcessingStatus>>(url)
   },
-  logPlay: (id: string) => fetch(`/api/play/${id}`).catch(() => {}),
-  random: (exclude: string[]) => request<{ id: string; metadata: TrackMetadata }>(`/api/random?exclude=${exclude.join(',')}`),
+  logPlay: (id: string) => fetch(`/api/play/${trackPathSegment(id)}`).catch(() => {}),
+  random: (exclude: string[]) => {
+    const validExclude = exclude.map(id => id.trim()).filter(id => /^\d+$/.test(id))
+    return request<{ id: string; metadata: TrackMetadata }>(`/api/random?exclude=${validExclude.map(encodeURIComponent).join(',')}`)
+  },
   editWord: (id: string, payload: LyricsEditPayload) =>
-    request<{ success: boolean }>(`/api/track/${id}/lyrics`, { method: 'PUT', body: JSON.stringify(payload) }),
+    request<{ success: boolean }>(`/api/track/${trackPathSegment(id)}/lyrics`, { method: 'PUT', body: JSON.stringify(payload) }),
   favorites: () => request<string[]>('/api/favorites'),
-  addFavorite: (id: string) => request<{ success: boolean }>(`/api/favorites/${id}`, { method: 'POST' }),
-  removeFavorite: (id: string) => request<{ success: boolean }>(`/api/favorites/${id}`, { method: 'DELETE' }),
+  addFavorite: (id: string) => request<{ success: boolean }>(`/api/favorites/${trackPathSegment(id)}`, { method: 'POST' }),
+  removeFavorite: (id: string) => request<{ success: boolean }>(`/api/favorites/${trackPathSegment(id)}`, { method: 'DELETE' }),
   credits: () => request<{ credits: number }>('/api/credits'),
-  deductPlayCredit: (id: string) => request<{ success?: boolean; credits?: number; error?: string }>(`/api/play/${id}/credit`, { method: 'POST' }),
+  deductPlayCredit: (id: string) => request<{ success?: boolean; credits?: number; error?: string }>(`/api/play/${trackPathSegment(id)}/credit`, { method: 'POST' }),
   playlists: () => request<Playlist[]>('/api/playlists'),
   createPlaylist: (name: string) => request<{ id: number; name: string }>('/api/playlists', { method: 'POST', body: JSON.stringify({ name }) }),
   deletePlaylist: (id: number) => request<{ success: boolean }>(`/api/playlists/${id}`, { method: 'DELETE' }),
   playlistTracks: (id: number) => request<LibraryTrack[]>(`/api/playlists/${id}/tracks`),
   addToPlaylist: (playlistId: number, trackId: string) =>
-    request<{ success: boolean }>(`/api/playlists/${playlistId}/tracks`, { method: 'POST', body: JSON.stringify({ track_id: trackId }) }),
+    request<{ success: boolean }>(`/api/playlists/${playlistId}/tracks`, { method: 'POST', body: JSON.stringify({ track_id: normalizeTrackId(trackId) }) }),
   removeFromPlaylist: (playlistId: number, trackId: string) =>
-    request<{ success: boolean }>(`/api/playlists/${playlistId}/tracks/${trackId}`, { method: 'DELETE' }),
+    request<{ success: boolean }>(`/api/playlists/${playlistId}/tracks/${trackPathSegment(trackId)}`, { method: 'DELETE' }),
 }
 
 // ─── Admin ───
@@ -152,15 +156,15 @@ export const admin = {
   },
   storage: () => request<StorageStats>('/api/admin/storage'),
   songs: () => request<AdminSong[]>('/api/admin/songs'),
-  deleteSong: (id: string) => request('/api/admin/songs/' + id, { method: 'DELETE' }),
-  reprocessSong: (id: string, fromStage?: string) => request('/api/admin/songs/' + id + '/reprocess', {
+  deleteSong: (id: string) => request('/api/admin/songs/' + trackPathSegment(id), { method: 'DELETE' }),
+  reprocessSong: (id: string, fromStage?: string) => request('/api/admin/songs/' + trackPathSegment(id) + '/reprocess', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ from_stage: fromStage || 'all' }),
   }),
-  songDetails: (id: string) => request<SongDetail>('/api/admin/songs/' + id + '/details'),
-  fetchReferenceLyrics: (id: string) => request<{ lines: string[] }>('/api/admin/songs/' + id + '/reference-lyrics', { method: 'POST' }),
-  fetchReferenceLyricsAI: (id: string) => request<{ lines: string[] }>('/api/admin/songs/' + id + '/reference-lyrics/ai', { method: 'POST' }),
+  songDetails: (id: string) => request<SongDetail>('/api/admin/songs/' + trackPathSegment(id) + '/details'),
+  fetchReferenceLyrics: (id: string) => request<{ lines: string[] }>('/api/admin/songs/' + trackPathSegment(id) + '/reference-lyrics', { method: 'POST' }),
+  fetchReferenceLyricsAI: (id: string) => request<{ lines: string[] }>('/api/admin/songs/' + trackPathSegment(id) + '/reference-lyrics/ai', { method: 'POST' }),
   runChecks: () => request<Record<string, HealthCheck>>('/api/admin/status/checks', { method: 'POST' }),
   deezerConfig: () => request<DeezerConfigStatus>('/api/admin/config/deezer'),
   setDeezerArl: (arl: string) => request<DeezerConfigStatus>('/api/admin/config/deezer', { method: 'POST', body: JSON.stringify({ arl }) }),
