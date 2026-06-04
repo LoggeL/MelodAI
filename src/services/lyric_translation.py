@@ -74,7 +74,7 @@ def translate_lines(lines: list[str], target_language: str, *, track_id: str | N
     if not lines:
         raise ValueError("no_lyrics")
 
-    model = os.getenv("LYRICS_TRANSLATION_MODEL", os.getenv("LYRICS_GEMINI_MODEL", "google/gemini-3-flash-preview"))
+    model = os.getenv("LYRICS_TRANSLATION_MODEL", os.getenv("LYRICS_GEMINI_MODEL", "google/gemini-3.1-flash-lite"))
 
     prompt = {
         "task": "Translate song lyrics line-by-line for live karaoke reading.",
