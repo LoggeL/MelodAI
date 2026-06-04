@@ -7,6 +7,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
 import { useAlbumColors } from '../hooks/useAlbumColors'
 import { tracks as tracksApi } from '../services/api'
+import type { LyricTranslation, TranslationLanguage } from '../types'
 import { isValidTrackId, normalizeTrackId } from '../utils/trackId'
 import { Sidebar } from '../components/Layout/Sidebar'
 import { Header } from '../components/Layout/Header'
@@ -32,6 +33,18 @@ export function PlayerPage() {
   useAlbumColors(player.currentTrack?.thumbnail)
   const searchRef = useRef<SearchBarHandle>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [translationLanguage, setTranslationLanguage] = useState<TranslationLanguage>(() => {
+    const stored = localStorage.getItem('melodai_translation_language')
+    if (stored === 'de' || stored === 'en') return stored
+    const browserLanguage = navigator.language.toLowerCase().split('-')[0]
+    return browserLanguage === 'en' ? 'en' : 'de'
+  })
+  const [translationMode, setTranslationMode] = useState<'original' | 'translation' | 'both'>(() => {
+    const stored = localStorage.getItem('melodai_translation_mode')
+    return stored === 'translation' || stored === 'both' ? stored : 'original'
+  })
+  const [translation, setTranslation] = useState<LyricTranslation | null>(null)
+  const [translationLoading, setTranslationLoading] = useState(false)
 
   // Cross-device queue sync
   const onSyncState = useCallback((state: SyncState) => {
@@ -107,6 +120,48 @@ export function PlayerPage() {
       navigate('/', { replace: true })
     }
   }, [player.currentTrack?.id, navigate])
+
+  useEffect(() => {
+    localStorage.setItem('melodai_translation_language', translationLanguage)
+  }, [translationLanguage])
+
+  useEffect(() => {
+    localStorage.setItem('melodai_translation_mode', translationMode)
+  }, [translationMode])
+
+  useEffect(() => {
+    const trackId = player.currentTrack?.id
+    setTranslation(null)
+    if (!trackId) return
+
+    let cancelled = false
+    setTranslationLoading(true)
+    tracksApi.lyricTranslation(trackId, translationLanguage)
+      .then(data => {
+        if (!cancelled) setTranslation(data.available ? data : null)
+      })
+      .catch(() => {
+        if (!cancelled) setTranslation(null)
+      })
+      .finally(() => {
+        if (!cancelled) setTranslationLoading(false)
+      })
+
+    return () => { cancelled = true }
+  }, [player.currentTrack?.id, translationLanguage])
+
+  const handleTranslate = useCallback(async () => {
+    const trackId = player.currentTrack?.id
+    if (!trackId) return
+    setTranslationLoading(true)
+    try {
+      const data = await tracksApi.createLyricTranslation(trackId, translationLanguage)
+      setTranslation(data.available ? data : null)
+      if (data.available && translationMode === 'original') setTranslationMode('both')
+    } finally {
+      setTranslationLoading(false)
+    }
+  }, [player.currentTrack?.id, translationLanguage, translationMode])
 
   const handleSearchSelect = useCallback((id: string, meta: { title: string; artist: string; img_url: string | null }) => {
     player.addToQueue(id, meta, true)
@@ -213,6 +268,13 @@ export function PlayerPage() {
                 onSeek={player.seek}
                 onEditWord={player.editWord}
                 hasTrack
+                translation={translation}
+                translationLanguage={translationLanguage}
+                translationMode={translationMode}
+                translationLoading={translationLoading}
+                onTranslationLanguageChange={setTranslationLanguage}
+                onTranslationModeChange={setTranslationMode}
+                onTranslate={handleTranslate}
               />
             </>
           ) : (

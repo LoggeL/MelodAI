@@ -171,6 +171,128 @@ def track_lyrics(track_id):
     return jsonify(lyrics)
 
 
+@track_bp.route("/track/<track_id>/lyrics/translations")
+@login_required
+def get_lyric_translation(track_id):
+    if not is_valid_track_id(track_id):
+        return jsonify({"error": "Invalid track ID"}), 400
+
+    from src.models.db import query_db
+    from src.services.lyric_translation import normalize_language, SUPPORTED_TRANSLATION_LANGUAGES
+
+    try:
+        target_language = normalize_language(request.args.get("lang") or "de")
+    except ValueError:
+        return jsonify({"error": "Unsupported language"}), 400
+
+    row = query_db(
+        "SELECT track_id, target_language, source_language, model, status, translated_lines_json, created_at, updated_at "
+        "FROM lyric_translations WHERE track_id = ? AND target_language = ?",
+        [str(track_id), target_language],
+        one=True,
+    )
+    if not row:
+        return jsonify({
+            "available": False,
+            "track_id": str(track_id),
+            "target_language": target_language,
+            "target_language_name": SUPPORTED_TRANSLATION_LANGUAGES[target_language],
+        })
+
+    return jsonify({
+        "available": True,
+        "track_id": row["track_id"],
+        "target_language": row["target_language"],
+        "target_language_name": SUPPORTED_TRANSLATION_LANGUAGES[row["target_language"]],
+        "source_language": row["source_language"],
+        "model": row["model"],
+        "status": row["status"],
+        "lines": json.loads(row["translated_lines_json"] or "[]"),
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    })
+
+
+@track_bp.route("/track/<track_id>/lyrics/translations", methods=["POST"])
+@login_required
+def create_lyric_translation(track_id):
+    if not is_valid_track_id(track_id):
+        return jsonify({"error": "Invalid track ID"}), 400
+
+    from src.models.db import query_db, get_db
+    from src.services.lyric_translation import (
+        extract_lyric_lines,
+        normalize_language,
+        translate_lines,
+        SUPPORTED_TRANSLATION_LANGUAGES,
+    )
+
+    data = request.get_json(silent=True) or {}
+    try:
+        target_language = normalize_language(data.get("target_language") or data.get("lang") or "de")
+    except ValueError:
+        return jsonify({"error": "Unsupported language"}), 400
+
+    existing = query_db(
+        "SELECT track_id, target_language, source_language, model, status, translated_lines_json, created_at, updated_at "
+        "FROM lyric_translations WHERE track_id = ? AND target_language = ?",
+        [str(track_id), target_language],
+        one=True,
+    )
+    if existing and not data.get("force"):
+        return jsonify({
+            "available": True,
+            "track_id": existing["track_id"],
+            "target_language": existing["target_language"],
+            "target_language_name": SUPPORTED_TRANSLATION_LANGUAGES[existing["target_language"]],
+            "source_language": existing["source_language"],
+            "model": existing["model"],
+            "status": existing["status"],
+            "lines": json.loads(existing["translated_lines_json"] or "[]"),
+            "created_at": existing["created_at"],
+            "updated_at": existing["updated_at"],
+        })
+
+    lyrics = load_lyrics(track_id)
+    if not lyrics:
+        return jsonify({"error": "Lyrics not found"}), 404
+
+    lyric_lines = extract_lyric_lines(lyrics)
+    if not lyric_lines:
+        return jsonify({"error": "No translatable lyrics"}), 400
+
+    try:
+        translated = translate_lines(lyric_lines, target_language, track_id=str(track_id))
+    except Exception as e:
+        from src.utils.error_logging import log_api_error
+        log_api_error(str(e), traceback.format_exc(), source="/lyrics/translations")
+        return jsonify({"error": "Translation failed"}), 502
+
+    translated_json = json.dumps(translated["lines"], ensure_ascii=False)
+    db = get_db()
+    db.execute(
+        "INSERT INTO lyric_translations (track_id, target_language, source_language, model, status, translated_lines_json, updated_at) "
+        "VALUES (?, ?, ?, ?, 'complete', ?, CURRENT_TIMESTAMP) "
+        "ON CONFLICT(track_id, target_language) DO UPDATE SET "
+        "source_language = excluded.source_language, model = excluded.model, status = 'complete', "
+        "translated_lines_json = excluded.translated_lines_json, updated_at = CURRENT_TIMESTAMP",
+        [str(track_id), target_language, translated.get("source_language"), translated.get("model"), translated_json],
+    )
+    db.commit()
+
+    _log_usage("translate_lyrics", f"{track_id}:{target_language}")
+    return jsonify({
+        "available": True,
+        "track_id": str(track_id),
+        "target_language": target_language,
+        "target_language_name": SUPPORTED_TRANSLATION_LANGUAGES[target_language],
+        "source_language": translated.get("source_language"),
+        "model": translated.get("model"),
+        "status": "complete",
+        "lines": translated["lines"],
+    })
+
+
 @track_bp.route("/track/library")
 @login_required
 def library():

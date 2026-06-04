@@ -3,6 +3,7 @@ import type {
   User, InviteKey, UsageLog, AdminStats, HealthCheck, StorageStats,
   AdminSong, UnfinishedTrack, ProcessingStatus, LyricsEditPayload, Playlist,
   ErrorLogResponse, AppLogResponse, SongDetail, ActivityResponse, DeezerConfigStatus,
+  LyricTranslation, TranslationLanguage,
 } from '../types'
 import { normalizeTrackId, trackPathSegment } from '../utils/trackId'
 
@@ -108,6 +109,13 @@ export const tracks = {
   add: (id: string) => request<{ status: string; progress: number; metadata?: TrackMetadata; error?: string; credits?: number; required?: number }>('/api/add', { method: 'POST', body: JSON.stringify({ id: normalizeTrackId(id) }) }),
   info: (id: string) => request<{ metadata: TrackMetadata; complete: boolean; status: ProcessingStatus | null }>(`/api/track/${trackPathSegment(id)}`),
   lyrics: (id: string) => request<LyricsData>(`/api/track/${trackPathSegment(id)}/lyrics`),
+  lyricTranslation: (id: string, lang: TranslationLanguage) =>
+    request<LyricTranslation>(`/api/track/${trackPathSegment(id)}/lyrics/translations?lang=${encodeURIComponent(lang)}`),
+  createLyricTranslation: (id: string, lang: TranslationLanguage, force = false) =>
+    request<LyricTranslation>(`/api/track/${trackPathSegment(id)}/lyrics/translations`, {
+      method: 'POST',
+      body: JSON.stringify({ target_language: lang, force }),
+    }),
   library: () => request<LibraryTrack[]>('/api/track/library'),
   status: (id?: string) => {
     const url = id ? `/api/track/status?id=${trackPathSegment(id)}` : '/api/track/status'

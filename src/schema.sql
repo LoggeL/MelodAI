@@ -138,3 +138,16 @@ CREATE TABLE IF NOT EXISTS sync_state (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
+
+CREATE TABLE IF NOT EXISTS lyric_translations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    track_id TEXT NOT NULL,
+    target_language TEXT NOT NULL,
+    source_language TEXT,
+    model TEXT,
+    status TEXT NOT NULL DEFAULT 'complete',
+    translated_lines_json TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(track_id, target_language)
+);

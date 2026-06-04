@@ -9,6 +9,92 @@
   -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%);
 }
 
+/* Translation controls */
+.translationToolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+  max-width: 760px;
+  margin: 0 auto var(--spacing-lg);
+  padding: var(--spacing-sm);
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.translationGroup,
+.translationModeGroup {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.translationGroup {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.translationSelect,
+.translateButton,
+.translationModeGroup button {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 6px 10px;
+}
+
+.translationSelect,
+.translateButton,
+.translationModeGroup button:not(:disabled) {
+  cursor: pointer;
+}
+
+.translateButton,
+.translationModeGroup button {
+  transition: border-color 0.15s ease, background 0.15s ease, opacity 0.15s ease;
+}
+
+.translateButton:hover:not(:disabled),
+.translationModeGroup button:hover:not(:disabled) {
+  border-color: var(--primary);
+  background: var(--primary-glow);
+}
+
+.translationModeGroup button:disabled,
+.translateButton:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.translationModeGroup .translationModeActive {
+  border-color: var(--primary);
+  background: var(--primary-glow);
+  color: var(--primary);
+}
+
+.translationLine {
+  margin-top: 0.1rem;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  font-weight: 400;
+  opacity: 0.82;
+}
+
+.lineActive .translationLine {
+  color: var(--text-primary);
+  opacity: 0.95;
+}
+
 /* Confidence warning */
 .confidenceWarning {
   display: flex;
@@ -221,6 +307,9 @@
   .container { padding: var(--spacing-lg) var(--spacing-sm); }
   .word { font-size: 0.95rem; }
   .line { padding: 6px 12px; }
+  .translationToolbar { align-items: stretch; }
+  .translationGroup, .translationModeGroup { justify-content: center; }
+  .translationLine { font-size: 0.82rem; }
 }
 
 /* Untimed lyrics (no word-level timestamps) */

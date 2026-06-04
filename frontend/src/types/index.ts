@@ -56,6 +56,27 @@ export interface LyricsData {
   plain_lyrics?: string[]
 }
 
+export type TranslationLanguage = 'de' | 'en' | 'fr' | 'es' | 'it' | 'pt'
+
+export interface LyricTranslationLine {
+  index: number
+  original: string
+  translation: string
+}
+
+export interface LyricTranslation {
+  available: boolean
+  track_id: string
+  target_language: TranslationLanguage
+  target_language_name?: string
+  source_language?: string
+  model?: string
+  status?: string
+  lines?: LyricTranslationLine[]
+  created_at?: string
+  updated_at?: string
+}
+
 export interface TrackMetadata {
   id: string
   title: string

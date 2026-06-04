@@ -1,7 +1,7 @@
 import { useRef, useEffect, useMemo, useState, useCallback } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faMicrophone, faGuitar, faTriangleExclamation, faLanguage } from '@fortawesome/free-solid-svg-icons'
-import type { LyricsData } from '../../types'
+import type { LyricsData, LyricTranslation, TranslationLanguage } from '../../types'
 import styles from './LyricsView.module.css'
 
 interface Props {
@@ -12,6 +12,13 @@ interface Props {
   onSeek: (time: number) => void
   onEditWord?: (segIdx: number, wordIdx: number, newWord: string) => void
   hasTrack: boolean
+  translation?: LyricTranslation | null
+  translationLanguage: TranslationLanguage
+  translationMode: 'original' | 'translation' | 'both'
+  translationLoading?: boolean
+  onTranslationLanguageChange: (language: TranslationLanguage) => void
+  onTranslationModeChange: (mode: 'original' | 'translation' | 'both') => void
+  onTranslate: () => void
 }
 
 const SPEAKER_CLASSES = [
@@ -19,13 +26,40 @@ const SPEAKER_CLASSES = [
   styles.speaker3, styles.speaker4, styles.speaker5,
 ]
 
-export function LyricsView({ lyrics, loading, currentTime, duration, onSeek, onEditWord, hasTrack }: Props) {
+const VISIBLE_TRANSLATION_LANGUAGES: Array<{ code: TranslationLanguage; label: string }> = [
+  { code: 'de', label: 'Deutsch' },
+  { code: 'en', label: 'English' },
+]
+
+export function LyricsView({
+  lyrics,
+  loading,
+  currentTime,
+  duration,
+  onSeek,
+  onEditWord,
+  hasTrack,
+  translation,
+  translationLanguage,
+  translationMode,
+  translationLoading = false,
+  onTranslationLanguageChange,
+  onTranslationModeChange,
+  onTranslate,
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const lastScrollRef = useRef(0)
   const [editing, setEditing] = useState<{ seg: number; word: number } | null>(null)
   const [editValue, setEditValue] = useState('')
   const [warningDismissed, setWarningDismissed] = useState(false)
   const editRef = useRef<HTMLInputElement>(null)
+  const translationByIndex = useMemo(() => {
+    const map = new Map<number, string>()
+    translation?.lines?.forEach(line => map.set(line.index, line.translation))
+    return map
+  }, [translation])
+  const showOriginal = translationMode !== 'translation' || !translation?.available
+  const showTranslation = translationMode !== 'original' && !!translation?.available
 
   const speakerMap = useMemo(() => {
     const map: Record<string, string> = {}
@@ -126,6 +160,45 @@ export function LyricsView({ lyrics, loading, currentTime, duration, onSeek, onE
   const plainLyrics = lyrics?.plain_lyrics || []
   const isUntimed = lyrics?.untimed && plainLyrics.length > 0
 
+  const translationToolbar = (
+    <div className={styles.translationToolbar}>
+      <div className={styles.translationGroup}>
+        <FontAwesomeIcon icon={faLanguage} />
+        <select
+          className={styles.translationSelect}
+          value={translationLanguage}
+          onChange={e => onTranslationLanguageChange(e.target.value as TranslationLanguage)}
+          aria-label="Translation language"
+        >
+          {VISIBLE_TRANSLATION_LANGUAGES.map(lang => (
+            <option key={lang.code} value={lang.code}>{lang.label}</option>
+          ))}
+        </select>
+        {!translation?.available && (
+          <button className={styles.translateButton} onClick={onTranslate} disabled={translationLoading}>
+            {translationLoading ? 'Übersetze…' : 'Übersetzen'}
+          </button>
+        )}
+      </div>
+      <div className={styles.translationModeGroup}>
+        <button
+          className={translationMode === 'original' ? styles.translationModeActive : ''}
+          onClick={() => onTranslationModeChange('original')}
+        >Original</button>
+        <button
+          className={translationMode === 'translation' ? styles.translationModeActive : ''}
+          onClick={() => onTranslationModeChange('translation')}
+          disabled={!translation?.available && !translationLoading}
+        >Übersetzung</button>
+        <button
+          className={translationMode === 'both' ? styles.translationModeActive : ''}
+          onClick={() => onTranslationModeChange('both')}
+          disabled={!translation?.available && !translationLoading}
+        >Beides</button>
+      </div>
+    </div>
+  )
+
   if (segments.length === 0 && !isUntimed) {
     return (
       <div className={styles.container}>
@@ -148,6 +221,7 @@ export function LyricsView({ lyrics, loading, currentTime, duration, onSeek, onE
 
     return (
       <div className={styles.container} ref={containerRef}>
+        {translationToolbar}
         <div className={styles.untimedBanner}>
           <FontAwesomeIcon icon={faLanguage} />
           <span>Lyrics from external source — word-level timing unavailable</span>
@@ -163,7 +237,8 @@ export function LyricsView({ lyrics, loading, currentTime, duration, onSeek, onE
 
           return (
             <div key={i} className={lineClass}>
-              <span className={styles.word}>{line || '\u00A0'}</span>
+              {showOriginal && <span className={styles.word}>{line || '\u00A0'}</span>}
+              {showTranslation && <div className={styles.translationLine}>{translationByIndex.get(i) || '\u00A0'}</div>}
             </div>
           )
         })}
@@ -192,6 +267,7 @@ export function LyricsView({ lyrics, loading, currentTime, duration, onSeek, onE
 
   return (
     <div className={styles.container} ref={containerRef}>
+      {translationToolbar}
       {showConfidenceWarning && (
         <div className={styles.confidenceWarning}>
           <FontAwesomeIcon icon={faTriangleExclamation} />
@@ -232,7 +308,7 @@ export function LyricsView({ lyrics, loading, currentTime, duration, onSeek, onE
               </div>
             )}
             <div className={lineClass}>
-              {seg.words.map((w, j) => {
+              {showOriginal && seg.words.map((w, j) => {
                 const wActive = isActive && currentTime >= w.start && currentTime <= w.end + 0.1
                 const isEditing = editing?.seg === i && editing?.word === j
 
@@ -267,6 +343,7 @@ export function LyricsView({ lyrics, loading, currentTime, duration, onSeek, onE
                   </span>
                 )
               })}
+              {showTranslation && <div className={styles.translationLine}>{translationByIndex.get(i) || '\u00A0'}</div>}
             </div>
           </div>
         )
