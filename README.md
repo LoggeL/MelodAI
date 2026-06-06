@@ -1,6 +1,16 @@
 # MelodAI
 
-AI-powered karaoke web application. Search for a song, and MelodAI separates vocals from instrumentals, extracts word-level timed lyrics, and presents a synchronized karaoke player.
+[![CI](https://github.com/LoggeL/MelodAI/actions/workflows/ci.yml/badge.svg)](https://github.com/LoggeL/MelodAI/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/LoggeL/MelodAI/actions/workflows/codeql.yml/badge.svg)](https://github.com/LoggeL/MelodAI/actions/workflows/codeql.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue.svg)](https://www.typescriptlang.org/)
+[![Flask](https://img.shields.io/badge/Flask-3-black.svg)](https://flask.palletsprojects.com/)
+
+**Open-source AI karaoke pipeline for vocal separation, timed lyrics, and synchronized playback.**
+
+Search for a song, and MelodAI separates vocals from instrumentals, extracts word-level timed lyrics, and presents a synchronized karaoke player.
+
+[Live demo](https://melodai.logge.top/about) · [Security policy](SECURITY.md) · [Contributing](CONTRIBUTING.md)
 
 ![Player](docs/screenshots/02-player.png)
 
