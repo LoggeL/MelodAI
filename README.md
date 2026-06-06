@@ -1,6 +1,6 @@
 # MelodAI
 
-AI-powered karaoke web application. Search for any song, and MelodAI automatically separates vocals from instrumentals, extracts word-level timed lyrics, and presents a synchronized karaoke player.
+AI-powered karaoke web application. Search for a song, and MelodAI separates vocals from instrumentals, extracts word-level timed lyrics, and presents a synchronized karaoke player.
 
 ![Player](docs/screenshots/02-player.png)
 
@@ -113,6 +113,18 @@ MelodAI/
       services/api.ts      # API client layer
 ```
 
+## Maintainer workflows
+
+MelodAI has real ongoing maintenance surface area:
+
+- reviewing and testing frontend/player changes
+- triaging processing failures across Deezer, Replicate, WhisperX, and OpenRouter
+- hardening auth, admin routes, file serving, and credit accounting
+- improving release confidence with CI, integration tests, and browser tests
+- documenting operational edge cases for self-hosted deployments
+
+Codex-style coding and review workflows are especially useful here because changes often span Python routes, external AI APIs, React state, audio playback, and end-to-end tests.
+
 ## License
 
-Private project.
+MIT — see [LICENSE](LICENSE).

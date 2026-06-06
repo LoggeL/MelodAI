@@ -20,3 +20,7 @@ node_modules
 # Built frontend
 src/static
 
+
+# Local database backups / generated package metadata
+*.db.bak*
+src/melodai.egg-info
