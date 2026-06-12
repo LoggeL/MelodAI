@@ -76,17 +76,19 @@ export function LibraryPanel({ onAddToQueue, favorites, onToggleFavorite, onSear
             className={`${styles.iconBtn} ${showFavsOnly ? styles.iconBtnActive : ''}`}
             onClick={() => setShowFavsOnly(!showFavsOnly)}
             title="Show favorites only"
+            aria-label="Show favorites only"
+            aria-pressed={showFavsOnly}
           >
             <FontAwesomeIcon icon={showFavsOnly ? faHeartSolid : faHeartRegular} />
           </button>
         )}
-        <button className={styles.iconBtn} onClick={load} title="Refresh">
+        <button className={styles.iconBtn} onClick={load} title="Refresh" aria-label="Refresh library">
           <FontAwesomeIcon icon={faRotateRight} />
         </button>
-        <button className={styles.iconBtn} onClick={handleAddAll} title="Add all to queue">
+        <button className={styles.iconBtn} onClick={handleAddAll} title="Add all to queue" aria-label="Add all to queue">
           <FontAwesomeIcon icon={faPlus} />
         </button>
-        <button className={styles.iconBtn} onClick={() => navigate('/library')} title="Open full library">
+        <button className={styles.iconBtn} onClick={() => navigate('/library')} title="Open full library" aria-label="Open full library">
           <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
         </button>
       </div>

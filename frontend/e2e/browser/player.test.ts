@@ -189,7 +189,7 @@ describe('Player Page E2E', () => {
       })
       await waitForIdle(page, 500)
 
-      const hasRandom = await exists(page, 'button[title="Random"]')
+      const hasRandom = await exists(page, 'button[title="Add random song"]')
       expect(hasRandom).toBe(true)
     })
   })

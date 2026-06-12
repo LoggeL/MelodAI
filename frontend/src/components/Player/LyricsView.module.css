@@ -46,7 +46,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface);
-  color: var(--text-primary);
+  color: var(--text);
   font: inherit;
   font-size: 0.78rem;
   padding: 6px 10px;
@@ -91,7 +91,7 @@
 }
 
 .lineActive .translationLine {
-  color: var(--text-primary);
+  color: var(--text);
   opacity: 0.95;
 }
 

@@ -4,12 +4,23 @@ from src.models.db import query_db
 from datetime import datetime
 
 
+def _wants_json():
+    # fetch() defaults to "Accept: */*" and <audio> sends "audio/*", so the
+    # Accept header alone misses most API/file requests — those would get a
+    # 302 → 200 HTML page the frontend can't distinguish from success.
+    return (
+        request.path.startswith(("/api/", "/songs/"))
+        or request.headers.get("Accept", "").startswith("application/json")
+        or request.is_json
+    )
+
+
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         user = _get_current_user()
         if not user:
-            if request.headers.get("Accept", "").startswith("application/json") or request.is_json:
+            if _wants_json():
                 return jsonify({"error": "Authentication required"}), 401
             return redirect("/login")
         return f(*args, **kwargs)
@@ -21,7 +32,7 @@ def admin_required(f):
     def decorated(*args, **kwargs):
         user = _get_current_user()
         if not user:
-            if request.headers.get("Accept", "").startswith("application/json") or request.is_json:
+            if _wants_json():
                 return jsonify({"error": "Authentication required"}), 401
             return redirect("/login")
         if not user["is_admin"]:

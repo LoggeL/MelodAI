@@ -37,17 +37,22 @@ export function LoginPage() {
     setLoading(true)
     setMessage(null)
     const form = new FormData(e.currentTarget)
-    const data = await auth.login(
-      form.get('username') as string,
-      form.get('password') as string,
-      form.get('remember') === 'on'
-    )
-    if (data.success) {
-      navigate(returnTo)
-    } else {
-      setMessage({ type: 'error', text: data.error || 'Login failed' })
+    try {
+      const data = await auth.login(
+        form.get('username') as string,
+        form.get('password') as string,
+        form.get('remember') === 'on'
+      )
+      if (data.success) {
+        navigate(returnTo)
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Login failed' })
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Network error — please try again' })
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   const handleRegister = async (e: FormEvent<HTMLFormElement>) => {
@@ -62,20 +67,25 @@ export function LoginPage() {
       setLoading(false)
       return
     }
-    const data = await auth.register(
-      form.get('username') as string,
-      form.get('email') as string,
-      password,
-      form.get('invite_key') as string || ''
-    )
-    if (data.success && !data.pending) {
-      navigate(returnTo)
-    } else if (data.pending) {
-      setMessage({ type: 'success', text: data.message || 'Waiting for approval' })
-    } else {
-      setMessage({ type: 'error', text: data.error || 'Registration failed' })
+    try {
+      const data = await auth.register(
+        form.get('username') as string,
+        form.get('email') as string,
+        password,
+        form.get('invite_key') as string || ''
+      )
+      if (data.success && !data.pending) {
+        navigate(returnTo)
+      } else if (data.pending) {
+        setMessage({ type: 'success', text: data.message || 'Waiting for approval' })
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Registration failed' })
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Network error — please try again' })
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   const handleForgot = async (e: FormEvent<HTMLFormElement>) => {
@@ -83,9 +93,14 @@ export function LoginPage() {
     setLoading(true)
     setMessage(null)
     const form = new FormData(e.currentTarget)
-    const data = await auth.forgotPassword(form.get('username') as string)
-    setMessage({ type: 'success', text: data.message || 'Check your email' })
-    setLoading(false)
+    try {
+      const data = await auth.forgotPassword(form.get('username') as string)
+      setMessage({ type: 'success', text: data.message || 'Check your email' })
+    } catch {
+      setMessage({ type: 'error', text: 'Network error — please try again' })
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleReset = async (e: FormEvent<HTMLFormElement>) => {
@@ -93,15 +108,20 @@ export function LoginPage() {
     setLoading(true)
     setMessage(null)
     const form = new FormData(e.currentTarget)
-    const data = await auth.resetPassword(resetToken, form.get('password') as string)
-    if (data.success) {
-      setMessage({ type: 'success', text: 'Password reset! You can now login.' })
-      window.location.hash = ''
-      setTimeout(() => setTab('login'), 2000)
-    } else {
-      setMessage({ type: 'error', text: data.error || 'Reset failed' })
+    try {
+      const data = await auth.resetPassword(resetToken, form.get('password') as string)
+      if (data.success) {
+        setMessage({ type: 'success', text: 'Password reset! You can now login.' })
+        window.location.hash = ''
+        setTimeout(() => setTab('login'), 2000)
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Reset failed' })
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Network error — please try again' })
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   const authTitle = tab === 'register'

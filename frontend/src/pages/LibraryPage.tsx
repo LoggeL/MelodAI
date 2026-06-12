@@ -289,6 +289,7 @@ export function LibraryPage() {
     if (!audioRef.current) {
       audioRef.current = new Audio()
       audioRef.current.addEventListener('ended', () => {
+        if (animRef.current) cancelAnimationFrame(animRef.current)
         setPreviewId(null)
         setPreviewProgress(0)
       })
@@ -300,8 +301,10 @@ export function LibraryPage() {
     audioRef.current.play().catch(() => {})
     setPreviewId(id)
 
+    // Note: don't gate on previewId here — this closure captures the value
+    // from before setPreviewId above, which is null on the first preview.
     const tick = () => {
-      if (audioRef.current && previewId !== null) {
+      if (audioRef.current) {
         const start = 30
         const dur = audioRef.current.duration || 0
         const cur = audioRef.current.currentTime
@@ -436,7 +439,11 @@ export function LibraryPage() {
   const handleAddSong = useCallback(async (result: SearchResult) => {
     try {
       const resp = await tracks.add(result.id)
-      if (resp.status === 'error') {
+      if (resp.error === 'insufficient_credits') {
+        toast.error(`Not enough credits (${resp.credits ?? 0}/${resp.required ?? 5})`)
+        return
+      }
+      if (resp.error || resp.status === 'error') {
         toast.error('Failed to add song')
         return
       }

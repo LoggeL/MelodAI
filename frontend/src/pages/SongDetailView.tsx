@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Fragment } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
@@ -520,8 +520,8 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
             </thead>
             <tbody>
               {data.errors.map(e => (
-                <>
-                  <tr key={e.id} className={styles.errorRow} onClick={() => setExpandedError(expandedError === e.id ? null : e.id)}>
+                <Fragment key={e.id}>
+                  <tr className={styles.errorRow} onClick={() => setExpandedError(expandedError === e.id ? null : e.id)}>
                     <td><span className={`${styles.tag} ${styles.tagDanger}`}>{e.error_type}</span></td>
                     <td>{e.source}</td>
                     <td style={{ maxWidth: 400, wordBreak: 'break-word' }}>{e.error_message}</td>
@@ -534,7 +534,7 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               ))}
             </tbody>
           </table>

@@ -176,7 +176,7 @@ export function LyricsView({
         </select>
         {!translation?.available && (
           <button className={styles.translateButton} onClick={onTranslate} disabled={translationLoading}>
-            {translationLoading ? 'Übersetze…' : 'Übersetzen'}
+            {translationLoading ? 'Translating…' : 'Translate'}
           </button>
         )}
       </div>
@@ -189,12 +189,12 @@ export function LyricsView({
           className={translationMode === 'translation' ? styles.translationModeActive : ''}
           onClick={() => onTranslationModeChange('translation')}
           disabled={!translation?.available && !translationLoading}
-        >Übersetzung</button>
+        >Translation</button>
         <button
           className={translationMode === 'both' ? styles.translationModeActive : ''}
           onClick={() => onTranslationModeChange('both')}
           disabled={!translation?.available && !translationLoading}
-        >Beides</button>
+        >Both</button>
       </div>
     </div>
   )

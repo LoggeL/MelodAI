@@ -64,6 +64,15 @@ def delete_user(user_id):
     execute_db("DELETE FROM usage_logs WHERE user_id = ?", [user_id])
     execute_db("DELETE FROM auth_tokens WHERE user_id = ?", [user_id])
     execute_db("DELETE FROM password_resets WHERE user_id = ?", [user_id])
+    # SQLite FKs aren't enforced here (PRAGMA foreign_keys is off), so the
+    # ON DELETE CASCADEs in the schema don't fire — clean up manually.
+    execute_db(
+        "DELETE FROM playlist_tracks WHERE playlist_id IN (SELECT id FROM playlists WHERE user_id = ?)",
+        [user_id],
+    )
+    execute_db("DELETE FROM playlists WHERE user_id = ?", [user_id])
+    execute_db("DELETE FROM favorites WHERE user_id = ?", [user_id])
+    execute_db("DELETE FROM sync_state WHERE user_id = ?", [user_id])
     execute_db("DELETE FROM users WHERE id = ?", [user_id])
     return jsonify({"success": True})
 
@@ -138,8 +147,8 @@ def stats():
 @admin_bp.route("/usage-logs")
 @admin_required
 def usage_logs():
-    page = int(request.args.get("page", 1))
-    per_page = int(request.args.get("per_page", 50))
+    page = max(request.args.get("page", 1, type=int) or 1, 1)
+    per_page = min(max(request.args.get("per_page", 50, type=int) or 50, 1), 200)
     username_filter = request.args.get("username", "")
     action_filter = request.args.get("action", "")
 
@@ -443,14 +452,14 @@ def delete_song(track_id):
     if not is_valid_track_id(track_id):
         return jsonify({"error": "Invalid track ID"}), 400
 
-    deleted = delete_track(track_id)
-    if deleted:
-        remove_from_queue(track_id)
-        execute_db("DELETE FROM processing_failures WHERE track_id = ?", [track_id])
-        return jsonify({"success": True})
-    # Even if files don't exist, clean up queue and DB
+    delete_track(track_id)
+    # Even if files don't exist, clean up queue and DB — including rows that
+    # would otherwise survive as ghost entries in user-facing lists.
     remove_from_queue(track_id)
     execute_db("DELETE FROM processing_failures WHERE track_id = ?", [track_id])
+    execute_db("DELETE FROM favorites WHERE track_id = ?", [track_id])
+    execute_db("DELETE FROM playlist_tracks WHERE track_id = ?", [track_id])
+    execute_db("DELETE FROM lyric_translations WHERE track_id = ?", [track_id])
     return jsonify({"success": True})
 
 
@@ -625,8 +634,8 @@ def unfinished_tracks():
 @admin_bp.route("/logs")
 @admin_required
 def app_logs_list():
-    page = int(request.args.get("page", 1))
-    per_page = int(request.args.get("per_page", 50))
+    page = max(request.args.get("page", 1, type=int) or 1, 1)
+    per_page = min(max(request.args.get("per_page", 50, type=int) or 50, 1), 200)
     level_filter = request.args.get("level", "")
     source_filter = request.args.get("source", "")
 
@@ -675,8 +684,8 @@ def clear_logs():
 @admin_bp.route("/errors")
 @admin_required
 def error_log_list():
-    page = int(request.args.get("page", 1))
-    per_page = int(request.args.get("per_page", 50))
+    page = max(request.args.get("page", 1, type=int) or 1, 1)
+    per_page = min(max(request.args.get("per_page", 50, type=int) or 50, 1), 200)
     type_filter = request.args.get("type", "")
     resolved_filter = request.args.get("resolved", "")
 

@@ -13,6 +13,11 @@ let redirectingToLogin = false
 
 async function request<T>(url: string, options?: RequestInit & { skipAuthRedirect?: boolean }): Promise<T> {
   let delay = INITIAL_DELAY
+  // Only idempotent requests are safe to re-send: a retried POST/DELETE whose
+  // first attempt actually reached the server can double-charge credits,
+  // double-process tracks, or duplicate registrations.
+  const method = (options?.method || 'GET').toUpperCase()
+  const canRetry = method === 'GET' || method === 'HEAD'
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
@@ -41,7 +46,7 @@ async function request<T>(url: string, options?: RequestInit & { skipAuthRedirec
 
       // Retry server errors (5xx) with backoff
       if (!resp.ok) {
-        if (attempt < MAX_RETRIES) {
+        if (canRetry && attempt < MAX_RETRIES) {
           await new Promise(r => setTimeout(r, delay))
           delay *= 2
           continue
@@ -56,7 +61,7 @@ async function request<T>(url: string, options?: RequestInit & { skipAuthRedirec
         throw err
       }
       // Network error - retry with backoff
-      if (attempt < MAX_RETRIES) {
+      if (canRetry && attempt < MAX_RETRIES) {
         await new Promise(r => setTimeout(r, delay))
         delay *= 2
         continue

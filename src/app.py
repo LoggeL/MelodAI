@@ -7,9 +7,36 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def _load_secret_key():
+    # `os.getenv(..., default)` doesn't kick in for SECRET_KEY= set to an
+    # empty string (as in example.env) — Flask then has no usable key and
+    # every session call 500s. And a fresh os.urandom key per process would
+    # log everyone out on restart and break multi-worker deployments, so
+    # persist the generated key.
+    key = os.getenv("SECRET_KEY", "").strip()
+    if key:
+        return key
+    key_path = os.path.join(os.path.dirname(__file__), ".secret_key")
+    try:
+        with open(key_path) as f:
+            stored = f.read().strip()
+        if stored:
+            return stored
+    except OSError:
+        pass
+    key = os.urandom(32).hex()
+    try:
+        with open(key_path, "w") as f:
+            f.write(key)
+        print("WARNING: SECRET_KEY not set; generated one and stored it in src/.secret_key. Set SECRET_KEY in .env for production.")
+    except OSError:
+        print("WARNING: SECRET_KEY not set and could not persist a generated key; sessions will reset on every restart.")
+    return key
+
+
 def create_app():
     app = Flask(__name__, static_folder=None)
-    app.secret_key = os.getenv("SECRET_KEY", os.urandom(32).hex())
+    app.secret_key = _load_secret_key()
     app.permanent_session_lifetime = timedelta(days=30)
     app.config.update(
         SESSION_COOKIE_HTTPONLY=True,

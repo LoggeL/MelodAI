@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
@@ -668,16 +668,19 @@ function StatusTab() {
 
   useEffect(() => {
     const loadQueue = async () => {
-      const [q, u, s, d] = await Promise.all([admin.processingQueue(), admin.unfinished(), admin.storage(), admin.deezerConfig()])
-      setQueue(q)
-      setUnfinished(u)
-      setStorage(s)
-      setDeezerConfig(d)
-      setLoading(false)
+      try {
+        const [q, u, s, d] = await Promise.all([admin.processingQueue(), admin.unfinished(), admin.storage(), admin.deezerConfig()])
+        setQueue(q)
+        setUnfinished(u)
+        setStorage(s)
+        setDeezerConfig(d)
+      } finally {
+        setLoading(false)
+      }
     }
-    loadQueue()
-    const qInterval = setInterval(async () => { setQueue(await admin.processingQueue()) }, 3000)
-    const uInterval = setInterval(async () => { setUnfinished(await admin.unfinished()) }, 5000)
+    loadQueue().catch(() => {})
+    const qInterval = setInterval(() => { admin.processingQueue().then(setQueue).catch(() => {}) }, 3000)
+    const uInterval = setInterval(() => { admin.unfinished().then(setUnfinished).catch(() => {}) }, 5000)
     return () => { clearInterval(qInterval); clearInterval(uInterval) }
   }, [])
 
@@ -1041,8 +1044,8 @@ function LogsTab() {
         </tr></thead>
         <tbody>
           {logs.map(log => (
-            <>
-              <tr key={log.id} onClick={() => setExpandedId(expandedId === log.id ? null : log.id)}
+            <Fragment key={log.id}>
+              <tr onClick={() => setExpandedId(expandedId === log.id ? null : log.id)}
                 style={{ cursor: log.details || log.track_id ? 'pointer' : undefined }}>
                 <td>
                   <span className={`${styles.tag} ${levelTagClass(log.level)}`}>
@@ -1069,7 +1072,7 @@ function LogsTab() {
                   </td>
                 </tr>
               )}
-            </>
+            </Fragment>
           ))}
         </tbody>
       </table>
@@ -1193,8 +1196,8 @@ function ErrorsTab() {
         </tr></thead>
         <tbody>
           {errors.map(err => (
-            <>
-              <tr key={err.id} onClick={() => setExpandedId(expandedId === err.id ? null : err.id)} style={{ cursor: 'pointer' }}>
+            <Fragment key={err.id}>
+              <tr onClick={() => setExpandedId(expandedId === err.id ? null : err.id)} style={{ cursor: 'pointer' }}>
                 <td>
                   <span className={`${styles.tag} ${err.error_type === 'pipeline' ? styles.tagWarning : styles.tagDanger}`}>
                     {err.error_type}
@@ -1232,7 +1235,7 @@ function ErrorsTab() {
                   </td>
                 </tr>
               )}
-            </>
+            </Fragment>
           ))}
         </tbody>
       </table>

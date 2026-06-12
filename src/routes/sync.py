@@ -53,7 +53,7 @@ def _get_sync_state(user_id):
 def stream():
     user_id = session["user_id"]
     client_id = request.args.get("clientId", "")
-    last_version = int(request.args.get("lastVersion", "0"))
+    last_version = request.args.get("lastVersion", 0, type=int) or 0
 
     q = Queue(maxsize=64)
 

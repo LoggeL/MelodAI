@@ -30,6 +30,28 @@ def remove_from_queue(track_id):
         _processing_queue.pop(str(track_id), None)
 
 
+def claim_processing(track_id, status, progress, detail=""):
+    """Atomically claim a track for processing.
+
+    Check-then-set must happen under the queue lock: two concurrent /add
+    requests (or /add racing the startup auto-reprocessor) would otherwise
+    both pass the "already processing" check and spawn duplicate pipelines.
+    Returns the existing entry if the track is already actively processing,
+    or None after writing the new status (claim succeeded).
+    """
+    with _queue_lock:
+        existing = _processing_queue.get(str(track_id))
+        if existing and existing["status"] not in ("complete", "error"):
+            return existing
+        _processing_queue[str(track_id)] = {
+            "status": status,
+            "progress": progress,
+            "detail": detail,
+            "updated_at": datetime.utcnow().isoformat(),
+        }
+        return None
+
+
 def run_health_checks():
     results = {}
 
@@ -138,12 +160,28 @@ def run_health_checks():
 def reprocess_unfinished_tracks(app):
     from src.utils.file_handling import get_all_track_ids, is_track_complete, load_metadata
     from src.routes.track import process_track
+    from src.utils.constants import STATUS_METADATA, PROGRESS
+
+    # Tracks that keep failing (e.g. region-blocked) would otherwise re-run
+    # on every restart, burning Replicate/OpenRouter cost each time.
+    max_auto_retries = 5
+    with app.app_context():
+        from src.models.db import query_db
+        failure_counts = {
+            str(row["track_id"]): row["failure_count"]
+            for row in query_db("SELECT track_id, failure_count FROM processing_failures")
+        }
 
     track_ids = get_all_track_ids()
     for track_id in track_ids:
         if not is_track_complete(track_id):
+            if failure_counts.get(str(track_id), 0) >= max_auto_retries:
+                print(f"Skipping auto-reprocess of track {track_id}: failed {failure_counts[str(track_id)]} times")
+                continue
             meta = load_metadata(track_id)
             if meta:
+                if claim_processing(track_id, STATUS_METADATA, PROGRESS[STATUS_METADATA], "Auto-reprocessing...") is not None:
+                    continue  # already being processed
                 print(f"Auto-reprocessing unfinished track {track_id}: {meta.get('title', 'Unknown')}")
                 t = threading.Thread(
                     target=process_track,

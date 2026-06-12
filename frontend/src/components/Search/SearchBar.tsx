@@ -20,6 +20,7 @@ export const SearchBar = forwardRef<SearchBarHandle, Props>(function SearchBar({
   const [loading, setLoading] = useState(false)
   const [libraryIds, setLibraryIds] = useState<Set<string>>(new Set())
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const searchSeqRef = useRef(0)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -32,12 +33,17 @@ export const SearchBar = forwardRef<SearchBarHandle, Props>(function SearchBar({
 
   const doSearch = useCallback(async (q: string) => {
     if (q.length < 2) { setShowResults(false); return }
+    // Sequence guard: a slow response for an old query must not overwrite
+    // the results of a newer one (API layer retries make this likely).
+    const seq = ++searchSeqRef.current
     setLoading(true)
     setShowResults(true)
     try {
       const data = await tracks.search(q)
+      if (seq !== searchSeqRef.current) return
       setResults(data)
     } catch {
+      if (seq !== searchSeqRef.current) return
       setResults([])
     }
     setLoading(false)
@@ -69,6 +75,13 @@ export const SearchBar = forwardRef<SearchBarHandle, Props>(function SearchBar({
     setShowResults(false)
   }, [onSelect])
 
+  // Clear pending debounce on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    }
+  }, [])
+
   // Close on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -93,7 +106,7 @@ export const SearchBar = forwardRef<SearchBarHandle, Props>(function SearchBar({
         autoComplete="off"
       />
       {query && (
-        <button className={styles.clear} onClick={handleClear}>
+        <button className={styles.clear} onClick={handleClear} aria-label="Clear search">
           <FontAwesomeIcon icon={faXmark} />
         </button>
       )}

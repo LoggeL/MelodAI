@@ -169,6 +169,11 @@ def login():
 
 @auth_bp.route("/logout", methods=["POST"])
 def logout():
+    # Revoke the remember-me token server-side, not just the cookie —
+    # otherwise the token stays valid in the DB for up to 30 days.
+    token = request.cookies.get("auth_token")
+    if token:
+        execute_db("DELETE FROM auth_tokens WHERE token = ?", [token])
     session.clear()
     response = make_response(jsonify({"success": True}))
     response.delete_cookie("auth_token")
@@ -203,8 +208,15 @@ def forgot_password():
         return jsonify({"error": "Username required"}), 400
 
     user = query_db("SELECT * FROM users WHERE username = ? OR email = ?", [username, username], one=True)
-    if not user:
-        # Don't reveal if user exists
+    # Don't reveal whether the account exists; accounts without an email
+    # can't receive a reset link, so skip sending (a bare username is not
+    # a deliverable address) but log it so admins can help out-of-band.
+    if not user or not user["email"]:
+        if user:
+            from src.utils.error_logging import log_event
+            log_event("warning", "auth",
+                      f"Password reset requested for '{user['username']}' but no email is set",
+                      user_id=user["id"], username=user["username"])
         return jsonify({"success": True, "message": "If the account exists, a reset email has been sent."})
 
     token = secrets.token_urlsafe(48)
@@ -214,9 +226,11 @@ def forgot_password():
         [user["id"], token, expires.isoformat()],
     )
 
-    # Send email to the user's email address
-    email_addr = user["email"] or user["username"]
-    send_password_reset_email(email_addr, token)
+    if not send_password_reset_email(user["email"], token):
+        from src.utils.error_logging import log_event
+        log_event("error", "auth",
+                  f"Failed to send password reset email for '{user['username']}'",
+                  user_id=user["id"], username=user["username"])
 
     return jsonify({"success": True, "message": "If the account exists, a reset email has been sent."})
 
@@ -243,6 +257,10 @@ def reset_password():
     password_hash = generate_password_hash(new_password)
     execute_db("UPDATE users SET password_hash = ? WHERE id = ?", [password_hash, reset["user_id"]])
     execute_db("UPDATE password_resets SET used = 1 WHERE id = ?", [reset["id"]])
+    # A password reset must lock out anyone holding old credentials:
+    # revoke all remember-me tokens and any other pending reset tokens.
+    execute_db("DELETE FROM auth_tokens WHERE user_id = ?", [reset["user_id"]])
+    execute_db("UPDATE password_resets SET used = 1 WHERE user_id = ? AND used = 0", [reset["user_id"]])
 
     return jsonify({"success": True, "message": "Password reset successful"})
 
@@ -315,8 +333,8 @@ def profile_activity():
         return jsonify({"error": "Not authenticated"}), 401
 
     user_id = user["id"]
-    page = int(request.args.get("page", 1))
-    per_page = int(request.args.get("per_page", 20))
+    page = max(request.args.get("page", 1, type=int) or 1, 1)
+    per_page = min(max(request.args.get("per_page", 20, type=int) or 20, 1), 100)
     offset = (page - 1) * per_page
 
     # Optional filters
@@ -397,5 +415,7 @@ def change_password():
 
     new_hash = generate_password_hash(new_password)
     execute_db("UPDATE users SET password_hash = ? WHERE id = ?", [new_hash, user["id"]])
+    # Changing the password revokes all remember-me tokens on other devices.
+    execute_db("DELETE FROM auth_tokens WHERE user_id = ?", [user["id"]])
 
     return jsonify({"success": True, "message": "Password changed successfully"})

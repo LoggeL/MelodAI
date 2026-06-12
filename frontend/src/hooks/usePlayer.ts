@@ -845,6 +845,12 @@ export function usePlayer(options: UsePlayerOptions = {}) {
         break
       }
     }
+    // play/pause/seek don't change queue/currentIndex, so the queue-save
+    // effect (the only other place the flag is cleared) never runs — without
+    // this reset the flag stays true and local actions stop broadcasting.
+    if (cmd.command === 'play' || cmd.command === 'pause' || cmd.command === 'seek') {
+      syncSourceRef.current = false
+    }
   }, [playIndex, startPlayback, next, prev])
 
   const currentTrack = currentIndex >= 0 ? queue[currentIndex] : null

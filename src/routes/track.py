@@ -20,7 +20,7 @@ from src.utils.file_handling import (
     is_track_complete, get_all_track_ids, SONGS_PATH, compress_audio_file,
     is_valid_track_id,
 )
-from src.utils.status_checks import set_processing_status, get_processing_status, remove_from_queue
+from src.utils.status_checks import set_processing_status, get_processing_status, remove_from_queue, claim_processing
 
 track_bp = Blueprint("track", __name__, url_prefix="/api")
 
@@ -53,15 +53,19 @@ def search():
     except Exception as e:
         from src.utils.error_logging import log_api_error
         log_api_error(str(e), traceback.format_exc(), source="/search")
-        return jsonify({"error": str(e)}), 500
+        # Don't leak internal exception details to users
+        return jsonify({"error": "Search is temporarily unavailable"}), 500
 
     # Upgrade cover images from 56x56 to 500x500
     for r in results:
         if "img_url" in r:
             r["img_url"] = _upgrade_cover_url(r["img_url"])
 
-    # Store in cache
-    _search_cache[cache_key] = (time.time(), results)
+    # Store in cache, evicting expired entries so it doesn't grow unbounded
+    now = time.time()
+    for key in [k for k, (t, _) in _search_cache.items() if now - t >= _SEARCH_CACHE_TTL]:
+        _search_cache.pop(key, None)
+    _search_cache[cache_key] = (now, results)
 
     _log_usage("search", q)
     return jsonify(results)
@@ -77,11 +81,6 @@ def add():
     if not is_valid_track_id(track_id):
         return jsonify({"error": "Invalid track ID"}), 400
 
-    # Check if already in queue
-    status = get_processing_status(track_id)
-    if status and status["status"] not in (STATUS_COMPLETE, STATUS_ERROR):
-        return jsonify({"status": "already_processing", "progress": status["progress"]})
-
     # Check if already complete (no credit cost for existing songs)
     if is_track_complete(track_id):
         meta = load_metadata(track_id)
@@ -91,6 +90,17 @@ def add():
             "status": "ready",
             "progress": 100,
             "metadata": meta,
+        })
+
+    # Atomically claim the queue slot BEFORE charging credits — two
+    # concurrent /add requests for the same track would otherwise both pass
+    # a plain status check, both deduct credits and spawn duplicate pipelines.
+    existing = claim_processing(track_id, STATUS_METADATA, PROGRESS[STATUS_METADATA], "Getting song info...")
+    if existing is not None:
+        return jsonify({
+            "status": "already_processing",
+            "stage": existing["status"],
+            "progress": existing["progress"],
         })
 
     # Credit check for new processing (5 credits)
@@ -105,6 +115,7 @@ def add():
         )
         db.commit()
         if cur.rowcount != 1:
+            remove_from_queue(track_id)  # release the claim
             refreshed = _qdb("SELECT credits FROM users WHERE id = ?", [user["id"]], one=True)
             credits = refreshed["credits"] if refreshed else 0
             return jsonify({"error": "insufficient_credits", "credits": credits, "required": 5}), 403
@@ -115,11 +126,9 @@ def add():
     username = user["username"] if user else "unknown"
     log_event("info", "pipeline", f"Processing started for track {track_id}", user_id=user["id"] if user else None, username=username, track_id=str(track_id))
 
-    # Start processing in background
+    # Start processing in background (status already set by claim_processing)
     from flask import current_app
     app = current_app._get_current_object()
-
-    set_processing_status(track_id, STATUS_METADATA, PROGRESS[STATUS_METADATA], "Getting song info...")
 
     t = threading.Thread(target=process_track, args=(track_id, app), daemon=True)
     t.start()
@@ -130,7 +139,7 @@ def add():
         refreshed = _qdb("SELECT credits FROM users WHERE id = ?", [user["id"]], one=True)
         updated_credits = refreshed["credits"] if refreshed else 0
 
-    resp = {"status": "processing", "progress": 0}
+    resp = {"status": "processing", "progress": PROGRESS[STATUS_METADATA]}
     if updated_credits is not None:
         resp["credits"] = updated_credits
     return jsonify(resp)
@@ -896,12 +905,27 @@ def _stage_complete(track_id):
 
 
 def _download_file(url, output_path):
-    """Download a file from URL to local path."""
-    resp = requests.get(str(url), stream=True, timeout=300)
-    resp.raise_for_status()
-    with open(output_path, "wb") as f:
-        for chunk in resp.iter_content(chunk_size=8192):
-            f.write(chunk)
+    """Download a file from URL to local path.
+
+    Streams to a temp file and renames atomically: a connection drop
+    mid-download must not leave a truncated file at the final path, because
+    the stage early-returns treat any existing file as complete and would
+    skip regeneration forever.
+    """
+    tmp_path = f"{output_path}.tmp"
+    try:
+        resp = requests.get(str(url), stream=True, timeout=300)
+        resp.raise_for_status()
+        with open(tmp_path, "wb") as f:
+            for chunk in resp.iter_content(chunk_size=8192):
+                f.write(chunk)
+        os.replace(tmp_path, output_path)
+    finally:
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
 
 
 def _record_failure(track_id, stage, error_msg):

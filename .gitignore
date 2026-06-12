@@ -3,6 +3,7 @@ songs
 
 # Secrets
 .env
+src/.secret_key
 
 # Python
 *.pyc
@@ -24,3 +25,5 @@ src/static
 # Local database backups / generated package metadata
 *.db.bak*
 src/melodai.egg-info
+*.db-shm
+*.db-wal
