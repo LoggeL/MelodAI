@@ -349,13 +349,27 @@ export function usePlayer(options: UsePlayerOptions = {}) {
   useEffect(() => {
     const q = queueRef.current
     const ci = currentIndexRef.current
-    if (ci < 0 || q.length < 2 || !audioCtxRef.current) return
+    const cache = bufferCacheRef.current
+    if (ci < 0 || q.length < 2 || !audioCtxRef.current) {
+      cache.clear()
+      return
+    }
 
     let nextIdx = ci + 1
     if (nextIdx >= q.length) nextIdx = 0
     const nextItem = q[nextIdx]
-    if (!nextItem?.ready || nextIdx === ci) return
-    if (bufferCacheRef.current.has(nextItem.id)) return
+    if (!nextItem?.ready || nextIdx === ci) {
+      cache.clear()
+      return
+    }
+
+    // Decoded buffers are tens of MB of raw PCM per track. Entries are only
+    // removed when consumed by loadBuffers, so skipping around the queue
+    // would strand them forever — evict everything but the upcoming track.
+    for (const id of [...cache.keys()]) {
+      if (id !== nextItem.id) cache.delete(id)
+    }
+    if (cache.has(nextItem.id)) return
 
     const ctx = audioCtxRef.current
     Promise.all([
@@ -746,6 +760,10 @@ export function usePlayer(options: UsePlayerOptions = {}) {
   // Apply incoming sync state from another device
   const applySyncState = useCallback((state: SyncState) => {
     syncSourceRef.current = true
+    // Capture the actually-playing track from the OLD queue before
+    // replacing it — newQueue[oldIndex] points at the wrong track when the
+    // remote device inserted or reordered items.
+    const currentItem = currentIndexRef.current >= 0 ? queueRef.current[currentIndexRef.current] : null
     const newQueue: QueueItem[] = state.queue.map(item => ({
       id: item.id,
       title: item.title,
@@ -764,7 +782,6 @@ export function usePlayer(options: UsePlayerOptions = {}) {
     setCurrentIndex(state.currentIndex)
 
     // If current track changed, load and play it
-    const currentItem = currentIndexRef.current >= 0 ? queueRef.current[currentIndexRef.current] : null
     const newItem = state.currentIndex >= 0 ? newQueue[state.currentIndex] : null
     if (newItem && newItem.id !== currentItem?.id) {
       playIndex(state.currentIndex)

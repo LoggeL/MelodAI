@@ -130,7 +130,8 @@ def add():
     from flask import current_app
     app = current_app._get_current_object()
 
-    t = threading.Thread(target=process_track, args=(track_id, app), daemon=True)
+    charged_user_id = user["id"] if user and not user["is_admin"] else None
+    t = threading.Thread(target=process_track, args=(track_id, app, charged_user_id), daemon=True)
     t.start()
 
     # Return updated credits for non-admin users
@@ -590,8 +591,12 @@ def get_credits():
     return jsonify({"credits": user["credits"] or 0 if user else 0})
 
 
-def process_track(track_id, app):
-    """6-stage processing pipeline. Runs in a background thread."""
+def process_track(track_id, app, charged_user_id=None):
+    """6-stage processing pipeline. Runs in a background thread.
+
+    charged_user_id: user who paid 5 credits for this run (None when the
+    run is free — admin, reprocess, auto-reprocess). Refunded on failure.
+    """
     from src.utils.error_logging import log_pipeline_error
 
     stages = [
@@ -613,6 +618,13 @@ def process_track(track_id, app):
                 set_processing_status(track_id, STATUS_ERROR, 0, str(e))
                 _record_failure(track_id, stage_name, str(e))
                 log_pipeline_error(track_id, stage_name, str(e), tb)
+                if charged_user_id is not None:
+                    from src.models.db import execute_db
+                    from src.utils.error_logging import log_event
+                    execute_db("UPDATE users SET credits = credits + 5 WHERE id = ?", [charged_user_id])
+                    log_event("info", "pipeline",
+                              f"Refunded 5 credits for failed processing of track {track_id}",
+                              user_id=charged_user_id, track_id=str(track_id))
                 return
 
 
@@ -648,8 +660,17 @@ def _stage_download(track_id):
 
     set_processing_status(track_id, STATUS_DOWNLOADING, 12, "Downloading song...")
 
-    meta = load_metadata(track_id)
-    song_data = meta.get("deezer_data", {})
+    meta = load_metadata(track_id) or {}
+    song_data = meta.get("deezer_data")
+    if not song_data:
+        # deezer_data is stripped from metadata.json on completion. If the
+        # song file is later lost or a reprocess needs to re-download, the
+        # metadata stage early-returns and this stage would fail forever
+        # with an empty dict — re-fetch from Deezer instead.
+        from src.services.deezer import get_song_infos_from_deezer_website, TYPE_TRACK
+        song_data = get_song_infos_from_deezer_website(TYPE_TRACK, track_id)
+        meta["deezer_data"] = song_data
+        save_metadata(track_id, meta)
     output_path = get_track_file_path(track_id, "song")
 
     from src.services.deezer import download_song
