@@ -1,3 +1,4 @@
+import logging
 import os
 import secrets
 from datetime import datetime, timezone
@@ -343,7 +344,6 @@ def song_details(track_id):
             "error_type": e["error_type"],
             "source": e["source"],
             "error_message": e["error_message"],
-            "stack_trace": e["stack_trace"],
             "created_at": e["created_at"],
         } for e in errors],
         "usage": {
@@ -379,8 +379,9 @@ def fetch_reference_lyrics(track_id):
     try:
         from src.services.reference_lyrics import fetch_lyrics
         lines = fetch_lyrics(title, artist, track_id=track_id)
-    except Exception as e:
-        return jsonify({"error": f"Lyrics fetch failed: {e}"}), 500
+    except Exception:
+        logging.getLogger(__name__).exception("Lyrics fetch failed for track %s", track_id)
+        return jsonify({"error": "Lyrics fetch failed"}), 500
 
     if not lines:
         return jsonify({"error": "No lyrics found"}), 404
@@ -431,8 +432,9 @@ def fetch_reference_lyrics_ai(track_id):
 
     try:
         lines = _fetch_openrouter(raw_text=raw_text, vocals_path=vp, track_id=track_id)
-    except Exception as e:
-        return jsonify({"error": f"AI lyrics fetch failed: {e}"}), 500
+    except Exception:
+        logging.getLogger(__name__).exception("AI lyrics fetch failed for track %s", track_id)
+        return jsonify({"error": "AI lyrics fetch failed"}), 500
 
     if not lines:
         return jsonify({"error": "AI returned no lyrics"}), 404
@@ -783,8 +785,10 @@ def compress_songs():
                     try:
                         compress_audio_file(path)
                         compressed += 1
-                    except Exception as e:
-                        print(f"Failed to compress {file_key} for track {tid}: {e}")
+                    except Exception:
+                        logging.getLogger(__name__).warning(
+                            "Failed to compress %s for track %s", file_key, tid, exc_info=True
+                        )
                         failed += 1
 
             log_event(

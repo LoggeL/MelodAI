@@ -1,7 +1,21 @@
 import base64
 import os
+from pathlib import Path
 
 import requests
+
+
+def _validate_file_path(file_path):
+    """Validate that *file_path* is within the songs directory."""
+    if not file_path:
+        return None
+    from src.utils.file_handling import _SONGS_PATH_RESOLVED
+    try:
+        resolved = Path(file_path).resolve()
+        resolved.relative_to(_SONGS_PATH_RESOLVED)
+        return str(resolved)
+    except (ValueError, TypeError):
+        return None
 
 
 def _fetch_lrclib(title, artist, track_id=None):
@@ -86,7 +100,10 @@ def _fetch_openrouter(raw_text=None, vocals_path=None, track_id=None):
     # Try hybrid (audio + text) first, then fall back to text-only
     attempts = []
     if vocals_path and os.path.exists(vocals_path):
-        attempts.append("hybrid")
+        safe_vocals = _validate_file_path(vocals_path)
+        if safe_vocals:
+            vocals_path = safe_vocals
+            attempts.append("hybrid")
     attempts.append("text_only")
 
     for attempt in attempts:

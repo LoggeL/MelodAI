@@ -1,9 +1,9 @@
 import sys
 import re
 import json
+import hashlib
 from typing import Optional, Sequence
 
-from Crypto.Hash import MD5
 from Crypto.Cipher import AES, Blowfish
 import struct
 import urllib.parse
@@ -141,8 +141,8 @@ def md5hex(data):
     """return hex string of md5 of the given string"""
     # type(data): bytes
     # returns: bytes
-    h = MD5.new()
-    h.update(data)
+    # MD5 is required by the Deezer download protocol — not used for security.
+    h = hashlib.md5(data, usedforsecurity=False)
     return b2a_hex(h.digest())
 
 
