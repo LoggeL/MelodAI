@@ -3,9 +3,24 @@ import os
 import shutil
 import subprocess
 import tempfile
+from pathlib import Path
 from src.utils.constants import SONGS_DIR, TRACK_FILES
 
 SONGS_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), SONGS_DIR)
+_SONGS_PATH_RESOLVED = Path(SONGS_PATH).resolve()
+
+
+def _validate_song_path(path):
+    """Resolve *path* and verify it stays within the songs directory.
+
+    Raises ValueError if the resolved path escapes SONGS_PATH.
+    """
+    resolved = Path(path).resolve()
+    try:
+        resolved.relative_to(_SONGS_PATH_RESOLVED)
+    except ValueError:
+        raise ValueError("Path traversal detected")
+    return str(resolved)
 
 
 def normalize_track_id(track_id):
@@ -27,8 +42,9 @@ def is_valid_track_id(track_id):
 def get_song_dir(track_id):
     track_id = normalize_track_id(track_id)
     path = os.path.join(SONGS_PATH, track_id)
-    os.makedirs(path, exist_ok=True)
-    return path
+    resolved = _validate_song_path(path)
+    os.makedirs(resolved, exist_ok=True)
+    return resolved
 
 
 def load_metadata(track_id):
@@ -114,8 +130,9 @@ def get_track_file_sizes(track_id):
 def delete_track(track_id):
     track_id = normalize_track_id(track_id)
     song_dir = os.path.join(SONGS_PATH, track_id)
-    if os.path.exists(song_dir):
-        shutil.rmtree(song_dir)
+    resolved = _validate_song_path(song_dir)
+    if os.path.exists(resolved):
+        shutil.rmtree(resolved)
         return True
     return False
 
