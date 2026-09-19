@@ -1,8 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 
-const BASE = process.env.E2E_BASE_URL || 'http://localhost:5000'
-const ADMIN_USER = process.env.E2E_ADMIN_USER || 'hyper.xjo@gmail.com'
-const ADMIN_PASS = process.env.E2E_ADMIN_PASS || '404noswagfound'
+import { BASE, ADMIN_USER, ADMIN_PASS, extractCookie } from '../config'
 
 let cookie = ''
 
@@ -29,13 +27,15 @@ describe('Favorites API - /favorites/*', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: ADMIN_USER, password: ADMIN_PASS }),
     })
-    cookie = (loginResp.headers.get('set-cookie') || '').split(';')[0]
+    expect(loginResp.status).toBe(200)
+    cookie = extractCookie(loginResp)
+    expect(cookie).toMatch(/^session=.+/)
   })
 
   describe('GET /favorites', () => {
     it('should reject unauthenticated request', async () => {
       const resp = await get('/api/favorites', '')
-      expect([401, 302]).toContain(resp.status)
+      expect(resp.status).toBe(401)
     })
 
     it('should return an array', async () => {
@@ -49,7 +49,7 @@ describe('Favorites API - /favorites/*', () => {
   describe('POST /favorites/:track_id', () => {
     it('should reject unauthenticated request', async () => {
       const resp = await post('/api/favorites/12345', {}, '')
-      expect([401, 302]).toContain(resp.status)
+      expect(resp.status).toBe(401)
     })
 
     it('should add a track to favorites', async () => {
@@ -91,7 +91,7 @@ describe('Favorites API - /favorites/*', () => {
   describe('DELETE /favorites/:track_id', () => {
     it('should reject unauthenticated request', async () => {
       const resp = await del('/api/favorites/12345', '')
-      expect([401, 302]).toContain(resp.status)
+      expect(resp.status).toBe(401)
     })
 
     it('should remove a track from favorites', async () => {

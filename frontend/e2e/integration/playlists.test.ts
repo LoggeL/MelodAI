@@ -1,8 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 
-const BASE = process.env.E2E_BASE_URL || 'http://localhost:5000'
-const ADMIN_USER = process.env.E2E_ADMIN_USER || 'hyper.xjo@gmail.com'
-const ADMIN_PASS = process.env.E2E_ADMIN_PASS || '404noswagfound'
+import { BASE, ADMIN_USER, ADMIN_PASS, extractCookie } from '../config'
 
 let cookie = ''
 
@@ -31,13 +29,15 @@ describe('Playlists API - /playlists/*', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: ADMIN_USER, password: ADMIN_PASS }),
     })
-    cookie = (loginResp.headers.get('set-cookie') || '').split(';')[0]
+    expect(loginResp.status).toBe(200)
+    cookie = extractCookie(loginResp)
+    expect(cookie).toMatch(/^session=.+/)
   })
 
   describe('GET /playlists', () => {
     it('should reject unauthenticated request', async () => {
       const resp = await get('/api/playlists', '')
-      expect([401, 302]).toContain(resp.status)
+      expect(resp.status).toBe(401)
     })
 
     it('should return an array', async () => {
@@ -51,7 +51,7 @@ describe('Playlists API - /playlists/*', () => {
   describe('POST /playlists', () => {
     it('should reject unauthenticated request', async () => {
       const resp = await post('/api/playlists', { name: 'test' }, '')
-      expect([401, 302]).toContain(resp.status)
+      expect(resp.status).toBe(401)
     })
 
     it('should reject empty name', async () => {
@@ -85,7 +85,7 @@ describe('Playlists API - /playlists/*', () => {
   describe('GET /playlists/:id/tracks', () => {
     it('should reject unauthenticated request', async () => {
       const resp = await get(`/api/playlists/${playlistId}/tracks`, '')
-      expect([401, 302]).toContain(resp.status)
+      expect(resp.status).toBe(401)
     })
 
     it('should return empty array for new playlist', async () => {
@@ -105,7 +105,7 @@ describe('Playlists API - /playlists/*', () => {
   describe('POST /playlists/:id/tracks', () => {
     it('should reject unauthenticated request', async () => {
       const resp = await post(`/api/playlists/${playlistId}/tracks`, { track_id: '12345' }, '')
-      expect([401, 302]).toContain(resp.status)
+      expect(resp.status).toBe(401)
     })
 
     it('should reject missing track_id', async () => {
@@ -135,11 +135,13 @@ describe('Playlists API - /playlists/*', () => {
     })
 
     it('should add multiple tracks with incrementing positions', async () => {
-      await post(`/api/playlists/${playlistId}/tracks`, { track_id: '67890' })
+      const added = await post(`/api/playlists/${playlistId}/tracks`, { track_id: '67890' })
+      expect(added.status).toBe(200)
       const resp = await get(`/api/playlists/${playlistId}/tracks`)
       const data = await resp.json()
-      // Tracks may or may not have metadata — filter by what exists
-      expect(data.length).toBeGreaterThanOrEqual(0)
+      expect(resp.status).toBe(200)
+      expect(data.map((track: { id: string }) => track.id)).toEqual(['12345', '67890'])
+      expect(data.map((track: { position: number }) => track.position)).toEqual([1, 2])
     })
 
     it('should update track_count in playlist list', async () => {
@@ -147,14 +149,14 @@ describe('Playlists API - /playlists/*', () => {
       const data = await resp.json()
       const found = data.find((p: { id: number }) => p.id === playlistId)
       expect(found).toBeDefined()
-      expect(found.track_count).toBeGreaterThanOrEqual(1)
+      expect(found.track_count).toBe(2)
     })
   })
 
   describe('DELETE /playlists/:id/tracks/:track_id', () => {
     it('should reject unauthenticated request', async () => {
       const resp = await del(`/api/playlists/${playlistId}/tracks/12345`, '')
-      expect([401, 302]).toContain(resp.status)
+      expect(resp.status).toBe(401)
     })
 
     it('should remove a track from the playlist', async () => {
@@ -180,7 +182,7 @@ describe('Playlists API - /playlists/*', () => {
   describe('DELETE /playlists/:id', () => {
     it('should reject unauthenticated request', async () => {
       const resp = await del(`/api/playlists/${playlistId}`, '')
-      expect([401, 302]).toContain(resp.status)
+      expect(resp.status).toBe(401)
     })
 
     it('should return 404 for non-existent playlist', async () => {

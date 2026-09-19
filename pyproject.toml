@@ -9,6 +9,7 @@ dependencies = [
     "pycryptodome>=3.20",
     "python-dotenv>=1.0",
     "replicate>=0.25",
+    "httpx>=0.27,<1",
     "requests>=2.31",
     "openai>=1.12",
     "resend>=0.8",

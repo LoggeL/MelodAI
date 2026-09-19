@@ -1,5 +1,6 @@
 .page {
-  min-height: 100vh;
+  height: 100dvh;
+  min-height: 0;
   overflow: auto;
   background:
     radial-gradient(circle at 18% 18%, rgba(var(--primary-rgb), 0.20), transparent 32rem),
@@ -413,4 +414,15 @@
   .twoCol { grid-template-columns: 1fr; }
   .cardHeader h2 { font-size: 2.25rem; }
   .formRow { align-items: flex-start; flex-direction: column; }
+}
+
+.fields { display: contents; padding: 0; margin: 0; border: 0; min-width: 0; }
+.input { min-width: 0; width: 100%; }
+.tab, .submit, .secondaryAction { min-height: 44px; }
+.message { overflow-wrap: anywhere; }
+@media (max-width: 440px) {
+  .twoCol { grid-template-columns: 1fr; }
+  .formRow { align-items: start; flex-direction: column; gap: 12px; }
+  .authPanel { min-width: 0; }
+  .card { padding: 22px 18px; }
 }

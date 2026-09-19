@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 interface AlbumColors {
   primary: string
@@ -25,16 +25,17 @@ const DEFAULT_COLORS: AlbumColors = {
  */
 export function useAlbumColors(thumbnailUrl: string | undefined) {
   const [colors, setColors] = useState<AlbumColors>(DEFAULT_COLORS)
-  const prevUrl = useRef<string>('')
 
   useEffect(() => {
-    if (!thumbnailUrl || thumbnailUrl === prevUrl.current) return
-    prevUrl.current = thumbnailUrl
+    clearFromDocument()
+    if (!thumbnailUrl) { setColors(DEFAULT_COLORS); return }
+    let cancelled = false
 
     const img = new Image()
     img.crossOrigin = 'anonymous'
 
     img.onload = () => {
+      if (cancelled) return
       try {
         const palette = extractColors(img)
         if (!palette) return
@@ -58,12 +59,14 @@ export function useAlbumColors(thumbnailUrl: string | undefined) {
     }
 
     img.onerror = () => {
+      if (cancelled) return
       // On failure, clear overrides so defaults show
       clearFromDocument()
       setColors(DEFAULT_COLORS)
     }
 
     img.src = thumbnailUrl
+    return () => { cancelled = true; img.onload = null; img.onerror = null; clearFromDocument() }
   }, [thumbnailUrl])
 
   // Clean up on unmount

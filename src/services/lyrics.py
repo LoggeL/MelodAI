@@ -1,11 +1,63 @@
 import os
 import json
 import logging
+import math
+import time
+from email.utils import parsedate_to_datetime
+import httpx
 import replicate
 from difflib import SequenceMatcher
 from replicate.exceptions import ModelError
 
 logger = logging.getLogger(__name__)
+
+
+class _PredictionCreationTransport(httpx.BaseTransport):
+    """Retry rejected prediction creation, never restart an accepted job."""
+
+    MAX_ATTEMPTS = 4
+    MAX_WAIT_SECONDS = 30
+
+    def __init__(self, transport=None):
+        self._transport = transport if transport is not None else httpx.HTTPTransport()
+
+    def handle_request(self, request):
+        waited = 0.0
+        for attempt in range(self.MAX_ATTEMPTS):
+            response = self._transport.handle_request(request)
+            if (request.method != "POST" or request.url.path != "/v1/predictions"
+                    or response.status_code != 429 or attempt == self.MAX_ATTEMPTS - 1):
+                return response
+
+            delay = 10.0
+            retry_after = response.headers.get("Retry-After", "")
+            if retry_after:
+                try:
+                    delay = float(retry_after)
+                except ValueError:
+                    try:
+                        delay = parsedate_to_datetime(retry_after).timestamp() - time.time()
+                    except (TypeError, ValueError, OverflowError):
+                        pass
+            if not math.isfinite(delay):
+                delay = 10.0
+            delay = max(1.0, delay)
+            if waited + delay > self.MAX_WAIT_SECONDS:
+                return response
+
+            response.close()
+            logger.warning("Prediction creation was rate limited; retrying in %.1f seconds (%d/%d)",
+                           delay, attempt + 1, self.MAX_ATTEMPTS - 1)
+            time.sleep(delay)
+            waited += delay
+
+    def close(self):
+        self._transport.close()
+
+
+# The SDK's default retry transport excludes POST. Scope our extra handling
+# to explicit creation throttling while retaining SDK polling/output behavior.
+_replicate_client = replicate.Client(transport=_PredictionCreationTransport())
 
 
 def _extract_text(output):
@@ -66,7 +118,8 @@ def _is_bad_output(output, reference_lines=None):
 
 def _run_whisperx(audio_url, diarization=True):
     """Single WhisperX call with optional diarization."""
-    hf_token = os.getenv("HF_READ_TOKEN", "")
+    hf_token = os.getenv("HF_READ_TOKEN", "").strip()
+    diarization = diarization and bool(hf_token)
     params = {
         "audio_file": audio_url,
         "batch_size": 16,
@@ -77,7 +130,7 @@ def _run_whisperx(audio_url, diarization=True):
         params["huggingface_access_token"] = hf_token
         params["min_speakers"] = 1
         params["max_speakers"] = 6
-    return replicate.run(
+    return _replicate_client.run(
         "victor-upmeet/whisperx:84d2ad2d6194fe98a17d2b60bef1c7f910c46b2f6fd38996ca457afd9c8abfcb",
         input=params,
     )
@@ -155,12 +208,23 @@ def extract_lyrics_whisperx(audio_url, max_retries=2, reference_lines=None,
 
     Falls back to Voxtral (Mistral) if WhisperX output is broken after retries.
     """
-    # Try with diarization first
-    try:
-        output = _run_whisperx(audio_url, diarization=True)
-    except ModelError as e:
-        logger.warning("WhisperX failed with diarization: %s. Retrying without.", e)
-        output = _run_whisperx(audio_url, diarization=False)
+    # Speaker detection needs access to gated Hugging Face models. Starting
+    # it without a token wastes a provider run before transcription can retry.
+    diarization = bool(os.getenv("HF_READ_TOKEN", "").strip())
+
+    def transcribe():
+        nonlocal diarization
+        try:
+            return _run_whisperx(audio_url, diarization=diarization)
+        except ModelError:
+            if not diarization:
+                raise
+            logger.warning("WhisperX failed with diarization; retrying without speaker detection")
+            # Keep speaker detection disabled for later quality retries too.
+            diarization = False
+            return _run_whisperx(audio_url, diarization=False)
+
+    output = transcribe()
 
     # Retry if output looks broken
     for attempt in range(max_retries):
@@ -170,10 +234,7 @@ def extract_lyrics_whisperx(audio_url, max_retries=2, reference_lines=None,
             "WhisperX output looks broken (attempt %d/%d), retrying...",
             attempt + 1, max_retries,
         )
-        try:
-            output = _run_whisperx(audio_url, diarization=True)
-        except ModelError:
-            output = _run_whisperx(audio_url, diarization=False)
+        output = transcribe()
 
     # Fall back to Voxtral if WhisperX still broken
     if _is_bad_output(output, reference_lines) and vocals_path:
@@ -204,7 +265,7 @@ def upload_audio_to_replicate(file_path):
 
 def split_audio_demucs(audio_url):
     """Run Demucs on Replicate to separate vocals from instrumental."""
-    output = replicate.run(
+    output = _replicate_client.run(
         "cjwbw/demucs:25a173108cff36ef9f80f854c162d01df9e6528be175794b81158fa03836d953",
         input={
             "audio": audio_url,

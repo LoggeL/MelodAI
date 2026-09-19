@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
@@ -10,6 +10,8 @@ import { useAuth } from '../hooks/useAuth'
 import { auth } from '../services/api'
 import { useToast } from '../hooks/useToast'
 import type { ActivityItem } from '../types'
+import { PageState } from '../components/common/PageState'
+import { errorMessage } from './account/errors'
 import styles from './ProfilePage.module.css'
 
 interface ProfileStats {
@@ -40,6 +42,12 @@ export function ProfilePage() {
 
   const [stats, setStats] = useState<ProfileStats | null>(null)
   const [loaded, setLoaded] = useState(false)
+  const [profileError, setProfileError] = useState('')
+  const [activityError, setActivityError] = useState('')
+  const profileRequest = useRef(0)
+  const cancelProfileRequest = useCallback(() => { profileRequest.current++ }, [])
+  const activityRequest = useRef(0)
+  const cancelActivityRequest = useCallback(() => { activityRequest.current++ }, [])
 
   // Activity state
   const [activity, setActivity] = useState<ActivityItem[]>([])
@@ -56,36 +64,43 @@ export function ProfilePage() {
   const [changing, setChanging] = useState(false)
 
   useEffect(() => {
-    if (checked && !authenticated) navigate('/login')
+    if (checked && !authenticated) navigate('/login', { replace: true, state: { from: '/profile' } })
   }, [checked, authenticated, navigate])
 
-  useEffect(() => {
-    if (checked && authenticated && !loaded) {
-      auth.profileStats().then(data => {
-        setStats(data)
-        setLoaded(true)
-      }).catch(() => {
-        toast.error('Failed to load profile')
-        setLoaded(true)
-      })
-    }
-  }, [checked, authenticated, loaded, toast])
-
-  const loadActivity = useCallback(async (page: number, sort: string, filter: string) => {
-    setActivityLoading(true)
-    try {
-      const data = await auth.activity(page, sort, filter)
-      setActivity(data.items)
-      setActivityTotal(data.total)
-    } catch {
-      /* silently fail - activity is supplementary */
-    }
-    setActivityLoading(false)
+  const loadProfile = useCallback(async () => {
+    const requestId = ++profileRequest.current
+    setProfileError('')
+    setLoaded(false)
+    try { const result = await auth.profileStats(); if (requestId === profileRequest.current) setStats(result) }
+    catch (error) { if (requestId === profileRequest.current) setProfileError(errorMessage(error, 'Failed to load profile')) }
+    finally { if (requestId === profileRequest.current) setLoaded(true) }
   }, [])
 
   useEffect(() => {
-    if (checked && authenticated) loadActivity(activityPage, activitySort, activityFilter)
-  }, [checked, authenticated, activityPage, activitySort, activityFilter, loadActivity])
+    if (checked && authenticated) void loadProfile()
+    return cancelProfileRequest
+  }, [checked, authenticated, loadProfile, cancelProfileRequest])
+
+  const loadActivity = useCallback(async (page: number, sort: string, filter: string) => {
+    const requestId = ++activityRequest.current
+    setActivityLoading(true)
+    setActivityError('')
+    try {
+      const data = await auth.activity(page, sort, filter)
+      if (requestId !== activityRequest.current) return
+      setActivity(data.items)
+      setActivityTotal(data.total)
+    } catch (error) {
+      if (requestId === activityRequest.current) setActivityError(errorMessage(error, 'Could not load credit activity'))
+    } finally {
+      if (requestId === activityRequest.current) setActivityLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (checked && authenticated) void loadActivity(activityPage, activitySort, activityFilter)
+    return cancelActivityRequest
+  }, [checked, authenticated, activityPage, activitySort, activityFilter, loadActivity, cancelActivityRequest])
 
   const handleSortToggle = useCallback(() => {
     setActivitySort(s => s === 'date_desc' ? 'date_asc' : 'date_desc')
@@ -98,6 +113,7 @@ export function ProfilePage() {
   }, [])
 
   const handleChangePassword = useCallback(async () => {
+    if (changing) return
     if (!currentPw || !newPw) {
       toast.error('Fill in all password fields')
       return
@@ -121,21 +137,22 @@ export function ProfilePage() {
       } else {
         toast.error(result.error || 'Failed to change password')
       }
-    } catch {
-      toast.error('Failed to change password')
+    } catch (error) {
+      toast.error(errorMessage(error, 'Failed to change password'))
     }
     setChanging(false)
-  }, [currentPw, newPw, confirmPw, toast])
+  }, [currentPw, newPw, confirmPw, toast, changing])
 
-  if (!checked || !authenticated) return null
+  if (!checked || !authenticated) return <PageState title="Checking your account" loading />
+  if (profileError) return <main className={styles.page}><PageState title="Could not load your profile" description={profileError} action={<button className={styles.primaryBtn} onClick={loadProfile}>Try again</button>} /><Link to="/">Back to player</Link></main>
 
   const initial = (stats?.display_name || stats?.username || '?').charAt(0).toUpperCase()
 
   return (
-    <div className={styles.page}>
+    <main className={styles.page}>
       <div className={styles.container}>
         {/* Back button */}
-        <Link to="/" className={styles.backBtn}>
+        <Link to="/" className={styles.backBtn} aria-label="Back to player" title="Back to player">
           <FontAwesomeIcon icon={faArrowLeft} />
         </Link>
 
@@ -232,17 +249,17 @@ export function ProfilePage() {
                 <FontAwesomeIcon icon={faFilter} className={styles.filterIcon} />
                 <button
                   className={`${styles.filterPill} ${activityFilter === '' ? styles.filterPillActive : ''}`}
-                  onClick={() => handleFilterChange('')}
+                  aria-pressed={activityFilter === ''} onClick={() => handleFilterChange('')}
                 >All</button>
                 <button
                   className={`${styles.filterPill} ${activityFilter === 'play' ? styles.filterPillActive : ''}`}
-                  onClick={() => handleFilterChange('play')}
+                  aria-pressed={activityFilter === 'play'} onClick={() => handleFilterChange('play')}
                 >
                   <FontAwesomeIcon icon={faPlay} /> Play
                 </button>
                 <button
                   className={`${styles.filterPill} ${activityFilter === 'download' ? styles.filterPillActive : ''}`}
-                  onClick={() => handleFilterChange('download')}
+                  aria-pressed={activityFilter === 'download'} onClick={() => handleFilterChange('download')}
                 >
                   <FontAwesomeIcon icon={faDownload} /> Process
                 </button>
@@ -254,7 +271,7 @@ export function ProfilePage() {
             </div>
           )}
 
-          {activityLoading && activity.length === 0 ? (
+          {activityError ? <PageState title="Could not load credit activity" description={activityError} action={<button className={styles.primaryBtn} onClick={() => loadActivity(activityPage, activitySort, activityFilter)}>Try again</button>} /> : activityLoading && activity.length === 0 ? (
             <div className={styles.activitySkeletons}>
               {[...Array(4)].map((_, i) => (
                 <div key={i} className={styles.activityItemSkeleton}>
@@ -272,7 +289,7 @@ export function ProfilePage() {
             </div>
           ) : (
             <>
-              <div className={`${styles.activityList} ${activityLoading ? styles.activityListLoading : ''}`}>
+              <div aria-busy={activityLoading} className={`${styles.activityList} ${activityLoading ? styles.activityListLoading : ''}`}>
                 {activity.map((item, i) => (
                   <div key={`${item.track_id}-${item.created_at}-${i}`} className={styles.activityItem}>
                     <img className={styles.activityThumb} src={item.img_url || '/logo.svg'} alt="" loading="lazy" />
@@ -297,15 +314,15 @@ export function ProfilePage() {
                 <div className={styles.activityPagination}>
                   <button
                     className={styles.activityPageBtn}
-                    disabled={activityPage <= 1}
+                    disabled={activityLoading || activityPage <= 1}
                     onClick={() => setActivityPage(p => p - 1)}
-                  >Prev</button>
+                  >Previous</button>
                   <span className={styles.activityPageInfo}>
                     {activityPage} / {Math.ceil(activityTotal / 15)}
                   </span>
                   <button
                     className={styles.activityPageBtn}
-                    disabled={activityPage * 15 >= activityTotal}
+                    disabled={activityLoading || activityPage * 15 >= activityTotal}
                     onClick={() => setActivityPage(p => p + 1)}
                   >Next</button>
                 </div>
@@ -320,42 +337,55 @@ export function ProfilePage() {
             <FontAwesomeIcon icon={faKey} className={styles.cardIcon} />
             <h2>Change Password</h2>
           </div>
-          <div className={styles.formStack}>
+          <form className={styles.formStack} aria-busy={changing} onSubmit={e => { e.preventDefault(); void handleChangePassword() }}>
+            <label className={styles.fieldLabel} htmlFor="profile-current-password">Current password</label>
             <input
+              id="profile-current-password"
               type="password"
+              required
+              disabled={changing}
               className={styles.input}
               placeholder="Current password"
               value={currentPw}
               onChange={e => setCurrentPw(e.target.value)}
               autoComplete="current-password"
             />
+            <label className={styles.fieldLabel} htmlFor="profile-new-password">New password</label>
             <input
+              id="profile-new-password"
               type="password"
+              required
+              disabled={changing}
+              minLength={8}
               className={styles.input}
-              placeholder="New password"
+              placeholder="At least 8 characters"
               value={newPw}
               onChange={e => setNewPw(e.target.value)}
               autoComplete="new-password"
             />
+            <label className={styles.fieldLabel} htmlFor="profile-confirm-password">Confirm new password</label>
             <input
+              id="profile-confirm-password"
               type="password"
+              required
+              disabled={changing}
+              minLength={8}
               className={styles.input}
               placeholder="Confirm new password"
               value={confirmPw}
               onChange={e => setConfirmPw(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleChangePassword()}
               autoComplete="new-password"
             />
             <button
               className={styles.primaryBtn}
-              onClick={handleChangePassword}
+              type="submit"
               disabled={changing || !currentPw || !newPw || !confirmPw}
             >
               {changing ? 'Changing...' : 'Update Password'}
             </button>
-          </div>
+          </form>
         </div>
       </div>
-    </div>
+    </main>
   )
 }

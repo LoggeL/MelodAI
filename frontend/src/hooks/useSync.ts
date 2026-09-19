@@ -1,148 +1,88 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, useState } from 'react'
+import type { QueueMetadata } from '../utils/queue'
 
-interface SyncQueueItem {
-  id: string
-  title: string
-  artist: string
-  thumbnail: string
-}
-
-export interface SyncState {
-  queue: SyncQueueItem[]
-  currentIndex: number
-  isPlaying: boolean
-  version: number
-}
-
-export interface SyncCommand {
-  command: string
-  payload: Record<string, unknown>
-}
-
-interface UseSyncOptions {
-  enabled: boolean
-  onSyncState: (state: SyncState) => void
-  onCommand: (cmd: SyncCommand) => void
-}
-
-const CLIENT_ID_KEY = 'melodai_sync_client_id'
-
-function getClientId(): string {
-  let id = sessionStorage.getItem(CLIENT_ID_KEY)
-  if (!id) {
-    id = crypto.randomUUID()
-    sessionStorage.setItem(CLIENT_ID_KEY, id)
-  }
-  return id
-}
+export interface SyncState { queue: QueueMetadata[]; currentIndex: number; isPlaying: boolean; version: number; initial?: boolean }
+export interface SyncCommand { command: string; payload: Record<string, unknown> }
+interface UseSyncOptions { enabled: boolean; onSyncState: (state: SyncState) => void; onCommand: (cmd: SyncCommand) => void }
 
 export function useSync({ enabled, onSyncState, onCommand }: UseSyncOptions) {
-  const clientIdRef = useRef(getClientId())
+  const [clientId] = useState(() => crypto.randomUUID())
   const versionRef = useRef(0)
-  const eventSourceRef = useRef<EventSource | null>(null)
-  const suppressUntilRef = useRef(0)
-  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const backoffRef = useRef(1000)
-
-  // Keep callbacks in refs to avoid reconnecting on every render
-  const onSyncStateRef = useRef(onSyncState)
-  const onCommandRef = useRef(onCommand)
-  onSyncStateRef.current = onSyncState
-  onCommandRef.current = onCommand
-
-  const connect = useCallback(() => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close()
-      eventSourceRef.current = null
-    }
-
-    const url = `/api/sync/stream?clientId=${clientIdRef.current}&lastVersion=${versionRef.current}`
-    const es = new EventSource(url)
-    eventSourceRef.current = es
-
-    es.addEventListener('sync_state', (e: MessageEvent) => {
-      if (Date.now() < suppressUntilRef.current) return
-      try {
-        const state: SyncState = JSON.parse(e.data)
-        versionRef.current = state.version
-        onSyncStateRef.current(state)
-      } catch { /* ignore parse errors */ }
-    })
-
-    es.addEventListener('command', (e: MessageEvent) => {
-      if (Date.now() < suppressUntilRef.current) return
-      try {
-        const cmd: SyncCommand = JSON.parse(e.data)
-        onCommandRef.current(cmd)
-      } catch { /* ignore parse errors */ }
-    })
-
-    es.onopen = () => {
-      backoffRef.current = 1000
-    }
-
-    es.onerror = () => {
-      es.close()
-      eventSourceRef.current = null
-      // Reconnect with backoff
-      reconnectTimerRef.current = setTimeout(() => {
-        backoffRef.current = Math.min(backoffRef.current * 2, 30000)
-        connect()
-      }, backoffRef.current)
-    }
-  }, [])
+  const enabledRef = useRef(enabled)
+  enabledRef.current = enabled
+  const callbacksRef = useRef({ onSyncState, onCommand })
+  callbacksRef.current = { onSyncState, onCommand }
+  const outgoingRef = useRef<Promise<void>>(Promise.resolve())
+  const localPlaybackIntentRef = useRef(false)
 
   useEffect(() => {
     if (!enabled) return
-
-    connect()
-
-    return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close()
-        eventSourceRef.current = null
-      }
-      if (reconnectTimerRef.current) {
-        clearTimeout(reconnectTimerRef.current)
-        reconnectTimerRef.current = null
+    let cancelled = false
+    let source: EventSource | null = null
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let backoff = 1000
+    let firstHydration = true
+    const connect = () => {
+      if (cancelled) return
+      const current = new EventSource(`/api/sync/stream?clientId=${encodeURIComponent(clientId)}&lastVersion=${versionRef.current}`)
+      source = current
+      current.addEventListener('sync_state', (event: MessageEvent) => {
+        if (cancelled || source !== current) return
+        try {
+          const state: SyncState = JSON.parse(event.data)
+          if (!Array.isArray(state.queue) || !Number.isInteger(state.version) || state.version <= versionRef.current || typeof state.isPlaying !== 'boolean') return
+          versionRef.current = state.version
+          // A Play gesture made while this first connection opens owns the
+          // selection. Only its saved snapshot is stale; live changes and
+          // snapshots after reconnect must still control this player.
+          if (state.initial === true && firstHydration && localPlaybackIntentRef.current) return
+          callbacksRef.current.onSyncState(state)
+        } catch { /* Ignore malformed events. */ }
+      })
+      current.addEventListener('sync_ready', () => {
+        if (!cancelled && source === current) firstHydration = false
+      })
+      current.addEventListener('command', (event: MessageEvent) => {
+        if (cancelled || source !== current) return
+        try {
+          const command: SyncCommand = JSON.parse(event.data)
+          if (typeof command.command === 'string') callbacksRef.current.onCommand(command)
+        } catch { /* Ignore malformed events. */ }
+      })
+      current.onopen = () => { backoff = 1000 }
+      current.onerror = () => {
+        if (cancelled || source !== current) return
+        firstHydration = false
+        current.close()
+        source = null
+        timer = setTimeout(connect, backoff)
+        backoff = Math.min(backoff * 2, 30000)
       }
     }
-  }, [enabled, connect])
+    connect()
+    return () => { cancelled = true; source?.close(); clearTimeout(timer) }
+  }, [enabled, clientId])
 
-  const pushQueue = useCallback(
-    (queue: SyncQueueItem[], currentIndex: number, isPlaying: boolean) => {
-      suppressUntilRef.current = Date.now() + 500
-      fetch('/api/sync/queue', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Client-Id': clientIdRef.current,
-        },
-        body: JSON.stringify({ queue, currentIndex, isPlaying }),
-      })
-        .then(r => r.json())
-        .then(data => {
-          if (data.version) versionRef.current = data.version
-        })
-        .catch(() => {})
-    },
-    [],
-  )
+  // Serialize writes so a slower old queue cannot overwrite a newer one.
+  const send = useCallback((path: string, method: string, body: unknown) => {
+    if (!enabledRef.current) return
+    outgoingRef.current = outgoingRef.current.then(async () => {
+      if (!enabledRef.current) return
+      const response = await fetch(path, { method, headers: { 'Content-Type': 'application/json', 'X-Client-Id': clientId }, body: JSON.stringify(body) })
+      if (!response.ok) return
+      const data = await response.json()
+      if (Number.isInteger(data.version)) versionRef.current = Math.max(versionRef.current, data.version)
+    }).catch(() => {})
+  }, [clientId])
 
-  const sendCommand = useCallback(
-    (command: string, payload: Record<string, unknown> = {}) => {
-      suppressUntilRef.current = Date.now() + 500
-      fetch('/api/sync/command', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Client-Id': clientIdRef.current,
-        },
-        body: JSON.stringify({ command, payload }),
-      }).catch(() => {})
-    },
-    [],
-  )
+  useEffect(() => { enabledRef.current = enabled; return () => { enabledRef.current = false } }, [enabled])
 
-  return { pushQueue, sendCommand }
+  const pushQueue = useCallback((queue: QueueMetadata[], currentIndex: number, isPlaying: boolean) => {
+    send('/api/sync/queue', 'PUT', { queue, currentIndex, isPlaying: isPlaying && currentIndex >= 0 })
+  }, [send])
+  const sendCommand = useCallback((command: string, payload: Record<string, unknown> = {}) => {
+    send('/api/sync/command', 'POST', { command, payload })
+  }, [send])
+  const markPlaybackIntent = useCallback(() => { localPlaybackIntentRef.current = true }, [])
+  return { pushQueue, sendCommand, markPlaybackIntent }
 }

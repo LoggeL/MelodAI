@@ -149,3 +149,8 @@
   .creditChip { font-size: 0.95rem; padding: 5px 12px; }
   .creditIcon { font-size: 0.9rem; }
 }
+
+.textLink { display: inline-flex; align-items: center; min-height: 40px; padding: 6px 10px; color: var(--text-secondary); border-radius: var(--radius-sm); font-size: .8rem; }
+.textLink[aria-current=page] { color: var(--primary); background: var(--primary-glow); }
+@media (max-width: 768px) { .textLink { display: none; } .navBtn, .avatarCircle, .menuBtn { width: 40px; height: 40px; } .actions { gap: 4px; } .separator { display: none; } }
+@media (max-width: 420px) { .header { flex-wrap: wrap; height: auto; min-height: var(--header-height); padding: 8px; gap: 8px; } .header > :nth-child(2) { order: 3; flex-basis: 100%; } .actions { margin-left: auto; } }

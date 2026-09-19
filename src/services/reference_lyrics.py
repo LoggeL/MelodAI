@@ -9,10 +9,10 @@ def _validate_file_path(file_path):
     """Validate that *file_path* is within the songs directory."""
     if not file_path:
         return None
-    from src.utils.file_handling import _SONGS_PATH_RESOLVED
+    from src.utils.file_handling import get_songs_path
     try:
         resolved = Path(file_path).resolve()
-        resolved.relative_to(_SONGS_PATH_RESOLVED)
+        resolved.relative_to(Path(get_songs_path()).resolve())
         return str(resolved)
     except (ValueError, TypeError):
         return None

@@ -7,76 +7,13 @@ import type {
 } from '../types'
 import { normalizeTrackId, trackPathSegment } from '../utils/trackId'
 
-const MAX_RETRIES = 3
-const INITIAL_DELAY = 1000
-let redirectingToLogin = false
-
-async function request<T>(url: string, options?: RequestInit & { skipAuthRedirect?: boolean }): Promise<T> {
-  let delay = INITIAL_DELAY
-  // Only idempotent requests are safe to re-send: a retried POST/DELETE whose
-  // first attempt actually reached the server can double-charge credits,
-  // double-process tracks, or duplicate registrations.
-  const method = (options?.method || 'GET').toUpperCase()
-  const canRetry = method === 'GET' || method === 'HEAD'
-
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      const resp = await fetch(url, {
-        ...options,
-        headers: {
-          'Content-Type': 'application/json',
-          ...options?.headers,
-        },
-      })
-
-      // Redirect to login on auth failure (guard against multiple parallel redirects)
-      // Skip redirect for auth endpoints that handle 401 themselves (login, etc.)
-      if (resp.status === 401 && !options?.skipAuthRedirect) {
-        if (!redirectingToLogin) {
-          redirectingToLogin = true
-          window.location.href = '/login'
-        }
-        throw new Error('Authentication required')
-      }
-
-      // Don't retry other client errors (4xx) - return the response as-is
-      if (resp.status >= 400 && resp.status < 500) {
-        return resp.json()
-      }
-
-      // Retry server errors (5xx) with backoff
-      if (!resp.ok) {
-        if (canRetry && attempt < MAX_RETRIES) {
-          await new Promise(r => setTimeout(r, delay))
-          delay *= 2
-          continue
-        }
-        return resp.json()
-      }
-
-      return resp.json()
-    } catch (err) {
-      // Don't retry auth errors
-      if (err instanceof Error && err.message === 'Authentication required') {
-        throw err
-      }
-      // Network error - retry with backoff
-      if (canRetry && attempt < MAX_RETRIES) {
-        await new Promise(r => setTimeout(r, delay))
-        delay *= 2
-        continue
-      }
-      throw err
-    }
-  }
-
-  throw new Error('Max retries exceeded')
-}
+import { request } from './http'
+export { ApiError } from './http'
 
 // ─── Auth ───
 
 export const auth = {
-  check: () => request<{ authenticated: boolean; username?: string; is_admin?: boolean; display_name?: string; credits?: number }>('/api/auth/check'),
+  check: () => request<{ authenticated: boolean; username?: string; is_admin?: boolean; display_name?: string; credits?: number }>('/api/auth/check', { skipAuthRedirect: true }),
   login: (username: string, password: string, remember: boolean) =>
     request<{ success?: boolean; error?: string; username?: string; is_admin?: boolean }>(
       '/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password, remember }), skipAuthRedirect: true }
@@ -98,7 +35,7 @@ export const auth = {
   }>('/api/auth/profile/stats'),
   changePassword: (current_password: string, new_password: string) =>
     request<{ success?: boolean; error?: string; message?: string }>(
-      '/api/auth/change-password', { method: 'POST', body: JSON.stringify({ current_password, new_password }) }
+      '/api/auth/change-password', { method: 'POST', body: JSON.stringify({ current_password, new_password }), skipAuthRedirect: true }
     ),
   activity: (page: number, sort = 'date_desc', action = '') => {
     const params = new URLSearchParams({ page: String(page), per_page: '15', sort })

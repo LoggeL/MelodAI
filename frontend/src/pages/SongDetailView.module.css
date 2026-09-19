@@ -609,3 +609,23 @@
   color: var(--danger);
   margin-bottom: var(--spacing-sm);
 }
+
+.collapsibleHeader { width: 100%; border: 0; color: var(--text); font: inherit; text-align: left; background: transparent; }
+.collapsibleTitle { flex-wrap: wrap; min-width: 0; }
+.tableScroll { max-width: 100%; overflow-x: auto; }
+.tableScroll .table { min-width: 460px; }
+.detailButton { color: inherit; font: inherit; background: transparent; border: 0; padding: 4px 0; text-align: left; cursor: pointer; }
+.detailButton:hover { text-decoration: underline; }
+.actionBtn { min-height: 40px; }
+.detailTitle { overflow-wrap: anywhere; }
+.headerInfo { min-width: 0; }
+@media (max-width: 600px) {
+  .detailHeader { align-items: flex-start; }
+  .detailActions { flex-wrap: wrap; }
+  .section { padding: 16px; }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .segmentLine { flex-wrap: wrap; gap: 6px; }
+  .segmentText { overflow-wrap: anywhere; }
+  .refFetch { flex-wrap: wrap; }
+  .reprocessMenu { min-width: 240px; max-width: calc(100vw - 48px); left: 0; right: auto; }
+}

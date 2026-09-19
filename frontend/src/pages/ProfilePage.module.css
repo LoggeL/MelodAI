@@ -1,6 +1,7 @@
 /* ── Page shell ─────────────────────────────── */
 .page {
-  min-height: 100vh;
+  height: 100dvh;
+  min-height: 0;
   background-color: var(--bg);
   background-image:
     radial-gradient(ellipse 90% 50% at 50% 0%, var(--primary-glow-strong) 0%, transparent 60%),
@@ -828,4 +829,16 @@
     min-width: 100px;
     padding: 16px 22px;
   }
+}
+
+.fieldLabel { color: var(--text-secondary); font-size: .82rem; font-weight: 600; margin-bottom: -6px; }
+.input { min-height: 44px; width: 100%; min-width: 0; }
+.primaryBtn, .filterPill, .sortBtn, .activityPageBtn { min-height: 40px; }
+.displayName, .username { overflow-wrap: anywhere; }
+@media (max-width: 440px) {
+  .container { padding-inline: 14px; }
+  .card { padding: 18px 16px; }
+  .activityControls { flex-wrap: wrap; gap: 12px; }
+  .activityFilters { flex-wrap: wrap; }
+  .statsGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

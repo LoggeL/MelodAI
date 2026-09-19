@@ -1,12 +1,7 @@
 import puppeteer, { type Browser, type Page } from 'puppeteer'
 
-const BASE = process.env.E2E_BASE_URL || 'http://localhost:5000'
-const ADMIN_USER = process.env.E2E_ADMIN_USER || 'hyper.xjo@gmail.com'
-const ADMIN_PASS = process.env.E2E_ADMIN_PASS || '404noswagfound'
-const REGULAR_USER = 'testuser'
-const REGULAR_PASS = 'testpass456'
-
-export { BASE, ADMIN_USER, ADMIN_PASS, REGULAR_USER, REGULAR_PASS }
+import { BASE, testEmail } from './config'
+export { BASE, ADMIN_USER, ADMIN_PASS, REGULAR_USER, REGULAR_PASS } from './config'
 
 export async function launchBrowser(): Promise<Browser> {
   return puppeteer.launch({
@@ -35,7 +30,7 @@ export async function registerUser(username: string, password: string, inviteKey
   const resp = await fetch(`${BASE}/api/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password, invite_key: inviteKey }),
+    body: JSON.stringify({ username, email: testEmail(username), password, invite_key: inviteKey }),
   })
   return resp.json()
 }

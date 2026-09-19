@@ -255,7 +255,7 @@
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--primary);
   box-shadow: 0 0 10px var(--primary-glow), 0 2px 4px rgba(0,0,0,0.2);
   transition: transform 0.15s ease;
 }
@@ -367,7 +367,7 @@
     appearance: none;
     height: 3px;
     border-radius: 2px;
-    background: var(--surface-hover);
+    background: var(--text-muted);
     accent-color: var(--primary);
     outline: none;
     cursor: pointer;
@@ -379,7 +379,7 @@
     width: 14px;
     height: 14px;
     border-radius: 50%;
-    background: #fff;
+    background: var(--primary);
     box-shadow: 0 0 6px var(--primary-glow);
     cursor: pointer;
   }
@@ -388,7 +388,7 @@
     width: 14px;
     height: 14px;
     border-radius: 50%;
-    background: #fff;
+    background: var(--primary);
     box-shadow: 0 0 6px var(--primary-glow);
     border: none;
     cursor: pointer;

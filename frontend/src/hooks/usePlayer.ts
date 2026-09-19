@@ -1,888 +1,503 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import type { QueueItem, LyricsData } from '../types'
-import { tracks } from '../services/api'
+import type { QueueItem, LyricsData, TrackMetadata } from '../types'
+import { adjacentReadyIndex, queueItem, queueSnapshot, restoreQueue, selectById, type QueueSelection } from '../utils/queue'
+import { tracks, ApiError } from '../services/api'
 import { showToast } from './useToast'
 import type { SyncState, SyncCommand } from './useSync'
-import { isValidTrackId, normalizeTrackId, trackPathSegment } from '../utils/trackId'
+import { isValidTrackId, normalizeTrackId } from '../utils/trackId'
+import { AudioPlayback, type PlaybackState } from './AudioPlayback'
+import { loadPlayerSettings, loadStoredQueue, normalizeVolume, PLAYER_STORAGE_KEY, queueStorageKey } from './playerStorage'
 
 interface UsePlayerOptions {
+  accountKey?: string
   isAdmin?: boolean
   onCreditsUpdate?: (credits: number) => void
 }
 
-// localStorage keys
-const QUEUE_STORAGE_KEY = 'melodai_queue'
-const PLAYER_STORAGE_KEY = 'melodai_player'
-
-interface StoredQueueData {
-  items: { id: string; title: string; artist: string; thumbnail: string }[]
-  currentIndex: number
-}
-
-interface StoredPlayerData {
-  vocalsVolume: number
-  instrumentalVolume: number
-  karaokeMode: boolean
-}
-
-function loadStoredQueue(): { queue: QueueItem[]; currentIndex: number } {
-  try {
-    const raw = localStorage.getItem(QUEUE_STORAGE_KEY)
-    if (!raw) return { queue: [], currentIndex: -1 }
-    const data: StoredQueueData = JSON.parse(raw)
-    if (!data.items?.length) return { queue: [], currentIndex: -1 }
-    const queue: QueueItem[] = data.items.filter(item => isValidTrackId(item.id)).map(item => ({
-      id: normalizeTrackId(item.id),
-      title: item.title,
-      artist: item.artist,
-      thumbnail: item.thumbnail,
-      vocalsUrl: `/songs/${trackPathSegment(item.id)}/vocals.mp3`,
-      musicUrl: `/songs/${trackPathSegment(item.id)}/no_vocals.mp3`,
-      lyricsUrl: `/api/track/${trackPathSegment(item.id)}/lyrics`,
-      ready: true,
-      progress: 100,
-      status: 'ready',
-      error: false,
-    }))
-    const currentIndex = Math.max(-1, Math.min(data.currentIndex, queue.length - 1))
-    return { queue, currentIndex }
-  } catch {
-    return { queue: [], currentIndex: -1 }
-  }
-}
-
-function loadStoredPlayer(): StoredPlayerData | null {
-  try {
-    const raw = localStorage.getItem(PLAYER_STORAGE_KEY)
-    if (!raw) return null
-    return JSON.parse(raw)
-  } catch {
-    return null
-  }
+function withMetadata(item: QueueItem, metadata?: Partial<TrackMetadata>): QueueItem {
+  return metadata ? { ...item, title: metadata.title || item.title, artist: metadata.artist || item.artist, thumbnail: metadata.img_url || item.thumbnail } : item
 }
 
 export function usePlayer(options: UsePlayerOptions = {}) {
-  const [storedQueue] = useState(loadStoredQueue)
-  const [queue, setQueue] = useState<QueueItem[]>(storedQueue.queue)
-  const [currentIndex, setCurrentIndex] = useState(storedQueue.currentIndex)
-  const [isPlaying, setIsPlaying] = useState(false)
+  const [storedQueue] = useState(() => loadStoredQueue(options.accountKey))
+  const [selection, setSelection] = useState<QueueSelection>(storedQueue)
+  const { queue, currentIndex } = selection
+  const [playback, setPlayback] = useState<PlaybackState>({ isPlaying: false, currentTime: 0, duration: 0 })
   const [lyrics, setLyrics] = useState<LyricsData | null>(null)
-  const [currentTime, setCurrentTime] = useState(0)
-  const [duration, setDuration] = useState(0)
   const [lyricsLoading, setLyricsLoading] = useState(false)
-  const [karaokeMode, setKaraokeMode] = useState(() => {
-    const stored = loadStoredPlayer()
-    return stored?.karaokeMode ?? false
-  })
+  const [settings, setSettings] = useState(loadPlayerSettings)
   const [favorites, setFavorites] = useState<Set<string>>(new Set())
-
-  // Audio context and gain nodes
-  const audioCtxRef = useRef<AudioContext | null>(null)
-  const vocalsGainRef = useRef<GainNode | null>(null)
-  const instrumentalGainRef = useRef<GainNode | null>(null)
-  const analyserRef = useRef<AnalyserNode | null>(null)
-  const initedRef = useRef(false)
-
-  // Decoded audio buffers
-  const vocalsBufferRef = useRef<AudioBuffer | null>(null)
-  const instBufferRef = useRef<AudioBuffer | null>(null)
-
-  // Source nodes (recreated on each play/seek/resume)
-  const vocalsSourceRef = useRef<AudioBufferSourceNode | null>(null)
-  const instSourceRef = useRef<AudioBufferSourceNode | null>(null)
-
-  // Timing: track position via AudioContext clock
-  const startCtxTimeRef = useRef(0)
-  const startOffsetRef = useRef(0)
-  const pausedAtRef = useRef(0)
-  const isPlayingRef = useRef(false)
-
-  // Buffer cache for preloading next track
-  const bufferCacheRef = useRef<Map<string, { vocals: AudioBuffer; instrumental: AudioBuffer }>>(new Map())
-
-  // Version counter to discard stale async loads
-  const playVersionRef = useRef(0)
-
-  const animRef = useRef<number | null>(null)
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const savedVocalsVolRef = useRef(0.5)
-  const saveQueueTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const savePlayerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const storedPlayerData = useRef(loadStoredPlayer())
-
-  // Refs tracking latest state for use in callbacks
-  const queueRef = useRef(queue)
-  const currentIndexRef = useRef(currentIndex)
-  const karaokeModeRef = useRef(karaokeMode)
-  queueRef.current = queue
-  currentIndexRef.current = currentIndex
-  karaokeModeRef.current = karaokeMode
-
-  // Ref for playIndex so onended can call it without circular deps
-  const playIndexRef = useRef<(index: number) => void>(() => {})
-
-  // Sync refs — populated by PlayerPage to wire useSync ↔ usePlayer
-  const syncSourceRef = useRef(false)
-  const syncPushRef = useRef<(() => void) | null>(null)
-  const syncCommandRef = useRef<((cmd: string, payload?: Record<string, unknown>) => void) | null>(null)
-
-  // Credit tracking refs
-  const creditChargedRef = useRef<Set<string>>(new Set())
+  const settingsRef = useRef(settings)
+  const favoritesRef = useRef(favorites)
+  const selectionRef = useRef(selection)
   const optionsRef = useRef(options)
   optionsRef.current = options
+  favoritesRef.current = favorites
+  const audioRef = useRef<AudioPlayback | null>(null)
+  const analyserRef = useRef<AnalyserNode | null>(null)
+  const mountedRef = useRef(true)
+  const lyricsVersionRef = useRef(0)
+  const lyricsTrackRef = useRef<string | null>(null)
+  const playbackVersionRef = useRef(0)
+  const pendingAutoplayRef = useRef<string | null>(null)
+  const trackRequestsRef = useRef(new Set<string>())
+  const favoritePendingRef = useRef(new Set<string>())
+  const chargedRef = useRef(new Set<string>())
+  const chargingRef = useRef(new Set<string>())
+  const creditFailureRef = useRef(new Set<string>())
+  const remotePlaybackRef = useRef(false)
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const syncPushRef = useRef<(() => void) | null>(null)
+  const syncCommandRef = useRef<((cmd: string, payload?: Record<string, unknown>) => void) | null>(null)
+  const syncPlaybackIntentRef = useRef<(() => void) | null>(null)
+  const playIndexRef = useRef<(index: number, remote?: boolean) => Promise<void>>(async () => {})
+  const onTimeRef = useRef<(time: number) => void>(() => {})
 
-  // Load favorites on mount
-  useEffect(() => {
-    tracks.favorites().then(ids => setFavorites(new Set(ids))).catch(() => {})
+  // Publish after React has committed the new queue/playback state to PlayerPage.
+  const scheduleSync = useCallback(() => {
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current)
+    syncTimerRef.current = setTimeout(() => { if (mountedRef.current) syncPushRef.current?.() }, 100)
   }, [])
 
-  // Debounced save queue to localStorage + sync push
-  useEffect(() => {
-    if (saveQueueTimerRef.current) clearTimeout(saveQueueTimerRef.current)
-    saveQueueTimerRef.current = setTimeout(() => {
-      const readyItems = queue.filter(q => q.ready)
-      if (readyItems.length === 0) {
-        localStorage.removeItem(QUEUE_STORAGE_KEY)
-        return
-      }
-      localStorage.setItem(QUEUE_STORAGE_KEY, JSON.stringify({
-        items: readyItems.map(q => ({
-          id: q.id, title: q.title, artist: q.artist, thumbnail: q.thumbnail,
-        })),
-        currentIndex,
-      }))
-      // Push to sync server (skip if this change originated from sync)
-      if (!syncSourceRef.current) {
-        syncPushRef.current?.()
-      }
-      syncSourceRef.current = false
-    }, 500)
-    return () => { if (saveQueueTimerRef.current) clearTimeout(saveQueueTimerRef.current) }
-  }, [queue, currentIndex])
+  const replaceSelection = useCallback((next: QueueSelection, remote = false) => {
+    selectionRef.current = next
+    setSelection(next)
+    if (!remote) scheduleSync()
+  }, [scheduleSync])
 
-  // Validate restored queue items against server and fetch lyrics for current track
-  useEffect(() => {
-    if (storedQueue.queue.length === 0) return
-    const validateQueue = async () => {
-      const validItems: QueueItem[] = []
-      for (const item of storedQueue.queue) {
-        try {
-          const info = await tracks.info(item.id)
-          if (info.metadata) {
-            item.title = info.metadata.title || item.title
-            item.artist = info.metadata.artist || item.artist
-            item.thumbnail = info.metadata.img_url || item.thumbnail
-            validItems.push(item)
+  const getAudio = useCallback(() => {
+    if (!audioRef.current) {
+      audioRef.current = new AudioPlayback(settingsRef.current, {
+        onInit: analyser => { analyserRef.current = analyser },
+        onState: state => {
+          if (!mountedRef.current) return
+          setPlayback(state)
+          if (!remotePlaybackRef.current) scheduleSync()
+        },
+        onTime: time => onTimeRef.current(time),
+        onEnded: () => {
+          const state = selectionRef.current
+          const next = adjacentReadyIndex(state.queue, state.currentIndex, 1)
+          if (next >= 0) {
+            const pending = pendingAutoplayRef.current
+            void playIndexRef.current(next, remotePlaybackRef.current)
+            pendingAutoplayRef.current = pending
           }
-        } catch {
-          // Track no longer exists, skip it
-        }
-      }
-      if (validItems.length !== storedQueue.queue.length) {
-        const newIndex = storedQueue.currentIndex >= validItems.length
-          ? Math.max(validItems.length - 1, -1)
-          : storedQueue.currentIndex
-        setQueue(validItems)
-        setCurrentIndex(validItems.length > 0 ? newIndex : -1)
-      }
-
-      // Fetch lyrics for the restored current track so they display without replay
-      const ci = storedQueue.currentIndex
-      const currentItem = ci >= 0 && ci < validItems.length ? validItems[ci] : (ci >= 0 && ci < storedQueue.queue.length ? storedQueue.queue[ci] : null)
-      if (currentItem?.ready) {
-        setLyricsLoading(true)
-        try {
-          const lyricsData = await tracks.lyrics(currentItem.id)
-          setLyrics(lyricsData)
-        } catch {
-          setLyrics(null)
-        }
-        setLyricsLoading(false)
-      }
+        },
+      })
     }
-    validateQueue()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    return audioRef.current
+  }, [scheduleSync])
+
+  const invalidatePendingWork = useCallback(() => {
+    lyricsVersionRef.current++
+    playbackVersionRef.current++
   }, [])
 
-  // Initialize Web Audio context and gain nodes
-  const initAudio = useCallback(() => {
-    if (initedRef.current) return
-    initedRef.current = true
-
-    const ctx = new AudioContext()
-    audioCtxRef.current = ctx
-
-    const stored = storedPlayerData.current
-    const vGain = ctx.createGain()
-    const iGain = ctx.createGain()
-    vGain.connect(ctx.destination)
-    iGain.connect(ctx.destination)
-    const vVol = stored ? stored.vocalsVolume / 100 : 0.5
-    const iVol = stored ? stored.instrumentalVolume / 100 : 0.5
-    vGain.gain.value = vVol
-    iGain.gain.value = iVol
-    savedVocalsVolRef.current = vVol
-
-    const analyser = ctx.createAnalyser()
-    analyser.fftSize = 256
-    analyser.smoothingTimeConstant = 0.8
-    vGain.connect(analyser)
-    iGain.connect(analyser)
-    analyserRef.current = analyser
-
-    vocalsGainRef.current = vGain
-    instrumentalGainRef.current = iGain
-
-    // Animation frame loop for time tracking
-    const tick = () => {
-      if (isPlayingRef.current && audioCtxRef.current) {
-        const elapsed = audioCtxRef.current.currentTime - startCtxTimeRef.current
-        const t = startOffsetRef.current + elapsed
-        setCurrentTime(t)
-
-        // Credit deduction at 15s
-        if (t >= 15 && !optionsRef.current.isAdmin) {
-          const q = queueRef.current
-          const ci = currentIndexRef.current
-          const currentItem = ci >= 0 ? q[ci] : null
-          if (currentItem && !creditChargedRef.current.has(currentItem.id)) {
-            creditChargedRef.current.add(currentItem.id)
-            tracks.deductPlayCredit(currentItem.id).then(data => {
-              if (data.credits !== undefined && optionsRef.current.onCreditsUpdate) {
-                optionsRef.current.onCreditsUpdate(data.credits)
-              }
-            }).catch(() => {})
-          }
-        }
-      }
-      animRef.current = requestAnimationFrame(tick)
-    }
-    animRef.current = requestAnimationFrame(tick)
-  }, [])
-
-  // Cleanup: stop all audio on unmount
   useEffect(() => {
+    mountedRef.current = true
     return () => {
-      try { vocalsSourceRef.current?.stop() } catch { /* already stopped */ }
-      try { instSourceRef.current?.stop() } catch { /* already stopped */ }
-      vocalsSourceRef.current = null
-      instSourceRef.current = null
-      if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
-        audioCtxRef.current.close()
-      }
-      if (animRef.current) cancelAnimationFrame(animRef.current)
-      if (pollRef.current) clearInterval(pollRef.current)
+      mountedRef.current = false
+      invalidatePendingWork()
+      audioRef.current?.dispose()
+      audioRef.current = null
+      analyserRef.current = null
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current)
     }
-  }, [])
+  }, [invalidatePendingWork])
 
-  // Start both buffers at the exact same AudioContext time (sample-accurate sync)
-  const startPlayback = useCallback((offset = 0) => {
-    const ctx = audioCtxRef.current
-    if (!ctx || !vocalsBufferRef.current || !instBufferRef.current) return
-
-    // Stop existing sources (onended will bail via ref check)
-    try { vocalsSourceRef.current?.stop() } catch { /* already stopped */ }
-    try { instSourceRef.current?.stop() } catch { /* already stopped */ }
-    vocalsSourceRef.current = null
-    instSourceRef.current = null
-
-    const vSrc = ctx.createBufferSource()
-    const iSrc = ctx.createBufferSource()
-    vSrc.buffer = vocalsBufferRef.current
-    iSrc.buffer = instBufferRef.current
-    vSrc.connect(vocalsGainRef.current!)
-    iSrc.connect(instrumentalGainRef.current!)
-
-    startCtxTimeRef.current = ctx.currentTime
-    startOffsetRef.current = offset
-
-    // Both start at the same context time — can never desync
-    vSrc.start(0, offset)
-    iSrc.start(0, offset)
-
-    vocalsSourceRef.current = vSrc
-    instSourceRef.current = iSrc
-    isPlayingRef.current = true
-
-    // Auto-advance when song ends naturally
-    vSrc.onended = () => {
-      if (vocalsSourceRef.current !== vSrc) return
-      isPlayingRef.current = false
-      setIsPlaying(false)
-
-      const q = queueRef.current
-      const ci = currentIndexRef.current
-      if (q.length === 0) return
-      let idx = ci + 1
-      if (idx >= q.length) idx = 0
-      for (let i = 0; i < q.length; i++) {
-        if (q[idx]?.ready) {
-          playIndexRef.current(idx)
-          return
-        }
-        idx = (idx + 1) % q.length
-      }
-    }
-  }, [])
-
-  // Fetch and decode audio buffers (uses cache if available)
-  const loadBuffers = useCallback(async (item: QueueItem): Promise<{ vocals: AudioBuffer; instrumental: AudioBuffer }> => {
-    const ctx = audioCtxRef.current!
-    const cached = bufferCacheRef.current.get(item.id)
-    if (cached) {
-      bufferCacheRef.current.delete(item.id)
-      return cached
-    }
-
-    const [vocalsData, instData] = await Promise.all([
-      fetch(item.vocalsUrl).then(r => r.arrayBuffer()),
-      fetch(item.musicUrl).then(r => r.arrayBuffer()),
-    ])
-    const [vocals, instrumental] = await Promise.all([
-      ctx.decodeAudioData(vocalsData),
-      ctx.decodeAudioData(instData),
-    ])
-    return { vocals, instrumental }
-  }, [])
-
-  // Preload next song's buffers
-  useEffect(() => {
-    const q = queueRef.current
-    const ci = currentIndexRef.current
-    const cache = bufferCacheRef.current
-    if (ci < 0 || q.length < 2 || !audioCtxRef.current) {
-      cache.clear()
-      return
-    }
-
-    let nextIdx = ci + 1
-    if (nextIdx >= q.length) nextIdx = 0
-    const nextItem = q[nextIdx]
-    if (!nextItem?.ready || nextIdx === ci) {
-      cache.clear()
-      return
-    }
-
-    // Decoded buffers are tens of MB of raw PCM per track. Entries are only
-    // removed when consumed by loadBuffers, so skipping around the queue
-    // would strand them forever — evict everything but the upcoming track.
-    for (const id of [...cache.keys()]) {
-      if (id !== nextItem.id) cache.delete(id)
-    }
-    if (cache.has(nextItem.id)) return
-
-    const ctx = audioCtxRef.current
-    Promise.all([
-      fetch(nextItem.vocalsUrl).then(r => r.arrayBuffer()),
-      fetch(nextItem.musicUrl).then(r => r.arrayBuffer()),
-    ]).then(([vData, iData]) =>
-      Promise.all([ctx.decodeAudioData(vData), ctx.decodeAudioData(iData)])
-    ).then(([vocals, instrumental]) => {
-      bufferCacheRef.current.set(nextItem.id, { vocals, instrumental })
-    }).catch(() => {})
-  }, [currentIndex, queue])
-
-  // Status polling
-  useEffect(() => {
-    if (pollRef.current) clearInterval(pollRef.current)
-    pollRef.current = setInterval(async () => {
-      const pending = queueRef.current.filter(q => !q.ready && !q.error)
-      if (pending.length === 0) return
-
-      let changed = false
-      for (const item of pending) {
-        try {
-          const data = await tracks.status(item.id) as { status: string; progress: number; detail?: string }
-          if (data.status === 'complete' || data.progress >= 100) {
-            item.ready = true
-            item.progress = 100
-            item.status = 'ready'
-            changed = true
-            if (item.title === 'Loading...') {
-              const info = await tracks.info(item.id)
-              if (info.metadata) {
-                item.title = info.metadata.title || item.title
-                item.artist = info.metadata.artist || item.artist
-                item.thumbnail = info.metadata.img_url || item.thumbnail
-              }
-            }
-            if (currentIndexRef.current < 0) {
-              const idx = queueRef.current.indexOf(item)
-              if (idx >= 0) playIndexRef.current(idx)
-            }
-          } else if (data.status === 'error') {
-            item.error = true
-            item.status = 'error'
-            item.progress = 0
-            changed = true
-          } else {
-            item.progress = data.progress || 0
-            item.status = data.detail || data.status || 'processing'
-            changed = true
-          }
-        } catch { /* ignore */ }
-      }
-      if (changed) setQueue([...queueRef.current])
-    }, 5000)
-
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current)
-    }
-  }, [])
-
-  const addToQueue = useCallback(async (trackId: string, meta?: { title?: string; artist?: string; img_url?: string | null }, autoPlay?: boolean) => {
-    initAudio()
-    if (!isValidTrackId(trackId)) {
-      showToast('Invalid track ID', 'error')
-      return
-    }
-    trackId = normalizeTrackId(trackId)
-
-    if (queueRef.current.find(q => q.id === trackId)) {
-      if (autoPlay) {
-        const idx = queueRef.current.findIndex(q => q.id === trackId)
-        if (idx >= 0 && queueRef.current[idx].ready) {
-          playIndexRef.current(idx)
-        }
-      } else {
-        showToast('Song already in queue', 'warning')
-      }
-      return
-    }
-
-    const item: QueueItem = {
-      id: trackId,
-      title: meta?.title || 'Loading...',
-      artist: meta?.artist || '',
-      thumbnail: meta?.img_url || '',
-      vocalsUrl: `/songs/${trackPathSegment(trackId)}/vocals.mp3`,
-      musicUrl: `/songs/${trackPathSegment(trackId)}/no_vocals.mp3`,
-      lyricsUrl: `/api/track/${trackPathSegment(trackId)}/lyrics`,
-      ready: false,
-      progress: 0,
-      status: 'processing',
-      error: false,
-    }
-
-    const newQueue = [...queueRef.current, item]
-    queueRef.current = newQueue
-    setQueue(newQueue)
-    showToast(`Added "${item.title}" to queue`, 'success')
-
-    try {
-      const data = await tracks.add(trackId)
-
-      if (data.error === 'insufficient_credits') {
-        showToast(`Not enough credits (need ${data.required ?? 5}, have ${data.credits ?? 0})`, 'error')
-        const filtered = queueRef.current.filter(q => q.id !== trackId)
-        queueRef.current = filtered
-        setQueue(filtered)
-        return
-      }
-
-      if (data.status === 'ready') {
-        item.ready = true
-        item.progress = 100
-        item.status = 'ready'
-      }
-      if (data.metadata) {
-        item.title = data.metadata.title || item.title
-        item.artist = data.metadata.artist || item.artist
-        item.thumbnail = data.metadata.img_url || item.thumbnail
-      }
-      if (data.credits !== undefined && optionsRef.current.onCreditsUpdate) {
-        optionsRef.current.onCreditsUpdate(data.credits)
-      }
-    } catch {
-      item.error = true
-      item.status = 'error'
-      showToast('Failed to add song', 'error')
-    }
-
-    setQueue([...queueRef.current])
-
-    if (item.ready && autoPlay) {
-      const idx = queueRef.current.indexOf(item)
-      if (idx >= 0) playIndexRef.current(idx)
-    }
-  }, [initAudio])
-
-  const playIndex = useCallback(async (index: number) => {
-    initAudio()
-    const q = queueRef.current
-    if (index < 0 || index >= q.length) return
-    const item = q[index]
-    if (!item.ready) return
-
-    if (!syncSourceRef.current) syncCommandRef.current?.('playIndex', { index })
-
-    if (audioCtxRef.current?.state === 'suspended') {
-      await audioCtxRef.current.resume()
-    }
-
-    // Stop current playback
-    try { vocalsSourceRef.current?.stop() } catch { /* */ }
-    try { instSourceRef.current?.stop() } catch { /* */ }
-    vocalsSourceRef.current = null
-    instSourceRef.current = null
-    isPlayingRef.current = false
-
-    const version = ++playVersionRef.current
-    setCurrentIndex(index)
+  const loadLyrics = useCallback(async (id: string) => {
+    const version = ++lyricsVersionRef.current
+    lyricsTrackRef.current = id
     setLyrics(null)
     setLyricsLoading(true)
-    setCurrentTime(0)
-
     try {
-      const { vocals, instrumental } = await loadBuffers(item)
-      if (playVersionRef.current !== version) return
+      const data = await tracks.lyrics(id)
+      if (mountedRef.current && lyricsVersionRef.current === version) setLyrics(data)
+    } catch {
+      if (mountedRef.current && lyricsVersionRef.current === version) setLyrics(null)
+    } finally {
+      if (mountedRef.current && lyricsVersionRef.current === version) setLyricsLoading(false)
+    }
+  }, [])
 
-      vocalsBufferRef.current = vocals
-      instBufferRef.current = instrumental
-      setDuration(Math.max(vocals.duration, instrumental.duration))
+  const clearLyrics = useCallback(() => {
+    ++lyricsVersionRef.current
+    lyricsTrackRef.current = null
+    setLyrics(null)
+    setLyricsLoading(false)
+  }, [])
 
-      if (karaokeModeRef.current && vocalsGainRef.current) {
-        vocalsGainRef.current.gain.value = 0
+  useEffect(() => {
+    let cancelled = false
+    void tracks.favorites().then(ids => {
+      if (!cancelled) { favoritesRef.current = new Set(ids); setFavorites(favoritesRef.current) }
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    const key = queueStorageKey(options.accountKey)
+    if (!key) return
+    const snapshot = queueSnapshot(queue, currentIndex)
+    try {
+      if (snapshot.items.length) localStorage.setItem(key, JSON.stringify(snapshot))
+      else localStorage.removeItem(key)
+    } catch { /* Storage is optional. */ }
+  }, [queue, currentIndex, options.accountKey])
+
+  useEffect(() => {
+    try { localStorage.setItem(PLAYER_STORAGE_KEY, JSON.stringify(settings)) } catch { /* Storage is optional. */ }
+  }, [settings])
+
+  // Reconcile restored rows by identity so responses cannot erase edits made meanwhile.
+  useEffect(() => {
+    let cancelled = false
+    void Promise.all(storedQueue.queue.map(async item => {
+      try { return { item, info: await tracks.info(item.id) } }
+      catch (error) { return { item, missing: error instanceof ApiError && error.status === 404 } }
+    })).then(results => {
+      if (cancelled) return
+      const current = selectionRef.current
+      const selectedId = current.queue[current.currentIndex]?.id
+      const nextQueue = current.queue.flatMap(item => {
+        const result = results.find(result => result.item === item)
+        if (!result) return [item]
+        if (result.missing) return []
+        if (!result.info) return [item]
+        return [{ ...withMetadata(item, result.info.metadata), ready: result.info.complete, progress: result.info.complete ? 100 : result.info.status?.progress ?? 0, status: result.info.complete ? 'ready' : result.info.status?.status || 'processing' }]
+      })
+      replaceSelection(selectById(nextQueue, selectedId), true)
+      const restoredCurrent = nextQueue.find(item => item.id === selectedId)
+      if (restoredCurrent?.ready && playbackVersionRef.current === 0 && lyricsTrackRef.current !== restoredCurrent.id) void loadLyrics(restoredCurrent.id)
+    })
+    return () => { cancelled = true }
+  }, [storedQueue, replaceSelection, loadLyrics])
+
+  const playIndex = useCallback(async (index: number, remote = false) => {
+    const state = selectionRef.current
+    const item = state.queue[index]
+    if (!Number.isInteger(index) || !item?.ready || item.error) return
+    if (!remote) syncPlaybackIntentRef.current?.()
+    remotePlaybackRef.current = remote
+    pendingAutoplayRef.current = null
+    creditFailureRef.current.delete(item.id)
+    const version = ++playbackVersionRef.current
+    replaceSelection({ queue: state.queue, currentIndex: index }, true)
+    void loadLyrics(item.id)
+    try {
+      const started = await getAudio().load(item)
+      if (!mountedRef.current || playbackVersionRef.current !== version) return
+      if (started) {
+        void tracks.logPlay(item.id)
+        if (!remote) scheduleSync()
       }
-
-      startPlayback(0)
-      setIsPlaying(true)
     } catch {
-      showToast('Failed to load audio', 'error')
+      if (mountedRef.current && playbackVersionRef.current === version) showToast('Failed to load audio. Try playing the song again.', 'error')
     }
-
-    try {
-      const lyricsData = await tracks.lyrics(item.id)
-      if (playVersionRef.current === version) setLyrics(lyricsData)
-    } catch {
-      if (playVersionRef.current === version) setLyrics(null)
-    }
-    if (playVersionRef.current === version) setLyricsLoading(false)
-
-    tracks.logPlay(item.id)
-  }, [initAudio, loadBuffers, startPlayback])
-
-  // Keep ref in sync so onended / polling can call playIndex
+  }, [getAudio, loadLyrics, replaceSelection, scheduleSync])
   playIndexRef.current = playIndex
 
+  const pause = useCallback((remote = false) => {
+    remotePlaybackRef.current = remote
+    ++playbackVersionRef.current
+    pendingAutoplayRef.current = null
+    audioRef.current?.pause()
+    if (!remote) scheduleSync()
+  }, [scheduleSync])
+
+  const resume = useCallback(async (remote = false) => {
+    const state = selectionRef.current
+    if (state.currentIndex < 0) return
+    const item = state.queue[state.currentIndex]
+    if (!item?.ready || item.error) return
+    if (!remote) syncPlaybackIntentRef.current?.()
+    remotePlaybackRef.current = remote
+    creditFailureRef.current.delete(item.id)
+    const audio = getAudio()
+    if (!audio.hasBuffers) { await playIndex(state.currentIndex, remote); return }
+    try {
+      if (await audio.resume() && !remote) scheduleSync()
+    } catch { showToast('Playback could not start. Try again.', 'error') }
+  }, [getAudio, playIndex, scheduleSync])
+
   const togglePlay = useCallback(() => {
-    if (currentIndexRef.current < 0) return
-    if (isPlaying) {
-      // Pause: record position, stop sources
-      if (audioCtxRef.current) {
-        const elapsed = audioCtxRef.current.currentTime - startCtxTimeRef.current
-        pausedAtRef.current = startOffsetRef.current + elapsed
-      }
-      try { vocalsSourceRef.current?.stop() } catch { /* */ }
-      try { instSourceRef.current?.stop() } catch { /* */ }
-      vocalsSourceRef.current = null
-      instSourceRef.current = null
-      isPlayingRef.current = false
-      setIsPlaying(false)
-      if (!syncSourceRef.current) syncCommandRef.current?.('pause')
-    } else {
-      // If buffers aren't loaded yet (e.g. restored from localStorage), do a full playIndex
-      if (!vocalsBufferRef.current || !instBufferRef.current) {
-        playIndex(currentIndexRef.current)
-        return
-      }
-      if (audioCtxRef.current?.state === 'suspended') audioCtxRef.current.resume()
-      startPlayback(pausedAtRef.current)
-      setIsPlaying(true)
-      if (!syncSourceRef.current) syncCommandRef.current?.('play')
-    }
-  }, [isPlaying, startPlayback, playIndex])
+    const audio = audioRef.current
+    if (audio?.isPlaying) pause()
+    else if (audio?.isLoading) {
+      // The button says Play while an automatic remote load awaits activation.
+      // Resuming its context must retain that load instead of cancelling it.
+      syncPlaybackIntentRef.current?.()
+      remotePlaybackRef.current = false
+      void audio.activate().catch(() => showToast('Playback could not start. Try again.', 'error'))
+    } else void resume()
+  }, [pause, resume])
 
-  const seek = useCallback((time: number) => {
-    if (!audioCtxRef.current || !vocalsBufferRef.current) return
-    if (isPlayingRef.current) {
-      startPlayback(time)
-    } else {
-      pausedAtRef.current = time
-      setCurrentTime(time)
-    }
-    if (!syncSourceRef.current) syncCommandRef.current?.('seek', { time })
-  }, [startPlayback])
+  onTimeRef.current = time => {
+    if (!mountedRef.current) return
+    setPlayback(previous => ({ ...previous, currentTime: time }))
+    const state = selectionRef.current
+    const item = state.queue[state.currentIndex]
+    if (time < 15 || optionsRef.current.isAdmin || !item || chargedRef.current.has(item.id) || chargingRef.current.has(item.id) || creditFailureRef.current.has(item.id)) return
+    chargingRef.current.add(item.id)
+    void tracks.deductPlayCredit(item.id).then(data => {
+      if (!mountedRef.current) return
+      if (data.error) throw new ApiError(data.error, 403, data)
+      chargedRef.current.add(item.id)
+      if (data.credits !== undefined) optionsRef.current.onCreditsUpdate?.(data.credits)
+    }).catch(error => {
+      if (!mountedRef.current) return
+      creditFailureRef.current.add(item.id)
+      const active = selectionRef.current.queue[selectionRef.current.currentIndex]
+      if (active?.id === item.id) pause()
+      if (error instanceof ApiError && typeof error.data.credits === 'number') optionsRef.current.onCreditsUpdate?.(error.data.credits)
+      showToast(error instanceof ApiError && error.data.error === 'insufficient_credits' ? 'Not enough credits to continue playback.' : 'Could not verify your play credit. Playback paused; try again.', 'error')
+    }).finally(() => chargingRef.current.delete(item.id))
+  }
 
-  const prev = useCallback(() => {
-    const q = queueRef.current
-    if (q.length === 0) return
-    let idx = currentIndexRef.current - 1
-    if (idx < 0) idx = q.length - 1
-    for (let i = 0; i < q.length; i++) {
-      if (q[idx]?.ready) { playIndex(idx); return }
-      idx = idx - 1 < 0 ? q.length - 1 : idx - 1
-    }
-  }, [playIndex])
+  useEffect(() => {
+    const audio = audioRef.current
+    const next = adjacentReadyIndex(queue, currentIndex, 1)
+    audio?.preload(next >= 0 && next !== currentIndex ? queue[next] : undefined)
+    return () => audio?.preload()
+  }, [queue, currentIndex, playback.isPlaying])
 
-  const next = useCallback(() => {
-    const q = queueRef.current
-    if (q.length === 0) return
-    let idx = currentIndexRef.current + 1
-    if (idx >= q.length) idx = 0
-    for (let i = 0; i < q.length; i++) {
-      if (q[idx]?.ready) { playIndex(idx); return }
-      idx = (idx + 1) % q.length
+  const updateItem = useCallback((original: QueueItem, updated: QueueItem) => {
+    const current = selectionRef.current
+    if (!current.queue.includes(original)) return false
+    replaceSelection({ ...current, queue: current.queue.map(item => item === original ? updated : item) })
+    return true
+  }, [replaceSelection])
+
+  const maybeAutoplay = useCallback((id: string) => {
+    if (pendingAutoplayRef.current !== id) return
+    const index = selectionRef.current.queue.findIndex(item => item.id === id && item.ready && !item.error)
+    if (index >= 0) void playIndexRef.current(index)
+  }, [])
+
+  // One poll at a time; removed/retried rows cannot be resurrected by old responses.
+  useEffect(() => {
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout>
+    const poll = async () => {
+      const pending = selectionRef.current.queue.filter(item => !item.ready && !item.error && !trackRequestsRef.current.has(item.id))
+      await Promise.all(pending.map(async item => {
+        try {
+          const status = await tracks.status(item.id) as { status: string; progress: number; detail?: string }
+          if (cancelled) return
+          let updated = { ...item }
+          if (status.status === 'error') updated = { ...item, error: true, progress: 0, status: 'error' }
+          else if (status.status === 'complete' || status.progress >= 100) {
+            updated = { ...item, ready: true, progress: 100, status: 'ready' }
+            try { updated = withMetadata(updated, (await tracks.info(item.id)).metadata) } catch { /* Metadata can retry later. */ }
+          } else updated = { ...item, progress: status.progress || 0, status: status.detail || status.status || 'processing' }
+          if (!cancelled && updateItem(item, updated)) maybeAutoplay(item.id)
+        } catch { /* The next poll retries safe reads. */ }
+      }))
+      if (!cancelled) timer = setTimeout(poll, 5000)
     }
-  }, [playIndex])
+    timer = setTimeout(poll, 5000)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [updateItem, maybeAutoplay])
+
+  const requestTrack = useCallback(async (item: QueueItem) => {
+    if (trackRequestsRef.current.has(item.id)) return
+    trackRequestsRef.current.add(item.id)
+    try {
+      const data = await tracks.add(item.id)
+      if (!mountedRef.current) return
+      if (data.error) throw new ApiError(data.error, 400, data)
+      const updated = withMetadata({ ...item, ready: data.status === 'ready', progress: data.status === 'ready' ? 100 : data.progress || 0, status: data.status === 'ready' ? 'ready' : 'processing', error: false }, data.metadata)
+      if (data.credits !== undefined) optionsRef.current.onCreditsUpdate?.(data.credits)
+      if (updateItem(item, updated)) maybeAutoplay(item.id)
+    } catch (error) {
+      if (!mountedRef.current) return
+      if (!updateItem(item, { ...item, ready: false, error: true, status: 'error', progress: 0 })) return
+      if (pendingAutoplayRef.current === item.id) pendingAutoplayRef.current = null
+      showToast(error instanceof ApiError && error.data.error === 'insufficient_credits' ? `Not enough credits (need ${error.data.required ?? 5}, have ${error.data.credits ?? 0})` : error instanceof Error ? error.message : 'Failed to add song', 'error')
+    } finally { trackRequestsRef.current.delete(item.id) }
+  }, [updateItem, maybeAutoplay])
+
+  const addToQueue = useCallback(async (trackId: string, meta?: { title?: string; artist?: string; img_url?: string | null }, autoPlay?: boolean) => {
+    if (!isValidTrackId(trackId)) { showToast('Invalid track ID', 'error'); return }
+    // Mark before /add resolves, while the previous song can still be selected.
+    if (autoPlay) syncPlaybackIntentRef.current?.()
+    const id = normalizeTrackId(trackId)
+    const current = selectionRef.current
+    const existingIndex = current.queue.findIndex(item => item.id === id)
+    if (existingIndex >= 0) {
+      if (autoPlay) {
+        pendingAutoplayRef.current = id
+        maybeAutoplay(id)
+      } else showToast('Song already in queue', 'warning')
+      return
+    }
+    const item = queueItem({ id, title: meta?.title || 'Loading...', artist: meta?.artist || '', thumbnail: meta?.img_url || '' }, false)
+    if (autoPlay) pendingAutoplayRef.current = id
+    replaceSelection({ ...current, queue: [...current.queue, item] })
+    showToast(`Added "${item.title}" to queue`, 'success')
+    await requestTrack(item)
+  }, [replaceSelection, requestTrack, maybeAutoplay])
 
   const removeFromQueue = useCallback((index: number) => {
-    if (index === currentIndexRef.current) return
-    const newQueue = [...queueRef.current]
-    newQueue.splice(index, 1)
-    setQueue(newQueue)
-    if (index < currentIndexRef.current) {
-      setCurrentIndex(prev => prev - 1)
-    }
+    const current = selectionRef.current
+    if (!Number.isInteger(index) || !current.queue[index] || index === current.currentIndex) return
+    const id = current.queue[index].id
+    if (pendingAutoplayRef.current === id) pendingAutoplayRef.current = null
+    replaceSelection(selectById(current.queue.filter((_, i) => i !== index), current.queue[current.currentIndex]?.id))
+  }, [replaceSelection])
+
+  const seek = useCallback((time: number, remote = false) => {
+    if (!Number.isFinite(time) || !audioRef.current?.hasBuffers) return
+    remotePlaybackRef.current = remote
+    audioRef.current.seek(time)
+    if (!remote) syncCommandRef.current?.('seek', { time: audioRef.current.currentTime })
   }, [])
 
-  const savePlayerState = useCallback(() => {
-    if (savePlayerTimerRef.current) clearTimeout(savePlayerTimerRef.current)
-    savePlayerTimerRef.current = setTimeout(() => {
-      localStorage.setItem(PLAYER_STORAGE_KEY, JSON.stringify({
-        vocalsVolume: Math.round(savedVocalsVolRef.current * 100),
-        instrumentalVolume: Math.round((instrumentalGainRef.current?.gain.value ?? 0.5) * 100),
-        karaokeMode: karaokeModeRef.current,
-      }))
-    }, 500)
+  const step = useCallback((direction: 1 | -1, remote = false) => {
+    const state = selectionRef.current
+    const index = adjacentReadyIndex(state.queue, state.currentIndex, direction)
+    if (index >= 0) void playIndex(index, remote)
+  }, [playIndex])
+  const prev = useCallback(() => step(-1), [step])
+  const next = useCallback(() => step(1), [step])
+
+  const updateSettings = useCallback((next: Partial<typeof settings>) => {
+    settingsRef.current = { ...settingsRef.current, ...next }
+    setSettings(settingsRef.current)
+    audioRef.current?.setSettings(settingsRef.current)
   }, [])
-
-  const setVocalsVolume = useCallback((v: number) => {
-    savedVocalsVolRef.current = v / 100
-    if (vocalsGainRef.current) {
-      vocalsGainRef.current.gain.value = v / 100
-    }
-    savePlayerState()
-  }, [savePlayerState])
-
-  const setInstrumentalVolume = useCallback((v: number) => {
-    if (instrumentalGainRef.current) instrumentalGainRef.current.gain.value = v / 100
-    savePlayerState()
-  }, [savePlayerState])
-
+  const setVocalsVolume = useCallback((volume: number) => updateSettings({ vocalsVolume: normalizeVolume(volume) }), [updateSettings])
+  const setInstrumentalVolume = useCallback((volume: number) => updateSettings({ instrumentalVolume: normalizeVolume(volume) }), [updateSettings])
   const toggleKaraokeMode = useCallback(() => {
-    setKaraokeMode(prev => {
-      const newMode = !prev
-      if (vocalsGainRef.current) {
-        if (newMode) {
-          savedVocalsVolRef.current = vocalsGainRef.current.gain.value
-          vocalsGainRef.current.gain.value = 0
-        } else {
-          vocalsGainRef.current.gain.value = savedVocalsVolRef.current
-        }
-      }
-      showToast(newMode ? 'Karaoke mode: vocals muted' : 'Vocals restored', 'success')
-      return newMode
-    })
-    savePlayerState()
-  }, [savePlayerState])
+    const karaokeMode = !settingsRef.current.karaokeMode
+    updateSettings({ karaokeMode })
+    showToast(karaokeMode ? 'Karaoke mode: vocals muted' : 'Vocals restored', 'success')
+  }, [updateSettings])
 
   const toggleFavorite = useCallback(async (trackId: string) => {
-    const isFav = favorites.has(trackId)
+    if (!isValidTrackId(trackId)) return
+    const id = normalizeTrackId(trackId)
+    if (favoritePendingRef.current.has(id)) return
+    favoritePendingRef.current.add(id)
+    const wasFavorite = favoritesRef.current.has(id)
     try {
-      if (isFav) {
-        await tracks.removeFavorite(trackId)
-        setFavorites(prev => { const next = new Set(prev); next.delete(trackId); return next })
-      } else {
-        await tracks.addFavorite(trackId)
-        setFavorites(prev => new Set(prev).add(trackId))
-      }
-    } catch {
-      showToast('Failed to update favorite', 'error')
-    }
-  }, [favorites])
+      await (wasFavorite ? tracks.removeFavorite(id) : tracks.addFavorite(id))
+      if (!mountedRef.current) return
+      const next = new Set(favoritesRef.current)
+      if (wasFavorite) next.delete(id)
+      else next.add(id)
+      favoritesRef.current = next
+      setFavorites(next)
+    } catch { if (mountedRef.current) showToast('Failed to update favorite', 'error') }
+    finally { favoritePendingRef.current.delete(id) }
+  }, [])
 
   const editWord = useCallback(async (segIdx: number, wordIdx: number, newWord: string) => {
-    const track = queueRef.current[currentIndexRef.current]
+    const state = selectionRef.current
+    const track = state.queue[state.currentIndex]
     if (!track) return
+    const version = lyricsVersionRef.current
     try {
       await tracks.editWord(track.id, { segmentIndex: segIdx, wordIndex: wordIdx, word: newWord })
-      setLyrics(prev => {
-        if (!prev) return prev
-        const updated = JSON.parse(JSON.stringify(prev))
-        updated.segments[segIdx].words[wordIdx].word = newWord
-        return updated
+      if (!mountedRef.current || version !== lyricsVersionRef.current) return
+      setLyrics(previous => {
+        if (!previous?.segments[segIdx]?.words[wordIdx]) return previous
+        return { ...previous, segments: previous.segments.map((segment, i) => i === segIdx ? { ...segment, words: segment.words.map((word, j) => j === wordIdx ? { ...word, word: newWord } : word) } : segment) }
       })
       showToast('Word updated', 'success')
-    } catch {
-      showToast('Failed to update word', 'error')
-    }
+    } catch { if (mountedRef.current) showToast('Failed to update word', 'error') }
   }, [])
 
   const shuffle = useCallback(() => {
-    const q = [...queueRef.current]
-    if (q.length < 2) return
-    const current = currentIndexRef.current >= 0 ? q[currentIndexRef.current] : null
-    for (let i = q.length - 1; i > 0; i--) {
+    const current = selectionRef.current
+    const shuffled = [...current.queue]
+    if (shuffled.length < 2) return
+    for (let i = shuffled.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [q[i], q[j]] = [q[j], q[i]]
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
     }
-    setQueue(q)
-    if (current) setCurrentIndex(q.indexOf(current))
+    replaceSelection(selectById(shuffled, current.queue[current.currentIndex]?.id))
     showToast('Queue shuffled', 'success')
-  }, [])
+  }, [replaceSelection])
 
   const clearQueue = useCallback(() => {
-    const current = currentIndexRef.current >= 0 ? queueRef.current[currentIndexRef.current] : null
-    setQueue(current ? [current] : [])
-    setCurrentIndex(current ? 0 : -1)
-    if (!current) localStorage.removeItem(QUEUE_STORAGE_KEY)
+    const state = selectionRef.current
+    const current = state.queue[state.currentIndex]
+    pendingAutoplayRef.current = null
+    replaceSelection({ queue: current ? [current] : [], currentIndex: current ? 0 : -1 })
     showToast('Queue cleared', 'success')
-  }, [])
+  }, [replaceSelection])
 
   const reorderQueue = useCallback((fromIndex: number, toIndex: number) => {
-    const q = [...queueRef.current]
-    const [moved] = q.splice(fromIndex, 1)
-    q.splice(toIndex, 0, moved)
-    setQueue(q)
-
-    let newCurrent = currentIndexRef.current
-    if (currentIndexRef.current === fromIndex) {
-      newCurrent = toIndex
-    } else if (fromIndex < currentIndexRef.current && toIndex >= currentIndexRef.current) {
-      newCurrent--
-    } else if (fromIndex > currentIndexRef.current && toIndex <= currentIndexRef.current) {
-      newCurrent++
-    }
-    setCurrentIndex(newCurrent)
-  }, [])
+    const current = selectionRef.current
+    if (!Number.isInteger(fromIndex) || !Number.isInteger(toIndex) || !current.queue[fromIndex] || !current.queue[toIndex] || fromIndex === toIndex) return
+    const nextQueue = [...current.queue]
+    const [moved] = nextQueue.splice(fromIndex, 1)
+    nextQueue.splice(toIndex, 0, moved)
+    replaceSelection(selectById(nextQueue, current.queue[current.currentIndex]?.id))
+  }, [replaceSelection])
 
   const retryTrack = useCallback(async (index: number) => {
-    const item = queueRef.current[index]
-    if (!item) return
-    item.error = false
-    item.progress = 0
-    item.status = 'processing'
-    setQueue([...queueRef.current])
-    await tracks.add(item.id)
-  }, [])
+    const item = selectionRef.current.queue[index]
+    if (!item?.error || trackRequestsRef.current.has(item.id)) return
+    const updated = { ...item, ready: false, error: false, progress: 0, status: 'processing' }
+    if (updateItem(item, updated)) await requestTrack(updated)
+  }, [requestTrack, updateItem])
 
-  // Apply incoming sync state from another device
   const applySyncState = useCallback((state: SyncState) => {
-    syncSourceRef.current = true
-    // Capture the actually-playing track from the OLD queue before
-    // replacing it — newQueue[oldIndex] points at the wrong track when the
-    // remote device inserted or reordered items.
-    const currentItem = currentIndexRef.current >= 0 ? queueRef.current[currentIndexRef.current] : null
-    const newQueue: QueueItem[] = state.queue.map(item => ({
-      id: item.id,
-      title: item.title,
-      artist: item.artist,
-      thumbnail: item.thumbnail,
-      vocalsUrl: `/songs/${item.id}/vocals.mp3`,
-      musicUrl: `/songs/${item.id}/no_vocals.mp3`,
-      lyricsUrl: `/api/track/${item.id}/lyrics`,
-      ready: true,
-      progress: 100,
-      status: 'ready',
-      error: false,
-    }))
-    queueRef.current = newQueue
-    setQueue(newQueue)
-    setCurrentIndex(state.currentIndex)
-
-    // If current track changed, load and play it
-    const newItem = state.currentIndex >= 0 ? newQueue[state.currentIndex] : null
-    if (newItem && newItem.id !== currentItem?.id) {
-      playIndex(state.currentIndex)
-    } else if (state.isPlaying && !isPlayingRef.current && newItem) {
-      // Same track but should be playing
-      if (vocalsBufferRef.current && instBufferRef.current) {
-        if (audioCtxRef.current?.state === 'suspended') audioCtxRef.current.resume()
-        startPlayback(pausedAtRef.current)
-        setIsPlaying(true)
-      } else {
-        playIndex(state.currentIndex)
+    if (syncTimerRef.current) { clearTimeout(syncTimerRef.current); syncTimerRef.current = null }
+    const old = selectionRef.current
+    const previousId = old.queue[old.currentIndex]?.id
+    const restored = restoreQueue(state.queue, state.currentIndex)
+    const newItem = restored.queue[restored.currentIndex]
+    pendingAutoplayRef.current = null
+    remotePlaybackRef.current = true
+    replaceSelection(restored, true)
+    if (newItem?.id !== previousId) {
+      ++playbackVersionRef.current
+      audioRef.current?.stop()
+      clearLyrics()
+      if (newItem) {
+        if (state.isPlaying) void playIndex(restored.currentIndex, true)
+        else void loadLyrics(newItem.id)
       }
-    } else if (!state.isPlaying && isPlayingRef.current) {
-      // Should be paused
-      if (audioCtxRef.current) {
-        const elapsed = audioCtxRef.current.currentTime - startCtxTimeRef.current
-        pausedAtRef.current = startOffsetRef.current + elapsed
-      }
-      try { vocalsSourceRef.current?.stop() } catch { /* */ }
-      try { instSourceRef.current?.stop() } catch { /* */ }
-      vocalsSourceRef.current = null
-      instSourceRef.current = null
-      isPlayingRef.current = false
-      setIsPlaying(false)
+    } else if (state.isPlaying && newItem) {
+      if (!audioRef.current?.isPlaying && !audioRef.current?.isLoading) void resume(true)
+    } else {
+      pause(true)
+      // Restored storage and the saved server queue may select the same song.
+      // Its identity alone does not mean this mount has loaded its lyrics.
+      if (newItem && lyricsTrackRef.current !== newItem.id) void loadLyrics(newItem.id)
     }
-  }, [playIndex, startPlayback])
+  }, [replaceSelection, playIndex, resume, pause, clearLyrics, loadLyrics])
 
-  // Apply incoming sync command from another device
-  const applySyncCommand = useCallback((cmd: SyncCommand) => {
-    syncSourceRef.current = true
-    switch (cmd.command) {
-      case 'play':
-        if (!isPlayingRef.current && currentIndexRef.current >= 0) {
-          if (!vocalsBufferRef.current || !instBufferRef.current) {
-            playIndex(currentIndexRef.current)
-          } else {
-            if (audioCtxRef.current?.state === 'suspended') audioCtxRef.current.resume()
-            startPlayback(pausedAtRef.current)
-            setIsPlaying(true)
-          }
-        }
-        break
-      case 'pause':
-        if (isPlayingRef.current) {
-          if (audioCtxRef.current) {
-            const elapsed = audioCtxRef.current.currentTime - startCtxTimeRef.current
-            pausedAtRef.current = startOffsetRef.current + elapsed
-          }
-          try { vocalsSourceRef.current?.stop() } catch { /* */ }
-          try { instSourceRef.current?.stop() } catch { /* */ }
-          vocalsSourceRef.current = null
-          instSourceRef.current = null
-          isPlayingRef.current = false
-          setIsPlaying(false)
-        }
-        break
-      case 'next':
-        next()
-        break
-      case 'prev':
-        prev()
-        break
-      case 'seek': {
-        const time = (cmd.payload as { time?: number }).time
-        if (time !== undefined) {
-          if (isPlayingRef.current) {
-            startPlayback(time)
-          } else {
-            pausedAtRef.current = time
-            setCurrentTime(time)
-          }
-        }
-        break
-      }
+  const applySyncCommand = useCallback((command: SyncCommand) => {
+    if (syncTimerRef.current) { clearTimeout(syncTimerRef.current); syncTimerRef.current = null }
+    switch (command.command) {
+      case 'play': if (!audioRef.current?.isPlaying && !audioRef.current?.isLoading) void resume(true); break
+      case 'pause': pause(true); break
+      case 'next': step(1, true); break
+      case 'prev': step(-1, true); break
+      case 'seek': if (typeof command.payload?.time === 'number') seek(command.payload.time, true); break
       case 'playIndex': {
-        const index = (cmd.payload as { index?: number }).index
-        if (index !== undefined) playIndex(index)
+        const index = command.payload?.index
+        if (typeof index !== 'number' || !Number.isInteger(index)) break
+        const id = queueSnapshot(selectionRef.current.queue, selectionRef.current.currentIndex).items[index]?.id
+        const localIndex = selectionRef.current.queue.findIndex(item => item.id === id)
+        if (localIndex >= 0) void playIndex(localIndex, true)
         break
       }
     }
-    // play/pause/seek don't change queue/currentIndex, so the queue-save
-    // effect (the only other place the flag is cleared) never runs — without
-    // this reset the flag stays true and local actions stop broadcasting.
-    if (cmd.command === 'play' || cmd.command === 'pause' || cmd.command === 'seek') {
-      syncSourceRef.current = false
-    }
-  }, [playIndex, startPlayback, next, prev])
-
-  const currentTrack = currentIndex >= 0 ? queue[currentIndex] : null
-  const initialVocalsVolume = storedPlayerData.current ? storedPlayerData.current.vocalsVolume : 50
-  const initialInstrumentalVolume = storedPlayerData.current ? storedPlayerData.current.instrumentalVolume : 50
+  }, [resume, pause, step, seek, playIndex])
 
   return {
-    queue, currentIndex, currentTrack, isPlaying, lyrics, lyricsLoading,
-    currentTime, duration, karaokeMode, favorites, analyserRef,
-    initialVocalsVolume, initialInstrumentalVolume,
-    addToQueue, playIndex, togglePlay, seek, prev, next,
-    removeFromQueue, setVocalsVolume, setInstrumentalVolume,
-    toggleKaraokeMode, toggleFavorite, editWord,
+    queue, currentIndex, currentTrack: queue[currentIndex] ?? null, ...playback, lyrics, lyricsLoading,
+    karaokeMode: settings.karaokeMode, favorites, analyserRef,
+    initialVocalsVolume: settings.vocalsVolume, initialInstrumentalVolume: settings.instrumentalVolume,
+    addToQueue, playIndex, togglePlay, seek, prev, next, removeFromQueue,
+    setVocalsVolume, setInstrumentalVolume, toggleKaraokeMode, toggleFavorite, editWord,
     shuffle, clearQueue, reorderQueue, retryTrack,
-    // Sync integration
-    syncPushRef, syncCommandRef, applySyncState, applySyncCommand,
+    syncPushRef, syncCommandRef, syncPlaybackIntentRef, applySyncState, applySyncCommand,
   }
 }

@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faPlay } from '@fortawesome/free-solid-svg-icons'
+import { PageState } from '../common/PageState'
 import { tracks } from '../../services/api'
 import type { LibraryTrack } from '../../types'
 import styles from './SuggestedSongs.module.css'
@@ -25,22 +26,21 @@ function LmfLogo({ className }: { className?: string }) {
 export function SuggestedSongs({ onSelect }: Props) {
   const [songs, setSongs] = useState<LibraryTrack[]>([])
   const [loaded, setLoaded] = useState(false)
-  const fetchedRef = useRef(false)
-
-  useEffect(() => {
-    if (fetchedRef.current) return
-    fetchedRef.current = true
+  const [error, setError] = useState('')
+  const load = useCallback(() => {
+    setLoaded(false); setError('')
     tracks.library().then(data => {
-      const complete = data.filter((s: LibraryTrack) => s.complete)
-      // Fisher-Yates shuffle
+      const complete = data.filter(song => song.complete)
       for (let i = complete.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1))
-        ;[complete[i], complete[j]] = [complete[j], complete[i]]
+        const j = Math.floor(Math.random() * (i + 1));
+        [complete[i], complete[j]] = [complete[j], complete[i]]
       }
       setSongs(complete.slice(0, 12))
-      setLoaded(true)
-    }).catch(() => setLoaded(true))
+    }).catch(error => setError(error instanceof Error ? error.message : 'Unable to load songs'))
+      .finally(() => setLoaded(true))
   }, [])
+  useEffect(() => { load() }, [load])
+  if (error) return <PageState title="Unable to load songs" description={error} action={<button className="button" onClick={load}>Try again</button>} />
 
   if (!loaded) {
     return (
@@ -82,7 +82,8 @@ export function SuggestedSongs({ onSelect }: Props) {
       </div>
       <div className={styles.grid}>
         {songs.map((song, i) => (
-          <div
+          <button type="button"
+            aria-label={`Play ${song.title} by ${song.artist}`}
             key={song.id}
             className={styles.card}
             onClick={() => onSelect(song.id, { title: song.title, artist: song.artist, img_url: song.img_url })}
@@ -96,7 +97,7 @@ export function SuggestedSongs({ onSelect }: Props) {
             </div>
             <div className={styles.cardTitle}>{song.title}</div>
             <div className={styles.cardArtist}>{song.artist}</div>
-          </div>
+          </button>
         ))}
       </div>
       <div className={styles.branding}>

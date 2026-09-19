@@ -203,3 +203,5 @@
   .brandingLogo { height: 32px; }
   .emptyLogo { height: 64px; }
 }
+
+.card { color: var(--text); text-align: left; font: inherit; }

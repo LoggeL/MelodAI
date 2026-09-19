@@ -134,3 +134,14 @@
   .resultArtist { font-size: 0.82rem; }
   .libraryBadge { font-size: 0.7rem; padding: 3px 8px; }
 }
+
+.wrapper { min-width: 0; }
+.input { min-height: 44px; }
+.input::-webkit-search-cancel-button { display: none; }
+.clear { min-width: 32px; min-height: 32px; }
+.resultItem { min-height: 56px; }
+.resultActive { background: var(--primary-glow); box-shadow: inset 3px 0 var(--primary); }
+@media (max-width: 480px) {
+  .libraryBadge { font-size: 0.55rem; padding: 3px; }
+  .resultItem { padding-inline: 10px; }
+}

@@ -1,11 +1,13 @@
 import logging
 import os
+import sqlite3
+from src.utils.validation import json_object, text_field, integer_field
 import secrets
 from datetime import datetime, timezone
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 
 from src.utils.decorators import admin_required
-from src.models.db import query_db, execute_db, insert_db
+from src.models.db import query_db, execute_db, insert_db, transaction
 from src.utils.file_handling import is_valid_track_id
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/api/admin")
@@ -14,10 +16,15 @@ admin_bp = Blueprint("admin", __name__, url_prefix="/api/admin")
 @admin_bp.route("/users")
 @admin_required
 def list_users():
-    users = query_db("SELECT id, username, display_name, is_admin, is_approved, credits, created_at, last_online FROM users ORDER BY created_at DESC")
+    users = query_db("""
+        SELECT users.id, users.username, users.display_name, users.is_admin,
+               users.is_approved, users.credits, users.created_at, users.last_online,
+               COUNT(usage_logs.id) AS activity_count
+        FROM users LEFT JOIN usage_logs ON usage_logs.user_id = users.id
+        GROUP BY users.id ORDER BY users.created_at DESC
+    """)
     result = []
     for u in users:
-        activity = query_db("SELECT COUNT(*) as c FROM usage_logs WHERE user_id = ?", [u["id"]], one=True)
         result.append({
             "id": u["id"],
             "username": u["username"],
@@ -27,7 +34,7 @@ def list_users():
             "credits": u["credits"] or 0,
             "created_at": u["created_at"],
             "last_online": u["last_online"],
-            "activity_count": activity["c"] if activity else 0,
+            "activity_count": u["activity_count"],
         })
     return jsonify(result)
 
@@ -35,14 +42,18 @@ def list_users():
 @admin_bp.route("/users/<int:user_id>/approve", methods=["POST"])
 @admin_required
 def approve_user(user_id):
-    execute_db("UPDATE users SET is_approved = 1 WHERE id = ?", [user_id])
+    with transaction() as db:
+        if db.execute("UPDATE users SET is_approved = 1 WHERE id = ?", [user_id]).rowcount != 1:
+            return jsonify({"error": "User not found"}), 404
     return jsonify({"success": True})
 
 
 @admin_bp.route("/users/<int:user_id>/promote", methods=["POST"])
 @admin_required
 def promote_user(user_id):
-    execute_db("UPDATE users SET is_admin = 1 WHERE id = ?", [user_id])
+    with transaction() as db:
+        if db.execute("UPDATE users SET is_admin = 1 WHERE id = ?", [user_id]).rowcount != 1:
+            return jsonify({"error": "User not found"}), 404
     return jsonify({"success": True})
 
 
@@ -52,7 +63,9 @@ def demote_user(user_id):
     from flask import session as flask_session
     if flask_session.get("user_id") == user_id:
         return jsonify({"error": "Cannot demote your own account"}), 400
-    execute_db("UPDATE users SET is_admin = 0 WHERE id = ?", [user_id])
+    with transaction() as db:
+        if db.execute("UPDATE users SET is_admin = 0 WHERE id = ?", [user_id]).rowcount != 1:
+            return jsonify({"error": "User not found"}), 404
     return jsonify({"success": True})
 
 
@@ -62,30 +75,24 @@ def delete_user(user_id):
     from flask import session as flask_session
     if flask_session.get("user_id") == user_id:
         return jsonify({"error": "Cannot delete your own account"}), 400
-    execute_db("DELETE FROM usage_logs WHERE user_id = ?", [user_id])
-    execute_db("DELETE FROM auth_tokens WHERE user_id = ?", [user_id])
-    execute_db("DELETE FROM password_resets WHERE user_id = ?", [user_id])
-    # SQLite FKs aren't enforced here (PRAGMA foreign_keys is off), so the
-    # ON DELETE CASCADEs in the schema don't fire — clean up manually.
-    execute_db(
-        "DELETE FROM playlist_tracks WHERE playlist_id IN (SELECT id FROM playlists WHERE user_id = ?)",
-        [user_id],
-    )
-    execute_db("DELETE FROM playlists WHERE user_id = ?", [user_id])
-    execute_db("DELETE FROM favorites WHERE user_id = ?", [user_id])
-    execute_db("DELETE FROM sync_state WHERE user_id = ?", [user_id])
-    execute_db("DELETE FROM users WHERE id = ?", [user_id])
+    with transaction() as db:
+        if not db.execute("SELECT id FROM users WHERE id = ?", [user_id]).fetchone():
+            return jsonify({"error": "User not found"}), 404
+        for table in ("usage_logs", "auth_tokens", "password_resets", "playlists", "favorites", "sync_state"):
+            db.execute(f"DELETE FROM {table} WHERE user_id = ?", [user_id])
+        db.execute("UPDATE invite_keys SET created_by = NULL WHERE created_by = ?", [user_id])
+        db.execute("DELETE FROM users WHERE id = ?", [user_id])
     return jsonify({"success": True})
 
 
 @admin_bp.route("/users/<int:user_id>/credits", methods=["POST"])
 @admin_required
 def set_credits(user_id):
-    data = request.get_json()
-    credits = data.get("credits")
-    if credits is None:
-        return jsonify({"error": "credits required"}), 400
-    execute_db("UPDATE users SET credits = ? WHERE id = ?", [int(credits), user_id])
+    data = json_object()
+    credits = integer_field(data, "credits", maximum=1000000)
+    with transaction() as db:
+        if db.execute("UPDATE users SET credits = ? WHERE id = ?", [credits, user_id]).rowcount != 1:
+            return jsonify({"error": "User not found"}), 404
     return jsonify({"success": True})
 
 
@@ -190,7 +197,7 @@ def usage_logs():
 @admin_required
 def storage():
     import shutil
-    from src.utils.file_handling import get_all_track_ids, SONGS_PATH
+    from src.utils.file_handling import get_all_track_ids, get_songs_path
 
     # System disk usage
     disk = shutil.disk_usage("/")
@@ -198,9 +205,10 @@ def storage():
     # Songs directory size
     songs_total = 0
     song_count = 0
-    if os.path.exists(SONGS_PATH):
+    songs_path = get_songs_path()
+    if os.path.exists(songs_path):
         for track_id in get_all_track_ids():
-            track_dir = os.path.join(SONGS_PATH, track_id)
+            track_dir = os.path.join(songs_path, track_id)
             for f in os.listdir(track_dir):
                 fp = os.path.join(track_dir, f)
                 if os.path.isfile(fp):
@@ -208,7 +216,7 @@ def storage():
             song_count += 1
 
     # Database size
-    db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "database.db")
+    db_path = current_app.config["DATABASE"]
     db_size = os.path.getsize(db_path) if os.path.exists(db_path) else 0
 
     return jsonify({
@@ -418,7 +426,7 @@ def fetch_reference_lyrics_ai(track_id):
         with open(lyrics_raw_path) as f:
             raw_data = json.load(f)
         words = []
-        segments = raw_data.get("segments", raw_data if isinstance(raw_data, list) else [])
+        segments = raw_data if isinstance(raw_data, list) else raw_data.get("segments", [])
         for seg in (segments if isinstance(segments, list) else []):
             for w in seg.get("words", []):
                 t = w.get("word", "").strip()
@@ -450,27 +458,30 @@ def fetch_reference_lyrics_ai(track_id):
 @admin_required
 def delete_song(track_id):
     from src.utils.file_handling import delete_track
-    from src.utils.status_checks import remove_from_queue
+    from src.utils.status_checks import remove_from_queue, claim_processing
     if not is_valid_track_id(track_id):
         return jsonify({"error": "Invalid track ID"}), 400
 
-    delete_track(track_id)
-    # Even if files don't exist, clean up queue and DB — including rows that
-    # would otherwise survive as ghost entries in user-facing lists.
-    remove_from_queue(track_id)
-    execute_db("DELETE FROM processing_failures WHERE track_id = ?", [track_id])
-    execute_db("DELETE FROM favorites WHERE track_id = ?", [track_id])
-    execute_db("DELETE FROM playlist_tracks WHERE track_id = ?", [track_id])
-    execute_db("DELETE FROM lyric_translations WHERE track_id = ?", [track_id])
+    if claim_processing(track_id, "deleting", 0, "Deleting song...") is not None:
+        return jsonify({"error": "Wait for processing to finish before deleting this song"}), 409
+    try:
+        delete_track(track_id)
+        # Reserve the track through cleanup so a concurrent add cannot start
+        # a worker while its files and references are being deleted.
+        with transaction() as db:
+            for table in ("processing_failures", "favorites", "playlist_tracks", "lyric_translations"):
+                db.execute(f"DELETE FROM {table} WHERE track_id = ?", [track_id])
+    finally:
+        remove_from_queue(track_id)
     return jsonify({"success": True})
 
 
 @admin_bp.route("/songs/<track_id>/reprocess", methods=["POST"])
 @admin_required
 def reprocess_song(track_id):
-    from flask import current_app, request as flask_request
+    from flask import current_app
     from src.routes.track import process_track
-    from src.utils.status_checks import set_processing_status
+    from src.utils.status_checks import claim_processing, remove_from_queue
     from src.utils.constants import STATUS_METADATA, PROGRESS
     from src.utils.file_handling import get_song_dir, get_track_file_path
     import threading
@@ -480,32 +491,37 @@ def reprocess_song(track_id):
     app = current_app._get_current_object()
 
     # Determine which stage to start from
-    data = flask_request.get_json(silent=True) or {}
-    from_stage = data.get("from_stage", "all")
+    data = json_object(optional=True)
+    from_stage = text_field(data, "from_stage", "all")
 
     # Map stages to files that need to be deleted to force re-run
     stage_artifacts = {
+        "all": ["vocals", "no_vocals", "lyrics_raw", "lyrics"],
         "splitting": ["vocals", "no_vocals", "lyrics_raw", "lyrics"],
         "lyrics": ["lyrics_raw", "lyrics"],
         "processing": ["lyrics"],
     }
 
-    if from_stage in stage_artifacts:
+    if from_stage not in {"all", *stage_artifacts}:
+        return jsonify({"error": "Invalid processing stage"}), 400
+    if claim_processing(track_id, STATUS_METADATA, PROGRESS[STATUS_METADATA], "Reprocessing...") is not None:
+        return jsonify({"error": "Song is already processing"}), 409
+
+    try:
+        execute_db("DELETE FROM lyric_translations WHERE track_id = ?", [track_id])
         song_dir = get_song_dir(track_id)
         for file_key in stage_artifacts[from_stage]:
             path = get_track_file_path(track_id, file_key)
             if os.path.exists(path):
                 os.remove(path)
-        # Also remove reference_lyrics.json if re-running lyrics stage
-        if from_stage in ("splitting", "lyrics"):
-            ref_lyrics_path = os.path.join(song_dir, "reference_lyrics.json")
-            if os.path.exists(ref_lyrics_path):
-                os.remove(ref_lyrics_path)
-
-    set_processing_status(track_id, STATUS_METADATA, PROGRESS[STATUS_METADATA], "Reprocessing...")
-
-    t = threading.Thread(target=process_track, args=(track_id, app), daemon=True)
-    t.start()
+        if from_stage in ("all", "splitting", "lyrics"):
+            reference_path = os.path.join(song_dir, "reference_lyrics.json")
+            if os.path.exists(reference_path):
+                os.remove(reference_path)
+        threading.Thread(target=process_track, args=(track_id, app), daemon=True).start()
+    except (OSError, RuntimeError, sqlite3.Error):
+        remove_from_queue(track_id)
+        return jsonify({"error": "Processing is temporarily unavailable"}), 503
 
     return jsonify({"success": True, "message": f"Reprocessing started (from: {from_stage})"})
 
@@ -544,8 +560,8 @@ def get_deezer_config():
 @admin_bp.route("/config/deezer", methods=["POST"])
 @admin_required
 def set_deezer_config():
-    data = request.get_json() or {}
-    arl = str(data.get("arl", "")).strip()
+    data = json_object()
+    arl = text_field(data, "arl")
     if len(arl) < 64:
         return jsonify({"error": "Valid Deezer ARL required"}), 400
 
@@ -573,8 +589,8 @@ def set_deezer_config():
 @admin_bp.route("/config/deezer/test", methods=["POST"])
 @admin_required
 def test_deezer_config():
-    data = request.get_json() or {}
-    arl = str(data.get("arl", "")).strip() or None
+    data = json_object()
+    arl = text_field(data, "arl") or None
 
     from src.services.app_config import get_config_value
     from src.services.deezer import init_deezer_session, test_deezer_login

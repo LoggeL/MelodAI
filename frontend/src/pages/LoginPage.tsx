@@ -1,6 +1,8 @@
 import { useState, useEffect, type FormEvent } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { auth } from '../services/api'
+import { useAuth } from '../hooks/useAuth'
+import { errorMessage } from './account/errors'
 import styles from './LoginPage.module.css'
 
 type AuthTab = 'login' | 'register' | 'forgot' | 'reset'
@@ -11,7 +13,9 @@ export function LoginPage() {
   const [message, setMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null)
   const navigate = useNavigate()
   const location = useLocation()
-  const returnTo = (location.state as { from?: string } | null)?.from || '/'
+  const { checked, authenticated, check } = useAuth()
+  const requestedPath = (location.state as { from?: string } | null)?.from || new URLSearchParams(location.search).get('returnTo') || '/'
+  const returnTo = typeof requestedPath === 'string' && requestedPath.startsWith('/') && !requestedPath.startsWith('//') && !requestedPath.startsWith('/login') ? requestedPath : '/'
 
   // Check for reset token in hash
   const [resetToken, setResetToken] = useState('')
@@ -21,35 +25,38 @@ export function LoginPage() {
       setResetToken(hash.slice(7))
       setTab('reset')
     }
-    // Check if already logged in
-    auth.check().then(data => {
-      if (data.authenticated) navigate(returnTo)
-    })
-  }, [navigate, returnTo])
+  }, [])
+
+  useEffect(() => {
+    if (checked && authenticated) navigate(returnTo, { replace: true })
+  }, [checked, authenticated, navigate, returnTo])
 
   const switchTab = (nextTab: AuthTab) => {
+    if (loading) return
     setTab(nextTab)
     setMessage(null)
   }
 
   const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    if (loading) return
     setLoading(true)
     setMessage(null)
     const form = new FormData(e.currentTarget)
     try {
       const data = await auth.login(
-        form.get('username') as string,
+        String(form.get('username') || '').trim(),
         form.get('password') as string,
         form.get('remember') === 'on'
       )
       if (data.success) {
-        navigate(returnTo)
+        await check()
+        navigate(returnTo, { replace: true })
       } else {
         setMessage({ type: 'error', text: data.error || 'Login failed' })
       }
-    } catch {
-      setMessage({ type: 'error', text: 'Network error — please try again' })
+    } catch (error) {
+      setMessage({ type: 'error', text: errorMessage(error, 'Could not connect. Please try again.') })
     } finally {
       setLoading(false)
     }
@@ -57,6 +64,7 @@ export function LoginPage() {
 
   const handleRegister = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    if (loading) return
     setLoading(true)
     setMessage(null)
     const form = new FormData(e.currentTarget)
@@ -69,20 +77,21 @@ export function LoginPage() {
     }
     try {
       const data = await auth.register(
-        form.get('username') as string,
-        form.get('email') as string,
+        String(form.get('username') || '').trim(),
+        String(form.get('email') || '').trim(),
         password,
         form.get('invite_key') as string || ''
       )
       if (data.success && !data.pending) {
-        navigate(returnTo)
+        await check()
+        navigate(returnTo, { replace: true })
       } else if (data.pending) {
         setMessage({ type: 'success', text: data.message || 'Waiting for approval' })
       } else {
         setMessage({ type: 'error', text: data.error || 'Registration failed' })
       }
-    } catch {
-      setMessage({ type: 'error', text: 'Network error — please try again' })
+    } catch (error) {
+      setMessage({ type: 'error', text: errorMessage(error, 'Could not connect. Please try again.') })
     } finally {
       setLoading(false)
     }
@@ -90,14 +99,19 @@ export function LoginPage() {
 
   const handleForgot = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    if (loading) return
     setLoading(true)
     setMessage(null)
     const form = new FormData(e.currentTarget)
     try {
-      const data = await auth.forgotPassword(form.get('username') as string)
-      setMessage({ type: 'success', text: data.message || 'Check your email' })
-    } catch {
-      setMessage({ type: 'error', text: 'Network error — please try again' })
+      const data = await auth.forgotPassword(String(form.get('username') || '').trim())
+      if (data.success === false) {
+        setMessage({ type: 'error', text: data.message || 'Could not request a reset link. Please try again.' })
+      } else {
+        setMessage({ type: 'success', text: data.message || 'If this account exists, a reset link will be sent to its email address.' })
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: errorMessage(error, 'Could not connect. Please try again.') })
     } finally {
       setLoading(false)
     }
@@ -105,20 +119,22 @@ export function LoginPage() {
 
   const handleReset = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    if (loading) return
     setLoading(true)
     setMessage(null)
     const form = new FormData(e.currentTarget)
     try {
       const data = await auth.resetPassword(resetToken, form.get('password') as string)
       if (data.success) {
-        setMessage({ type: 'success', text: 'Password reset! You can now login.' })
-        window.location.hash = ''
-        setTimeout(() => setTab('login'), 2000)
+        setResetToken('')
+        window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search)
+        setTab('login')
+        setMessage({ type: 'success', text: 'Password reset. Sign in with your new password.' })
       } else {
         setMessage({ type: 'error', text: data.error || 'Reset failed' })
       }
-    } catch {
-      setMessage({ type: 'error', text: 'Network error — please try again' })
+    } catch (error) {
+      setMessage({ type: 'error', text: errorMessage(error, 'Could not connect. Please try again.') })
     } finally {
       setLoading(false)
     }
@@ -154,7 +170,7 @@ export function LoginPage() {
 
           <div className={styles.heroCopy}>
             <p className={styles.eyebrow}>Private karaoke lab</p>
-            <h1>Turn any song into a stage-ready karaoke session.</h1>
+            <h1>Your next karaoke session starts here.</h1>
             <p>MelodAI separates vocals, extracts synced lyrics, and gives you a focused player built for singing along.</p>
           </div>
 
@@ -191,20 +207,20 @@ export function LoginPage() {
             </div>
 
             {tab !== 'reset' && tab !== 'forgot' && (
-              <div className={styles.tabs} role="tablist" aria-label="Authentication mode">
-                <button type="button" className={`${styles.tab} ${tab === 'login' ? styles.tabActive : ''}`} onClick={() => switchTab('login')}>Login</button>
-                <button type="button" className={`${styles.tab} ${tab === 'register' ? styles.tabActive : ''}`} onClick={() => switchTab('register')}>Register</button>
+              <div className={styles.tabs} role="group" aria-label="Authentication mode">
+                <button type="button" className={`${styles.tab} ${tab === 'login' ? styles.tabActive : ''}`} aria-pressed={tab === 'login'} disabled={loading} onClick={() => switchTab('login')}>Sign in</button>
+                <button type="button" className={`${styles.tab} ${tab === 'register' ? styles.tabActive : ''}`} aria-pressed={tab === 'register'} disabled={loading} onClick={() => switchTab('register')}>Create account</button>
               </div>
             )}
 
             {message && (
-              <div className={`${styles.message} ${message.type === 'error' ? styles.messageError : styles.messageSuccess}`}>
+              <div role={message.type === 'error' ? 'alert' : 'status'} className={`${styles.message} ${message.type === 'error' ? styles.messageError : styles.messageSuccess}`}>
                 {message.text}
               </div>
             )}
 
             {tab === 'login' && (
-              <form onSubmit={handleLogin} className={styles.form}>
+              <form onSubmit={handleLogin} className={styles.form} aria-busy={loading}><fieldset className={styles.fields} disabled={loading}>
                 <div className={styles.group}>
                   <label htmlFor="login-username">Username / Email</label>
                   <input id="login-username" name="username" className={styles.input} placeholder="you@example.com" required autoComplete="username" />
@@ -221,11 +237,11 @@ export function LoginPage() {
                   <button type="button" className={styles.textButton} onClick={() => switchTab('forgot')}>Forgot password?</button>
                 </div>
                 <button type="submit" className={styles.submit} disabled={loading}>{loading ? 'Signing in…' : 'Sign in'}</button>
-              </form>
+              </fieldset></form>
             )}
 
             {tab === 'register' && (
-              <form onSubmit={handleRegister} className={styles.form}>
+              <form onSubmit={handleRegister} className={styles.form} aria-busy={loading}><fieldset className={styles.fields} disabled={loading}>
                 <div className={styles.twoCol}>
                   <div className={styles.group}>
                     <label htmlFor="register-username">Username</label>
@@ -239,11 +255,11 @@ export function LoginPage() {
                 <div className={styles.twoCol}>
                   <div className={styles.group}>
                     <label htmlFor="register-password">Password</label>
-                    <input id="register-password" name="password" type="password" className={styles.input} placeholder="Create password" required autoComplete="new-password" />
+                    <input id="register-password" name="password" type="password" className={styles.input} placeholder="At least 8 characters" required minLength={8} autoComplete="new-password" />
                   </div>
                   <div className={styles.group}>
-                    <label htmlFor="register-confirm">Confirm</label>
-                    <input id="register-confirm" name="confirm_password" type="password" className={styles.input} placeholder="Repeat password" required autoComplete="new-password" />
+                    <label htmlFor="register-confirm">Confirm password</label>
+                    <input id="register-confirm" name="confirm_password" type="password" className={styles.input} placeholder="Repeat password" required minLength={8} autoComplete="new-password" />
                   </div>
                 </div>
                 <div className={styles.group}>
@@ -251,28 +267,28 @@ export function LoginPage() {
                   <input id="invite-key" name="invite_key" className={styles.input} placeholder="Instant access key" />
                 </div>
                 <button type="submit" className={styles.submit} disabled={loading}>{loading ? 'Creating account…' : 'Create account'}</button>
-              </form>
+              </fieldset></form>
             )}
 
             {tab === 'forgot' && (
-              <form onSubmit={handleForgot} className={styles.form}>
+              <form onSubmit={handleForgot} className={styles.form} aria-busy={loading}><fieldset className={styles.fields} disabled={loading}>
                 <div className={styles.group}>
                   <label htmlFor="forgot-username">Username / Email</label>
                   <input id="forgot-username" name="username" className={styles.input} placeholder="you@example.com" required autoComplete="username" />
                 </div>
                 <button type="submit" className={styles.submit} disabled={loading}>{loading ? 'Sending…' : 'Send reset link'}</button>
-                <button type="button" className={styles.secondaryAction} onClick={() => switchTab('login')}>Back to login</button>
-              </form>
+                <button type="button" className={styles.secondaryAction} onClick={() => switchTab('login')}>Back to sign in</button>
+              </fieldset></form>
             )}
 
             {tab === 'reset' && (
-              <form onSubmit={handleReset} className={styles.form}>
+              <form onSubmit={handleReset} className={styles.form} aria-busy={loading}><fieldset className={styles.fields} disabled={loading}>
                 <div className={styles.group}>
                   <label htmlFor="reset-password">New Password</label>
-                  <input id="reset-password" name="password" type="password" className={styles.input} placeholder="Enter new password" required autoComplete="new-password" />
+                  <input id="reset-password" name="password" type="password" className={styles.input} placeholder="At least 8 characters" required minLength={8} autoComplete="new-password" />
                 </div>
                 <button type="submit" className={styles.submit} disabled={loading}>{loading ? 'Resetting…' : 'Reset password'}</button>
-              </form>
+              </fieldset></form>
             )}
           </section>
 

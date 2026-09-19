@@ -8,6 +8,8 @@ on:
 jobs:
   frontend:
     runs-on: ubuntu-latest
+    env:
+      PUPPETEER_SKIP_DOWNLOAD: 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -25,16 +27,27 @@ jobs:
       - name: Lint frontend
         working-directory: frontend
         run: npm run lint
+      - uses: astral-sh/setup-uv@v4
+      - name: Install backend test dependencies
+        run: uv sync --frozen
+      - name: Test offline API integration
+        working-directory: frontend
+        run: npm run test:integration
+      - name: Test frontend contracts
+        working-directory: frontend
+        run: npm test
       - name: Build frontend
         working-directory: frontend
         run: npm run build
 
-  backend-import:
+  backend:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
       - name: Install Python dependencies
-        run: uv sync
+        run: uv sync --frozen
+      - name: Test backend offline
+        run: uv run python -m unittest discover -s tests -v
       - name: Compile backend
         run: uv run python -m compileall main.py src

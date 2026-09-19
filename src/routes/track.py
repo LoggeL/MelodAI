@@ -1,23 +1,22 @@
 import os
+from src.utils.validation import json_object, text_field, integer_field, boolean_field
 import json
+import sqlite3
 import random
 import threading
-import time
 import traceback
 import requests
 from datetime import datetime
-from flask import Blueprint, request, jsonify, session
+from flask import Blueprint, request, jsonify, session, current_app
 
 from src.utils.decorators import login_required
 from src.utils.constants import STATUS_METADATA, STATUS_DOWNLOADING, STATUS_SPLITTING, STATUS_LYRICS, STATUS_PROCESSING, STATUS_COMPLETE, STATUS_ERROR, PROGRESS
 
-# Simple TTL cache for Deezer search results
-_search_cache: dict[str, tuple[float, list]] = {}
-_SEARCH_CACHE_TTL = 300  # 5 minutes
+from src.utils.cache import TTLCache
 from src.utils.file_handling import (
     get_song_dir, load_metadata, save_metadata, load_lyrics,
     save_lyrics, save_lyrics_raw, track_file_exists, get_track_file_path,
-    is_track_complete, get_all_track_ids, SONGS_PATH, compress_audio_file,
+    is_track_complete, get_all_track_ids, compress_audio_file,
     is_valid_track_id,
 )
 from src.utils.status_checks import set_processing_status, get_processing_status, remove_from_queue, claim_processing
@@ -39,13 +38,14 @@ def search():
     if not q:
         return jsonify([])
 
-    # Check cache
-    cache_key = q.lower()
-    if cache_key in _search_cache:
-        cached_time, cached_results = _search_cache[cache_key]
-        if time.time() - cached_time < _SEARCH_CACHE_TTL:
-            _log_usage("search", q)
-            return jsonify(cached_results)
+    if len(q) > 500:
+        return jsonify({"error": "Search query must be at most 500 characters"}), 400
+    cache = current_app.extensions.setdefault("search_cache", TTLCache())
+    cache_key = q.casefold()
+    cached_results = cache.get(cache_key)
+    if cached_results is not None:
+        _log_usage("search", q)
+        return jsonify(cached_results)
 
     from src.services.deezer import deezer_search, TYPE_TRACK
     try:
@@ -61,11 +61,7 @@ def search():
         if "img_url" in r:
             r["img_url"] = _upgrade_cover_url(r["img_url"])
 
-    # Store in cache, evicting expired entries so it doesn't grow unbounded
-    now = time.time()
-    for key in [k for k, (t, _) in _search_cache.items() if now - t >= _SEARCH_CACHE_TTL]:
-        _search_cache.pop(key, None)
-    _search_cache[cache_key] = (now, results)
+    cache.set(cache_key, results)
 
     _log_usage("search", q)
     return jsonify(results)
@@ -74,7 +70,7 @@ def search():
 @track_bp.route("/add", methods=["POST"])
 @login_required
 def add():
-    data = request.get_json(silent=True) or {}
+    data = json_object(optional=True)
     track_id = str(data.get("id") or request.args.get("id", "")).strip()
     if not track_id:
         return jsonify({"error": "Track ID required"}), 400
@@ -109,11 +105,16 @@ def add():
     user = _get_current_user()
     if user and not user["is_admin"]:
         db = get_db()
-        cur = db.execute(
-            "UPDATE users SET credits = credits - 5 WHERE id = ? AND credits >= 5",
-            [user["id"]],
-        )
-        db.commit()
+        try:
+            cur = db.execute(
+                "UPDATE users SET credits = credits - 5 WHERE id = ? AND credits >= 5",
+                [user["id"]],
+            )
+            db.commit()
+        except sqlite3.Error:
+            db.rollback()
+            remove_from_queue(track_id)
+            raise
         if cur.rowcount != 1:
             remove_from_queue(track_id)  # release the claim
             refreshed = _qdb("SELECT credits FROM users WHERE id = ?", [user["id"]], one=True)
@@ -127,12 +128,18 @@ def add():
     log_event("info", "pipeline", f"Processing started for track {track_id}", user_id=user["id"] if user else None, username=username, track_id=str(track_id))
 
     # Start processing in background (status already set by claim_processing)
-    from flask import current_app
     app = current_app._get_current_object()
 
     charged_user_id = user["id"] if user and not user["is_admin"] else None
     t = threading.Thread(target=process_track, args=(track_id, app, charged_user_id), daemon=True)
-    t.start()
+    try:
+        t.start()
+    except RuntimeError:
+        remove_from_queue(track_id)
+        if charged_user_id is not None:
+            from src.models.db import execute_db
+            execute_db("UPDATE users SET credits = credits + 5 WHERE id = ?", [charged_user_id])
+        return jsonify({"error": "Processing is temporarily unavailable"}), 503
 
     # Return updated credits for non-admin users
     updated_credits = None
@@ -237,9 +244,9 @@ def create_lyric_translation(track_id):
         SUPPORTED_TRANSLATION_LANGUAGES,
     )
 
-    data = request.get_json(silent=True) or {}
+    data = json_object(optional=True)
     try:
-        target_language = normalize_language(data.get("target_language") or data.get("lang") or "de")
+        target_language = normalize_language(text_field(data, "target_language") or text_field(data, "lang") or "de")
     except ValueError:
         return jsonify({"error": "Unsupported language"}), 400
 
@@ -249,7 +256,8 @@ def create_lyric_translation(track_id):
         [str(track_id), target_language],
         one=True,
     )
-    if existing and not data.get("force"):
+    force = boolean_field(data, "force")
+    if existing and not force:
         return jsonify({
             "available": True,
             "track_id": existing["track_id"],
@@ -347,10 +355,10 @@ def update_lyrics(track_id):
     if not is_valid_track_id(track_id):
         return jsonify({"error": "Invalid track ID"}), 400
 
-    data = request.get_json()
-    seg_idx = data.get("segmentIndex")
-    word_idx = data.get("wordIndex")
-    new_word = data.get("word", "").strip()
+    data = json_object()
+    seg_idx = integer_field(data, "segmentIndex")
+    word_idx = integer_field(data, "wordIndex")
+    new_word = text_field(data, "word")
 
     if seg_idx is None or word_idx is None or not new_word:
         return jsonify({"error": "segmentIndex, wordIndex, and word required"}), 400
@@ -389,9 +397,7 @@ def add_favorite(track_id):
         return jsonify({"error": "Invalid track ID"}), 400
 
     user_id = session.get("user_id")
-    existing = query_db("SELECT id FROM favorites WHERE user_id = ? AND track_id = ?", [user_id, str(track_id)], one=True)
-    if not existing:
-        insert_db("INSERT INTO favorites (user_id, track_id) VALUES (?, ?)", [user_id, str(track_id)])
+    insert_db("INSERT OR IGNORE INTO favorites (user_id, track_id) VALUES (?, ?)", [user_id, str(track_id)])
     return jsonify({"success": True})
 
 
@@ -476,14 +482,17 @@ def random_track():
 def list_playlists():
     from src.models.db import query_db
     user_id = session.get("user_id")
-    playlists = query_db("SELECT * FROM playlists WHERE user_id = ? ORDER BY created_at DESC", [user_id])
+    playlists = query_db("""
+        SELECT playlists.*, COUNT(playlist_tracks.id) AS track_count
+        FROM playlists LEFT JOIN playlist_tracks ON playlist_tracks.playlist_id = playlists.id
+        WHERE playlists.user_id = ? GROUP BY playlists.id ORDER BY playlists.created_at DESC
+    """, [user_id])
     result = []
     for p in playlists:
-        track_count = query_db("SELECT COUNT(*) as c FROM playlist_tracks WHERE playlist_id = ?", [p["id"]], one=True)
         result.append({
             "id": p["id"],
             "name": p["name"],
-            "track_count": track_count["c"] if track_count else 0,
+            "track_count": p["track_count"],
             "created_at": p["created_at"],
         })
     return jsonify(result)
@@ -493,8 +502,8 @@ def list_playlists():
 @login_required
 def create_playlist():
     from src.models.db import insert_db
-    data = request.get_json()
-    name = data.get("name", "").strip()
+    data = json_object()
+    name = text_field(data, "name")
     if not name:
         return jsonify({"error": "Name required"}), 400
     user_id = session.get("user_id")
@@ -510,7 +519,6 @@ def delete_playlist(playlist_id):
     pl = query_db("SELECT id FROM playlists WHERE id = ? AND user_id = ?", [playlist_id, user_id], one=True)
     if not pl:
         return jsonify({"error": "Not found"}), 404
-    execute_db("DELETE FROM playlist_tracks WHERE playlist_id = ?", [playlist_id])
     execute_db("DELETE FROM playlists WHERE id = ?", [playlist_id])
     return jsonify({"success": True})
 
@@ -552,18 +560,22 @@ def add_to_playlist(playlist_id):
     pl = query_db("SELECT id FROM playlists WHERE id = ? AND user_id = ?", [playlist_id, user_id], one=True)
     if not pl:
         return jsonify({"error": "Not found"}), 404
-    data = request.get_json()
-    track_id = data.get("track_id", "").strip()
+    data = json_object()
+    track_id = text_field(data, "track_id")
     if not track_id:
         return jsonify({"error": "track_id required"}), 400
     if not is_valid_track_id(track_id):
         return jsonify({"error": "Invalid track ID"}), 400
-    # Get next position
-    last = query_db("SELECT MAX(position) as p FROM playlist_tracks WHERE playlist_id = ?", [playlist_id], one=True)
-    pos = (last["p"] or 0) + 1
+    from src.models.db import transaction
     try:
-        insert_db("INSERT INTO playlist_tracks (playlist_id, track_id, position) VALUES (?, ?, ?)", [playlist_id, track_id, pos])
-    except Exception:
+        with transaction() as db:
+            db.execute(
+                """INSERT INTO playlist_tracks (playlist_id, track_id, position)
+                   SELECT ?, ?, COALESCE(MAX(position), 0) + 1
+                   FROM playlist_tracks WHERE playlist_id = ?""",
+                [playlist_id, track_id, playlist_id],
+            )
+    except sqlite3.IntegrityError:
         return jsonify({"error": "Track already in playlist"}), 409
     return jsonify({"success": True})
 
@@ -608,14 +620,14 @@ def process_track(track_id, app, charged_user_id=None):
         ("complete", _stage_complete),
     ]
 
-    with app.app_context():
+    with app.extensions["processing_slots"], app.app_context():
         for stage_name, stage_fn in stages:
             try:
                 stage_fn(track_id)
             except Exception as e:
                 tb = traceback.format_exc()
                 print(f"ERROR processing track {track_id} at stage '{stage_name}': {e}")
-                set_processing_status(track_id, STATUS_ERROR, 0, str(e))
+                set_processing_status(track_id, STATUS_ERROR, 0, f"The {stage_name} stage failed. Please try again.")
                 _record_failure(track_id, stage_name, str(e))
                 log_pipeline_error(track_id, stage_name, str(e), tb)
                 if charged_user_id is not None:
@@ -698,7 +710,7 @@ def _stage_split(track_id):
 
     set_processing_status(track_id, STATUS_SPLITTING, 45, "Saving vocal tracks...")
 
-    print(f"Demucs output type: {type(output)}, repr: {repr(output)}")
+    print(f"Demucs output type: {type(output).__name__}")
 
     # Demucs with stem="vocals" returns a FileOutput or dict with vocals/other URLs
     vocals_url = None
@@ -722,7 +734,7 @@ def _stage_split(track_id):
         # Single output - it's the vocals
         vocals_url = str(output)
 
-    print(f"Demucs parsed: vocals_url={vocals_url!r}, no_vocals_url={no_vocals_url!r}")
+    print(f"Demucs stems: vocals={bool(vocals_url)}, instrumental={bool(no_vocals_url)}")
 
     if vocals_url:
         _download_file(vocals_url, get_track_file_path(track_id, "vocals"))
@@ -808,7 +820,7 @@ def _stage_lyrics(track_id):
 def _extract_whisperx_text(raw_data):
     """Concatenate all words from WhisperX output into a plain-text string."""
     words = []
-    segments = raw_data.get("segments", raw_data if isinstance(raw_data, list) else [])
+    segments = raw_data if isinstance(raw_data, list) else raw_data.get("segments", [])
     for seg in (segments if isinstance(segments, list) else []):
         for w in seg.get("words", []):
             text = w.get("word", "").strip()
@@ -831,6 +843,9 @@ def _stage_process_lyrics(track_id):
     raw_path = get_track_file_path(track_id, "lyrics_raw")
     with open(raw_path, "r") as f:
         raw_data = json.load(f)
+
+    if isinstance(raw_data, list):
+        raw_data = {"segments": raw_data}
 
     # Correct WhisperX transcription with reference lyrics
     ref_line_breaks = []
@@ -870,7 +885,7 @@ def _stage_process_lyrics(track_id):
                     print(f"WARNING: Reference lyrics fetch failed for {track_id}: {e}")
 
     # Check if WhisperX returned empty segments
-    raw_segments = raw_data.get("segments", raw_data if isinstance(raw_data, list) else [])
+    raw_segments = raw_data if isinstance(raw_data, list) else raw_data.get("segments", [])
     has_words = any(
         w.get("word", "").strip()
         for seg in (raw_segments if isinstance(raw_segments, list) else [])
@@ -893,7 +908,7 @@ def _stage_process_lyrics(track_id):
 
     if ref_lines:
         try:
-            segments = raw_data.get("segments", raw_data if isinstance(raw_data, list) else [])
+            segments = raw_data if isinstance(raw_data, list) else raw_data.get("segments", [])
             corrected, ref_line_breaks, ref_stats = correct_lyrics_with_reference(segments, ref_lines)
             raw_data["segments"] = corrected
             # Save corrected raw data back
@@ -935,11 +950,13 @@ def _download_file(url, output_path):
     """
     tmp_path = f"{output_path}.tmp"
     try:
-        resp = requests.get(str(url), stream=True, timeout=300)
-        resp.raise_for_status()
-        with open(tmp_path, "wb") as f:
-            for chunk in resp.iter_content(chunk_size=8192):
-                f.write(chunk)
+        with requests.get(str(url), stream=True, timeout=300) as resp:
+            resp.raise_for_status()
+            with open(tmp_path, "wb") as f:
+                for chunk in resp.iter_content(chunk_size=8192):
+                    f.write(chunk)
+        if os.path.getsize(tmp_path) == 0:
+            raise RuntimeError("The audio provider returned an empty file")
         os.replace(tmp_path, output_path)
     finally:
         if os.path.exists(tmp_path):

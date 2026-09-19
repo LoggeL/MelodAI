@@ -3,12 +3,11 @@ from html import escape
 from flask import Blueprint, send_from_directory, request
 
 from ..utils.decorators import login_required
-from ..utils.file_handling import is_valid_track_id, load_metadata
+from ..utils.file_handling import is_valid_track_id, load_metadata, get_songs_path, _validate_song_path
 
 static_bp = Blueprint("static", __name__)
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
-SONGS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "songs")
 
 _DEFAULT_OG = (
     '<meta property="og:title" content="MelodAI">'
@@ -108,4 +107,9 @@ def favicon():
 @static_bp.route("/songs/<path:filename>")
 @login_required
 def song_file(filename):
-    return send_from_directory(SONGS_DIR, filename)
+    try:
+        _validate_song_path(os.path.join(get_songs_path(), filename))
+    except ValueError:
+        from flask import abort
+        abort(404)
+    return send_from_directory(get_songs_path(), filename)

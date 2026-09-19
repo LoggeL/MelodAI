@@ -305,6 +305,7 @@ source = { editable = "." }
 dependencies = [
     { name = "flask" },
     { name = "flask-cors" },
+    { name = "httpx" },
     { name = "openai" },
     { name = "pycryptodome" },
     { name = "python-dotenv" },
@@ -318,6 +319,7 @@ dependencies = [
 requires-dist = [
     { name = "flask", specifier = ">=3.0" },
     { name = "flask-cors", specifier = ">=4.0" },
+    { name = "httpx", specifier = ">=0.27,<1" },
     { name = "openai", specifier = ">=1.12" },
     { name = "pycryptodome", specifier = ">=3.20" },
     { name = "python-dotenv", specifier = ">=1.0" },

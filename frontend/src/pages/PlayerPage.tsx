@@ -1,11 +1,14 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { usePlayer } from '../hooks/usePlayer'
 import { useSync } from '../hooks/useSync'
 import type { SyncState, SyncCommand } from '../hooks/useSync'
 import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
 import { useAlbumColors } from '../hooks/useAlbumColors'
+import { PageState } from '../components/common/PageState'
+import { showToast } from '../hooks/useToast'
+import { queueSnapshot } from '../utils/queue'
 import { tracks as tracksApi } from '../services/api'
 import type { LyricTranslation, TranslationLanguage } from '../types'
 import { isValidTrackId, normalizeTrackId } from '../utils/trackId'
@@ -21,28 +24,53 @@ import { SuggestedSongs } from '../components/Player/SuggestedSongs'
 import styles from './PlayerPage.module.css'
 
 export function PlayerPage() {
+  const { checked, authenticated, username, logout } = useAuth()
+  const { trackId } = useParams()
+  const navigate = useNavigate()
+  const [signingOut, setSigningOut] = useState(false)
+  const handleLogout = useCallback(async () => {
+    setSigningOut(true)
+    try {
+      await logout()
+      navigate('/login', { replace: true, state: { from: '/' } })
+    } catch (error) {
+      setSigningOut(false)
+      showToast(error instanceof Error ? error.message : 'Unable to sign out', 'error')
+    }
+  }, [logout, navigate])
+  if (!checked) return <PageState loading title="Loading your session" />
+  if (!authenticated) return <Navigate to="/login" replace state={{ from: !signingOut && trackId ? `/song/${trackId}` : '/' }} />
+  return <PlayerContent key={username} onLogout={handleLogout} />
+}
+
+function PlayerContent({ onLogout }: { onLogout: () => Promise<void> }) {
   const navigate = useNavigate()
   const { trackId: urlTrackId } = useParams()
-  const { checked, authenticated, username, displayName, isAdmin, credits, logout, setCredits } = useAuth()
+  const { authenticated, username, displayName, isAdmin, credits, setCredits } = useAuth()
   const { toggle: toggleTheme } = useTheme()
   const playerOptions = useMemo(() => ({
+    accountKey: username,
     isAdmin,
     onCreditsUpdate: setCredits,
-  }), [isAdmin, setCredits])
+  }), [username, isAdmin, setCredits])
   const player = usePlayer(playerOptions)
   useAlbumColors(player.currentTrack?.thumbnail)
   const searchRef = useRef<SearchBarHandle>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const closeSidebar = useCallback(() => setSidebarOpen(false), [])
   const [translationLanguage, setTranslationLanguage] = useState<TranslationLanguage>(() => {
-    const stored = localStorage.getItem('melodai_translation_language')
+    let stored: string | null = null
+    try { stored = localStorage.getItem('melodai_translation_language') } catch { /* Storage is optional. */ }
     if (stored === 'de' || stored === 'en') return stored
     const browserLanguage = navigator.language.toLowerCase().split('-')[0]
     return browserLanguage === 'en' ? 'en' : 'de'
   })
   const [translationMode, setTranslationMode] = useState<'original' | 'translation' | 'both'>(() => {
-    const stored = localStorage.getItem('melodai_translation_mode')
+    let stored: string | null = null
+    try { stored = localStorage.getItem('melodai_translation_mode') } catch { /* Storage is optional. */ }
     return stored === 'translation' || stored === 'both' ? stored : 'original'
   })
+  const translationRequest = useRef(0)
   const [translation, setTranslation] = useState<LyricTranslation | null>(null)
   const [translationLoading, setTranslationLoading] = useState(false)
 
@@ -60,91 +88,86 @@ export function PlayerPage() {
   // Wire sync functions into player refs
   useEffect(() => {
     player.syncPushRef.current = () => {
-      const readyItems = player.queue.filter(q => q.ready)
+      const snapshot = queueSnapshot(player.queue, player.currentIndex)
       sync.pushQueue(
-        readyItems.map(q => ({ id: q.id, title: q.title, artist: q.artist, thumbnail: q.thumbnail })),
-        player.currentIndex,
+        snapshot.items,
+        snapshot.currentIndex,
         player.isPlaying,
       )
     }
     player.syncCommandRef.current = (cmd: string, payload?: Record<string, unknown>) => {
       sync.sendCommand(cmd, payload ?? {})
     }
+    player.syncPlaybackIntentRef.current = sync.markPlaybackIntent
   }, [player, sync])
 
-  useEffect(() => {
-    if (checked && !authenticated) {
-      const returnTo = urlTrackId ? `/song/${urlTrackId}` : undefined
-      navigate('/login', { state: returnTo ? { from: returnTo } : undefined })
-    }
-  }, [checked, authenticated, navigate, urlTrackId])
+  const playerRef = useRef(player)
+  playerRef.current = player
+  const routeRequestRef = useRef<{ id: string; previousId?: string } | null>(null)
+  const handledRouteRef = useRef<string | null>(null)
+  const selectionRouteRef = useRef<string | null>(null)
+  const urlTrackIdRef = useRef(urlTrackId)
+  urlTrackIdRef.current = urlTrackId
 
-  // Load song from URL on mount (route param or legacy hash)
+  // An explicit song route selects the song, including after in-app navigation.
   useEffect(() => {
-    async function loadFromUrl(id: string) {
-      if (!isValidTrackId(id)) {
-        navigate('/', { replace: true })
-        return
-      }
-      const trackId = normalizeTrackId(id)
-      try {
-        const data = await tracksApi.info(trackId)
-        player.addToQueue(trackId, {
-          title: data.metadata?.title,
-          artist: data.metadata?.artist,
-          img_url: data.metadata?.img_url,
-        })
-      } catch {
-        player.addToQueue(trackId)
-      }
-    }
-
     const hash = window.location.hash
     if (hash.startsWith('#song=')) {
-      const id = hash.slice(6)
-      loadFromUrl(id)
-      if (isValidTrackId(id)) {
-        navigate(`/song/${normalizeTrackId(id)}`, { replace: true })
-      }
-    } else if (urlTrackId) {
-      loadFromUrl(urlTrackId)
+      const legacyId = hash.slice(6)
+      navigate(isValidTrackId(legacyId) ? `/song/${normalizeTrackId(legacyId)}` : '/', { replace: true })
+      return
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    if (!urlTrackId) { handledRouteRef.current = null; return }
+    if (!isValidTrackId(urlTrackId)) {
+      routeRequestRef.current = null
+      navigate('/', { replace: true })
+      return
+    }
+    const id = normalizeTrackId(urlTrackId)
+    const current = playerRef.current
+    if (handledRouteRef.current === id || (selectionRouteRef.current === id && current.currentTrack?.id === id)) return
+    handledRouteRef.current = id
+    selectionRouteRef.current = null
+    routeRequestRef.current = { id, previousId: current.currentTrack?.id }
+    void current.addToQueue(id, undefined, true)
+    return () => { handledRouteRef.current = null }
+  }, [urlTrackId, navigate])
 
-  // Sync URL when current track changes
+  // Keep deep links stable while their audio is being prepared.
   useEffect(() => {
     const id = player.currentTrack?.id
-    if (id) {
-      navigate(`/song/${id}`, { replace: true })
-    } else if (window.location.pathname.startsWith('/song/')) {
-      navigate('/', { replace: true })
-    }
+    const requested = routeRequestRef.current
+    if (requested && id !== requested.id && id === requested.previousId) return
+    routeRequestRef.current = null
+    if (id && urlTrackIdRef.current !== id) { selectionRouteRef.current = id; navigate(`/song/${id}`, { replace: true }) }
+    else if (!id && !requested && window.location.pathname.startsWith('/song/')) navigate('/', { replace: true })
   }, [player.currentTrack?.id, navigate])
 
   useEffect(() => {
-    localStorage.setItem('melodai_translation_language', translationLanguage)
+    try { localStorage.setItem('melodai_translation_language', translationLanguage) } catch { /* Storage is optional. */ }
   }, [translationLanguage])
 
   useEffect(() => {
-    localStorage.setItem('melodai_translation_mode', translationMode)
+    try { localStorage.setItem('melodai_translation_mode', translationMode) } catch { /* Storage is optional. */ }
   }, [translationMode])
 
   useEffect(() => {
     const trackId = player.currentTrack?.id
+    const requestVersion = ++translationRequest.current
     setTranslation(null)
-    if (!trackId) return
+    if (!trackId) { setTranslationLoading(false); return }
 
     let cancelled = false
     setTranslationLoading(true)
     tracksApi.lyricTranslation(trackId, translationLanguage)
       .then(data => {
-        if (!cancelled) setTranslation(data.available ? data : null)
+        if (!cancelled && requestVersion === translationRequest.current) setTranslation(data.available ? data : null)
       })
       .catch(() => {
-        if (!cancelled) setTranslation(null)
+        if (!cancelled && requestVersion === translationRequest.current) setTranslation(null)
       })
       .finally(() => {
-        if (!cancelled) setTranslationLoading(false)
+        if (!cancelled && requestVersion === translationRequest.current) setTranslationLoading(false)
       })
 
     return () => { cancelled = true }
@@ -153,13 +176,17 @@ export function PlayerPage() {
   const handleTranslate = useCallback(async () => {
     const trackId = player.currentTrack?.id
     if (!trackId) return
+    const requestVersion = ++translationRequest.current
     setTranslationLoading(true)
     try {
       const data = await tracksApi.createLyricTranslation(trackId, translationLanguage)
+      if (requestVersion !== translationRequest.current) return
       setTranslation(data.available ? data : null)
       if (data.available && translationMode === 'original') setTranslationMode('both')
+    } catch (error) {
+      if (requestVersion === translationRequest.current) showToast(error instanceof Error ? error.message : 'Unable to translate lyrics', 'error')
     } finally {
-      setTranslationLoading(false)
+      if (requestVersion === translationRequest.current) setTranslationLoading(false)
     }
   }, [player.currentTrack?.id, translationLanguage, translationMode])
 
@@ -171,12 +198,8 @@ export function PlayerPage() {
     player.addToQueue(id, meta)
   }, [player])
 
-  const handlePlayNow = useCallback(async (id: string, meta: { title: string; artist: string; img_url: string | null }) => {
-    await player.addToQueue(id, meta)
-    const idx = player.queue.findIndex(q => q.id === id)
-    if (idx >= 0 && player.queue[idx].ready) {
-      player.playIndex(idx)
-    }
+  const handlePlayNow = useCallback((id: string, meta: { title: string; artist: string; img_url: string | null }) => {
+    void player.addToQueue(id, meta, true)
   }, [player])
 
   const handleRandom = useCallback(async () => {
@@ -190,17 +213,10 @@ export function PlayerPage() {
           img_url: data.metadata?.img_url,
         })
       }
-    } catch {
-      // No songs available
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'No songs available', 'warning')
     }
   }, [player])
-
-  const handleLogout = useCallback(async () => {
-    await logout()
-    navigate('/login')
-  }, [logout, navigate])
-
-  if (!checked || !authenticated) return null
 
   const currentTrackId = player.currentTrack?.id
   const isFavorite = currentTrackId ? player.favorites.has(currentTrackId) : false
@@ -211,7 +227,7 @@ export function PlayerPage() {
     <div className={styles.layout}>
       <Sidebar
         mobileOpen={sidebarOpen}
-        onMobileClose={() => setSidebarOpen(false)}
+        onMobileClose={closeSidebar}
         queueContent={
           <QueuePanel
             queue={player.queue}
@@ -236,7 +252,7 @@ export function PlayerPage() {
         }
       />
 
-      <main className={styles.main}>
+      <main className={styles.main} inert={sidebarOpen}>
         <div
           className={`${styles.albumBackdrop} ${thumbnail ? styles.albumBackdropVisible : ''}`}
           style={thumbnail ? { '--album-art': `url(${thumbnail})` } as React.CSSProperties : undefined}
@@ -248,7 +264,7 @@ export function PlayerPage() {
           credits={credits}
           searchBar={<SearchBar ref={searchRef} onSelect={handleSearchSelect} />}
           onThemeToggle={toggleTheme}
-          onLogout={handleLogout}
+          onLogout={onLogout}
           onMenuOpen={() => setSidebarOpen(true)}
         />
 
@@ -264,6 +280,7 @@ export function PlayerPage() {
                 lyrics={player.lyrics}
                 loading={player.lyricsLoading}
                 currentTime={player.currentTime}
+                isPlaying={player.isPlaying}
                 duration={player.duration}
                 onSeek={player.seek}
                 onEditWord={player.editWord}
@@ -283,6 +300,7 @@ export function PlayerPage() {
         </div>
 
         <Controls
+          disabled={!player.currentTrack?.ready}
           isPlaying={player.isPlaying}
           currentTime={player.currentTime}
           duration={player.duration}

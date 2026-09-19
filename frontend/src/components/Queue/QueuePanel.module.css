@@ -104,12 +104,12 @@
 
 /* ─── Active (now playing) ─── */
 .active {
-  background: rgba(217, 4, 41, 0.06);
-  border-color: rgba(217, 4, 41, 0.12);
+  background: var(--primary-glow);
+  border-color: var(--primary-glow-strong);
 }
 
 .active:hover {
-  background: rgba(217, 4, 41, 0.1);
+  background: var(--primary-glow-strong);
 }
 
 /* ─── Processing & error states ─── */
@@ -160,7 +160,7 @@
 }
 
 .active .thumbWrap {
-  box-shadow: 0 0 0 2px rgba(217, 4, 41, 0.3), 0 2px 8px rgba(217, 4, 41, 0.15);
+  box-shadow: 0 0 0 2px var(--primary-glow-strong), 0 2px 8px var(--primary-glow);
 }
 
 /* ─── Equalizer bars (on active item thumbnail) ─── */
@@ -256,7 +256,7 @@
 }
 
 .active .title {
-  color: var(--primary);
+  color: var(--text);
 }
 
 .artist {

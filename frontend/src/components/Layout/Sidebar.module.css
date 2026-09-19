@@ -13,22 +13,22 @@
 }
 
 .collapsed {
-  width: 0;
-  min-width: 0;
-  border-right: none;
+  width: 48px;
+  min-width: 48px;
 }
+
+.sidebar [hidden] { display: none; }
 
 /* ─── Expand / collapse toggle ─── */
 .toggle {
   position: absolute;
-  top: 12px;
-  right: -28px;
-  width: 24px;
+  top: 8px;
+  right: 8px;
+  width: 32px;
   height: 32px;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
-  border-left: none;
-  border-radius: 0 6px 6px 0;
+  border-radius: 6px;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -209,11 +209,13 @@
     max-width: 360px;
     z-index: 200;
     transform: translateX(-100%);
+    visibility: hidden;
     transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .open {
     transform: translateX(0);
+    visibility: visible;
   }
 
   .toggle {
@@ -239,3 +241,6 @@
   from { opacity: 0; }
   to { opacity: 1; }
 }
+
+.mobileNav { display: none; }
+@media (max-width: 768px) { .mobileNav { display: flex; gap: 8px; padding: 0 16px 12px; } .mobileNav a { display: block; padding: 10px; border-radius: var(--radius-sm); color: var(--text-secondary); font-size: .85rem; } .mobileNav a[aria-current=page] { color: var(--primary); background: var(--primary-glow); } }
