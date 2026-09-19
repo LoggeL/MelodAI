@@ -1,6 +1,6 @@
-import { useRef, useEffect, useMemo, useState, useCallback } from 'react'
+import { useRef, useEffect, useMemo, useState, useCallback, useId } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faMicrophone, faGuitar, faTriangleExclamation, faLanguage } from '@fortawesome/free-solid-svg-icons'
+import { faMicrophone, faGuitar, faTriangleExclamation, faLanguage, faChevronDown } from '@fortawesome/free-solid-svg-icons'
 import type { LyricsData, LyricTranslation, TranslationLanguage } from '../../types'
 import styles from './LyricsView.module.css'
 
@@ -8,6 +8,7 @@ interface Props {
   lyrics: LyricsData | null
   loading: boolean
   currentTime: number
+  isPlaying?: boolean
   duration: number
   onSeek: (time: number) => void
   onEditWord?: (segIdx: number, wordIdx: number, newWord: string) => void
@@ -35,6 +36,7 @@ export function LyricsView({
   lyrics,
   loading,
   currentTime,
+  isPlaying = false,
   duration,
   onSeek,
   onEditWord,
@@ -48,10 +50,18 @@ export function LyricsView({
   onTranslate,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const lastScrollRef = useRef(0)
+  const manualScrollUntilRef = useRef(0)
+  const lastActiveLineRef = useRef<HTMLElement | null>(null)
+  const previousTimeRef = useRef(currentTime)
+  const currentTimeRef = useRef(currentTime)
+  currentTimeRef.current = currentTime
   const [editing, setEditing] = useState<{ seg: number; word: number } | null>(null)
   const [editValue, setEditValue] = useState('')
+  const editingRef = useRef(editing)
+  editingRef.current = editing
   const [warningDismissed, setWarningDismissed] = useState(false)
+  const [translationMenuOpen, setTranslationMenuOpen] = useState(false)
+  const translationMenuId = useId()
   const editRef = useRef<HTMLInputElement>(null)
   const translationByIndex = useMemo(() => {
     const map = new Map<number, string>()
@@ -73,47 +83,66 @@ export function LyricsView({
     return map
   }, [lyrics])
 
-  // Improved auto-scroll: smooth with read-ahead offset
-  useEffect(() => {
-    if (!containerRef.current || !lyrics || editing) return
-    const activeLine = containerRef.current.querySelector(`.${styles.lineActive}`) as HTMLElement | null
-    if (!activeLine) return
-
+  const centerActiveLine = useCallback((force = false) => {
     const container = containerRef.current
+    if (!container || editingRef.current || (!force && Date.now() < manualScrollUntilRef.current)) return
+    const lines = container.querySelectorAll<HTMLElement>(`.${styles.line}`)
+    const activeLine = container.querySelector<HTMLElement>(`.${styles.lineActive}, .${styles.lineNext}`)
+      ?? (currentTimeRef.current > 0 ? lines[lines.length - 1] : lines[0])
+    if (!activeLine || (!force && activeLine === lastActiveLineRef.current)) return
+    lastActiveLineRef.current = activeLine
     const containerRect = container.getBoundingClientRect()
     const lineRect = activeLine.getBoundingClientRect()
-    // Position active line slightly above center (40% from top) for read-ahead feel
-    const targetTop = containerRect.height * 0.4
-    const offset = lineRect.top - containerRect.top - targetTop + lineRect.height / 2
+    const controlsHeight = container.querySelector<HTMLElement>(`.${styles.translationControls}`)?.offsetHeight ?? 0
+    const readingPosition = controlsHeight + (containerRect.height - controlsHeight) * 0.4
+    const offset = lineRect.top - containerRect.top + lineRect.height / 2 - readingPosition
+    if (Math.abs(offset) < 4) return
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    container.scrollTo({ top: container.scrollTop + offset, behavior: force || reducedMotion ? 'instant' : 'smooth' })
+  }, [])
 
-    if (Math.abs(offset) > 30 && Date.now() - lastScrollRef.current > 80) {
-      container.scrollTop += offset * 0.12
-      lastScrollRef.current = Date.now()
-    }
-  }, [currentTime, lyrics, editing])
-
-  // Auto-scroll for untimed lyrics
+  // Follow new lines while playing and jump directly after a paused seek.
   useEffect(() => {
-    if (!containerRef.current || !lyrics?.untimed || !lyrics?.plain_lyrics?.length || !duration) return
-    const progress = duration > 0 ? currentTime / duration : 0
-    const activeIdx = Math.min(
-      Math.floor(progress * lyrics.plain_lyrics.length),
-      lyrics.plain_lyrics.length - 1
-    )
-    const lines = containerRef.current.querySelectorAll(`.${styles.untimedLine}`)
-    const activeLine = lines[activeIdx] as HTMLElement | undefined
-    if (!activeLine) return
+    const jumped = Math.abs(currentTime - previousTimeRef.current) > 1.5
+    previousTimeRef.current = currentTime
+    centerActiveLine(!isPlaying || jumped)
+  }, [currentTime, isPlaying, centerActiveLine])
 
+  // A viewport or panel resize must also position lyrics when playback is paused.
+  useEffect(() => {
     const container = containerRef.current
-    const containerRect = container.getBoundingClientRect()
-    const lineRect = activeLine.getBoundingClientRect()
-    const targetTop = containerRect.height * 0.4
-    const offset = lineRect.top - containerRect.top - targetTop + lineRect.height / 2
-
-    if (Math.abs(offset) > 30) {
-      container.scrollTop += offset * 0.12
+    if (!container) return
+    let frame: number | null = null
+    const recenter = () => {
+      if (frame !== null) cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => centerActiveLine(true))
     }
-  }, [currentTime, lyrics, duration])
+    const deferFollowing = () => { manualScrollUntilRef.current = Date.now() + 6000 }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'].includes(event.key)) deferFollowing()
+    }
+    const observer = new ResizeObserver(recenter)
+    observer.observe(container)
+    window.addEventListener('resize', recenter)
+    container.addEventListener('wheel', deferFollowing, { passive: true })
+    container.addEventListener('touchstart', deferFollowing, { passive: true })
+    container.addEventListener('pointerdown', deferFollowing, { passive: true })
+    container.addEventListener('keydown', onKeyDown)
+    recenter()
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', recenter)
+      container.removeEventListener('wheel', deferFollowing)
+      container.removeEventListener('touchstart', deferFollowing)
+      container.removeEventListener('pointerdown', deferFollowing)
+      container.removeEventListener('keydown', onKeyDown)
+      if (frame !== null) cancelAnimationFrame(frame)
+    }
+  }, [lyrics, loading, hasTrack, centerActiveLine])
+
+  useEffect(() => {
+    centerActiveLine(true)
+  }, [translationMode, translationMenuOpen, translation, warningDismissed, editing, duration, centerActiveLine])
 
   const handleDoubleClick = useCallback((segIdx: number, wordIdx: number, word: string) => {
     if (!onEditWord) return
@@ -161,40 +190,56 @@ export function LyricsView({
   const isUntimed = lyrics?.untimed && plainLyrics.length > 0
 
   const translationToolbar = (
-    <div className={styles.translationToolbar}>
-      <div className={styles.translationGroup}>
-        <FontAwesomeIcon icon={faLanguage} />
-        <select
-          className={styles.translationSelect}
-          value={translationLanguage}
-          onChange={e => onTranslationLanguageChange(e.target.value as TranslationLanguage)}
-          aria-label="Translation language"
+    <div className={styles.translationControls}>
+      <div className={styles.translationDisclosure}>
+        <button
+          type="button"
+          className={styles.translationToggle}
+          aria-label="Translation settings"
+          aria-expanded={translationMenuOpen}
+          aria-controls={translationMenuId}
+          onClick={() => setTranslationMenuOpen(open => !open)}
         >
-          {VISIBLE_TRANSLATION_LANGUAGES.map(lang => (
-            <option key={lang.code} value={lang.code}>{lang.label}</option>
-          ))}
-        </select>
-        {!translation?.available && (
-          <button className={styles.translateButton} onClick={onTranslate} disabled={translationLoading}>
-            {translationLoading ? 'Translating…' : 'Translate'}
-          </button>
-        )}
+          <FontAwesomeIcon icon={faLanguage} />
+          Translation
+          <FontAwesomeIcon icon={faChevronDown} className={styles.translationChevron} />
+        </button>
       </div>
-      <div className={styles.translationModeGroup}>
-        <button
-          className={translationMode === 'original' ? styles.translationModeActive : ''}
-          onClick={() => onTranslationModeChange('original')}
-        >Original</button>
-        <button
-          className={translationMode === 'translation' ? styles.translationModeActive : ''}
-          onClick={() => onTranslationModeChange('translation')}
-          disabled={!translation?.available && !translationLoading}
-        >Translation</button>
-        <button
-          className={translationMode === 'both' ? styles.translationModeActive : ''}
-          onClick={() => onTranslationModeChange('both')}
-          disabled={!translation?.available && !translationLoading}
-        >Both</button>
+      <div id={translationMenuId} className={styles.translationToolbar} hidden={!translationMenuOpen}>
+        <div className={styles.translationGroup}>
+          <FontAwesomeIcon icon={faLanguage} />
+          <select
+            className={styles.translationSelect}
+            value={translationLanguage}
+            onChange={e => onTranslationLanguageChange(e.target.value as TranslationLanguage)}
+            aria-label="Translation language"
+          >
+            {VISIBLE_TRANSLATION_LANGUAGES.map(lang => (
+              <option key={lang.code} value={lang.code}>{lang.label}</option>
+            ))}
+          </select>
+          {!translation?.available && (
+            <button className={styles.translateButton} onClick={onTranslate} disabled={translationLoading}>
+              {translationLoading ? 'Translating…' : 'Translate'}
+            </button>
+          )}
+        </div>
+        <div className={styles.translationModeGroup}>
+          <button
+            className={translationMode === 'original' ? styles.translationModeActive : ''}
+            onClick={() => onTranslationModeChange('original')}
+          >Original</button>
+          <button
+            className={translationMode === 'translation' ? styles.translationModeActive : ''}
+            onClick={() => onTranslationModeChange('translation')}
+            disabled={!translation?.available && !translationLoading}
+          >Translation</button>
+          <button
+            className={translationMode === 'both' ? styles.translationModeActive : ''}
+            onClick={() => onTranslationModeChange('both')}
+            disabled={!translation?.available && !translationLoading}
+          >Both</button>
+        </div>
       </div>
     </div>
   )
@@ -231,7 +276,7 @@ export function LyricsView({
           const lineClass = [
             styles.line,
             styles.untimedLine,
-            dist === 0 ? styles.lineNear : '',
+            dist === 0 ? styles.lineActive : '',
             dist <= 2 && dist > 0 ? styles.lineNear : '',
           ].filter(Boolean).join(' ')
 

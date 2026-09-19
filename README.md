@@ -50,7 +50,7 @@ Search for a song, and MelodAI separates vocals from instrumentals, extracts wor
 ### Prerequisites
 
 - Python 3.12+ with [uv](https://docs.astral.sh/uv/)
-- Node.js 18+
+- Node.js 22+
 - API keys for: Replicate, OpenRouter, Deezer ARL cookie
 - Optional: Resend (for password reset emails)
 
@@ -60,7 +60,7 @@ Search for a song, and MelodAI separates vocals from instrumentals, extracts wor
 # Clone and install dependencies
 git clone <repo-url> && cd MelodAI
 uv sync
-cd frontend && npm install
+cd frontend && npm ci
 ```
 
 ### Configuration
@@ -90,13 +90,22 @@ cd frontend && npm run build
 
 ### Testing
 
-All tests require Flask running on port 5000.
+The default regression suites run locally without provider credentials or a running server:
 
 ```bash
-cd frontend && npm run test:e2e         # Integration tests (62 tests)
-cd frontend && npm run test:browser     # Puppeteer browser tests (32 tests)
-cd frontend && npm run test:pipeline    # Live API pipeline test (~2.5 min)
+uv run python -m unittest discover -s tests -v
+cd frontend
+npm test                    # Frontend request, queue and playback regressions
+npm run test:integration     # Starts a disposable offline Flask server
+npm run lint
+npm run build
 ```
+
+The integration runner creates temporary users, a database, and synthetic songs. It blocks external network calls and removes its fixtures when finished. CI runs these checks.
+
+Browser tests require an isolated server and explicit `E2E_BASE_URL`, `E2E_ADMIN_USER`, and `E2E_ADMIN_PASS` values. Live API integration remains available through `npm run test:integration:live`. The paid pipeline suite also requires `E2E_ALLOW_PAID_PIPELINE=1`, `E2E_DEDICATED_PIPELINE_SERVER=1`, and fresh storage on an explicit loopback URL.
+
+See [backend configuration and testing](docs/backend.md) and [offline integration tests](frontend/e2e/README.md) for setup and runtime limits.
 
 ## Architecture
 

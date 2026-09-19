@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, NavLink } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faBars, faMoon, faRightFromBracket, faCoins } from '@fortawesome/free-solid-svg-icons'
 import styles from './Header.module.css'
@@ -20,13 +20,16 @@ export function Header({ username, displayName, isAdmin, credits, searchBar, onT
 
   return (
     <header className={styles.header}>
-      <button className={styles.menuBtn} onClick={onMenuOpen} title="Open menu">
+      <button className={styles.menuBtn} onClick={onMenuOpen} title="Open menu" aria-label="Open library and queue">
         <FontAwesomeIcon icon={faBars} />
       </button>
       {searchBar}
 
-      <nav className={styles.actions}>
-        <button className={styles.navBtn} onClick={onThemeToggle} title="Toggle Theme">
+      <nav className={styles.actions} aria-label="Main navigation">
+        <NavLink className={styles.textLink} to="/">Player</NavLink>
+        <NavLink className={styles.textLink} to="/library">Library</NavLink>
+        {isAdmin && <NavLink className={styles.textLink} to="/admin">Admin</NavLink>}
+        <button className={styles.navBtn} onClick={onThemeToggle} title="Toggle theme" aria-label="Toggle theme">
           <FontAwesomeIcon icon={faMoon} />
         </button>
 
@@ -42,11 +45,11 @@ export function Header({ username, displayName, isAdmin, credits, searchBar, onT
 
         <div className={styles.separator} />
 
-        <Link className={styles.avatarCircle} to="/profile" title="Profile">
+        <Link className={styles.avatarCircle} to="/profile" title="Profile" aria-label="Your profile">
           {initial}
         </Link>
 
-        <button className={`${styles.navBtn} ${styles.navBtnDanger}`} onClick={onLogout} title="Logout">
+        <button className={`${styles.navBtn} ${styles.navBtnDanger}`} onClick={onLogout} title="Logout" aria-label="Sign out">
           <FontAwesomeIcon icon={faRightFromBracket} />
         </button>
       </nav>

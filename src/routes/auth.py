@@ -1,11 +1,13 @@
 import os
+from src.utils.validation import json_object, text_field, boolean_field
 import secrets
 import time
-from collections import defaultdict, deque
+import threading
+from collections import deque
 from datetime import datetime, timedelta
-from flask import Blueprint, request, jsonify, session, make_response
+from flask import Blueprint, request, jsonify, session, make_response, current_app
 from werkzeug.security import generate_password_hash, check_password_hash
-from src.models.db import query_db, execute_db, insert_db
+from src.models.db import query_db, execute_db, insert_db, transaction
 from src.services.email import send_password_reset_email
 from src.utils.decorators import login_required
 
@@ -14,7 +16,7 @@ auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 MIN_PASSWORD_LENGTH = 8
 LOGIN_ATTEMPT_WINDOW_SECONDS = 15 * 60
 MAX_LOGIN_ATTEMPTS = 8
-_login_attempts = defaultdict(deque)
+_login_lock = threading.Lock()
 
 
 def _password_length_error(prefix="Password"):
@@ -22,81 +24,85 @@ def _password_length_error(prefix="Password"):
 
 
 def _login_rate_key(username):
-    forwarded_for = request.headers.get("X-Forwarded-For", "")
-    ip = forwarded_for.split(",", 1)[0].strip() or request.remote_addr or "unknown"
-    return f"{ip}:{username.lower()}"
+    # Only trust Flask's peer address. Forwarding headers require a trusted
+    # reverse-proxy configuration; accepting arbitrary X-Forwarded-For bypasses limits.
+    return f"{request.remote_addr or 'unknown'}:{username.lower()}"
+
+
+def _login_attempt_store():
+    return current_app.extensions.setdefault("login_attempts", {})
 
 
 def _is_login_rate_limited(username):
-    now = time.time()
-    attempts = _login_attempts[_login_rate_key(username)]
-    while attempts and now - attempts[0] > LOGIN_ATTEMPT_WINDOW_SECONDS:
-        attempts.popleft()
-    return len(attempts) >= MAX_LOGIN_ATTEMPTS
+    now = time.monotonic()
+    with _login_lock:
+        store = _login_attempt_store()
+        for key in list(store):
+            attempts = store[key]
+            while attempts and now - attempts[0] > LOGIN_ATTEMPT_WINDOW_SECONDS:
+                attempts.popleft()
+            if not attempts:
+                del store[key]
+        return len(store.get(_login_rate_key(username), ())) >= MAX_LOGIN_ATTEMPTS
 
 
 def _record_failed_login(username):
-    _login_attempts[_login_rate_key(username)].append(time.time())
+    with _login_lock:
+        store = _login_attempt_store()
+        if len(store) >= 10000:
+            store.pop(next(iter(store)))
+        store.setdefault(_login_rate_key(username), deque()).append(time.monotonic())
 
 
 def _clear_failed_logins(username):
-    _login_attempts.pop(_login_rate_key(username), None)
+    with _login_lock:
+        _login_attempt_store().pop(_login_rate_key(username), None)
 
 
 @auth_bp.route("/register", methods=["POST"])
 def register():
-    data = request.get_json()
-    username = data.get("username", "").strip()
-    email = data.get("email", "").strip()
-    password = data.get("password", "")
-    invite_key = data.get("invite_key", "").strip()
+    data = json_object()
+    username = text_field(data, "username")
+    email = text_field(data, "email")
+    password = text_field(data, "password", strip=False)
+    invite_key = text_field(data, "invite_key")
 
     if not username or not password:
         return jsonify({"error": "Username and password required"}), 400
     if len(password) < MIN_PASSWORD_LENGTH:
         return jsonify({"error": _password_length_error()}), 400
 
-    existing = query_db("SELECT id FROM users WHERE username = ?", [username], one=True)
-    if existing:
-        return jsonify({"error": "Username already taken"}), 409
-    if email:
-        existing_email = query_db("SELECT id FROM users WHERE email = ?", [email], one=True)
-        if existing_email:
-            return jsonify({"error": "Email already in use"}), 409
-
-    # First user becomes admin and is auto-approved
-    user_count = query_db("SELECT COUNT(*) as c FROM users", one=True)["c"]
-    is_first = user_count == 0
-    is_admin = 1 if is_first else 0
-    is_approved = 1 if is_first else 0
-
-    # Check invite key
-    if not is_first and invite_key:
-        key_row = query_db(
-            "SELECT * FROM invite_keys WHERE key = ? AND used_by IS NULL",
-            [invite_key],
-            one=True,
-        )
-        if key_row:
-            is_approved = 1
-            execute_db(
-                "UPDATE invite_keys SET used_by = ?, used_at = ? WHERE id = ?",
-                [username, datetime.utcnow().isoformat(), key_row["id"]],
-            )
-        else:
-            return jsonify({"error": "Invalid invite key"}), 400
-
-    display_name = data.get("display_name", "").strip() or username
+    display_name = text_field(data, "display_name") or username
     password_hash = generate_password_hash(password)
-    user_id = insert_db(
-        "INSERT INTO users (username, email, display_name, password_hash, is_admin, is_approved) VALUES (?, ?, ?, ?, ?, ?)",
-        [username, email or None, display_name, password_hash, is_admin, is_approved],
-    )
+    # Reserve the writer before checking names or invites. Concurrent requests
+    # cannot both bootstrap an admin or consume the same invite.
+    with transaction() as db:
+        if db.execute("SELECT id FROM users WHERE username = ?", [username]).fetchone():
+            return jsonify({"error": "Username already taken"}), 409
+        if email and db.execute("SELECT id FROM users WHERE email = ?", [email]).fetchone():
+            return jsonify({"error": "Email already in use"}), 409
+        is_first = db.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0
+        is_admin = int(is_first)
+        is_approved = int(is_first)
+        if not is_first and invite_key:
+            claimed = db.execute(
+                "UPDATE invite_keys SET used_by = ?, used_at = ? WHERE key = ? AND used_by IS NULL",
+                [username, datetime.utcnow().isoformat(), invite_key],
+            )
+            if claimed.rowcount != 1:
+                return jsonify({"error": "Invalid invite key"}), 400
+            is_approved = 1
+        user_id = db.execute(
+            "INSERT INTO users (username, email, display_name, password_hash, is_admin, is_approved) VALUES (?, ?, ?, ?, ?, ?)",
+            [username, email or None, display_name, password_hash, is_admin, is_approved],
+        ).lastrowid
 
     from src.utils.error_logging import log_event
     log_event("info", "auth", f"New user registered: '{username}'" + (" (approved)" if is_approved else " (pending)"), user_id=user_id, username=username)
 
     if is_approved:
+        session.clear()
+        session["session_version"] = 0
         session.permanent = True
         session["user_id"] = user_id
         return jsonify({
@@ -114,10 +120,10 @@ def register():
 
 @auth_bp.route("/login", methods=["POST"])
 def login():
-    data = request.get_json()
-    username = data.get("username", "").strip()
-    password = data.get("password", "")
-    remember = data.get("remember", False)
+    data = json_object()
+    username = text_field(data, "username")
+    password = text_field(data, "password", strip=False)
+    remember = boolean_field(data, "remember")
 
     if not username or not password:
         return jsonify({"error": "Username and password required"}), 400
@@ -135,13 +141,33 @@ def login():
     if not user["is_approved"]:
         return jsonify({"error": "Account pending approval"}), 403
 
+    token = secrets.token_urlsafe(48) if remember else None
+    old_token = request.cookies.get("auth_token")
+    # Password verification is expensive, so do it outside the writer lock,
+    # then verify the credential snapshot before issuing any new credentials.
+    # A concurrent password reset must not leave a newly minted remember token.
+    with transaction() as db:
+        updated = db.execute(
+            """UPDATE users SET last_online = ? WHERE id = ? AND password_hash = ?
+               AND session_version = ? AND is_approved = 1""",
+            [datetime.utcnow().isoformat(), user["id"], user["password_hash"], user["session_version"]],
+        )
+        if updated.rowcount != 1:
+            return jsonify({"error": "Credentials changed. Please sign in again."}), 401
+        if old_token:
+            db.execute("DELETE FROM auth_tokens WHERE token = ?", [old_token])
+        if token:
+            expires = datetime.utcnow() + timedelta(days=30)
+            db.execute(
+                "INSERT INTO auth_tokens (user_id, token, expires_at) VALUES (?, ?, ?)",
+                [user["id"], token, expires.isoformat()],
+            )
+
     _clear_failed_logins(username)
+    session.clear()
+    session["session_version"] = user["session_version"]
     session.permanent = True
     session["user_id"] = user["id"]
-
-    # Update last_online
-    execute_db("UPDATE users SET last_online = ? WHERE id = ?",
-               [datetime.utcnow().isoformat(), user["id"]])
 
     resp_data = {
         "success": True,
@@ -155,14 +181,13 @@ def login():
 
     response = make_response(jsonify(resp_data))
 
-    if remember:
-        token = secrets.token_urlsafe(48)
-        expires = datetime.utcnow() + timedelta(days=30)
-        insert_db(
-            "INSERT INTO auth_tokens (user_id, token, expires_at) VALUES (?, ?, ?)",
-            [user["id"], token, expires.isoformat()],
+    if token:
+        response.set_cookie(
+            "auth_token", token, max_age=30 * 86400, httponly=True, samesite="Lax",
+            secure=current_app.config["SESSION_COOKIE_SECURE"],
         )
-        response.set_cookie("auth_token", token, max_age=30 * 86400, httponly=True, samesite="Lax")
+    elif old_token:
+        response.delete_cookie("auth_token")
 
     return response
 
@@ -201,8 +226,8 @@ def check():
 
 @auth_bp.route("/forgot-password", methods=["POST"])
 def forgot_password():
-    data = request.get_json()
-    username = data.get("username", "").strip()
+    data = json_object()
+    username = text_field(data, "username")
 
     if not username:
         return jsonify({"error": "Username required"}), 400
@@ -237,30 +262,29 @@ def forgot_password():
 
 @auth_bp.route("/reset-password", methods=["POST"])
 def reset_password():
-    data = request.get_json()
-    token = data.get("token", "").strip()
-    new_password = data.get("password", "")
+    data = json_object()
+    token = text_field(data, "token")
+    new_password = text_field(data, "password", strip=False)
 
     if not token or not new_password:
         return jsonify({"error": "Token and new password required"}), 400
     if len(new_password) < MIN_PASSWORD_LENGTH:
         return jsonify({"error": _password_length_error()}), 400
 
-    reset = query_db(
-        "SELECT * FROM password_resets WHERE token = ? AND used = 0 AND expires_at > ?",
-        [token, datetime.utcnow().isoformat()],
-        one=True,
-    )
-    if not reset:
-        return jsonify({"error": "Invalid or expired reset token"}), 400
-
     password_hash = generate_password_hash(new_password)
-    execute_db("UPDATE users SET password_hash = ? WHERE id = ?", [password_hash, reset["user_id"]])
-    execute_db("UPDATE password_resets SET used = 1 WHERE id = ?", [reset["id"]])
-    # A password reset must lock out anyone holding old credentials:
-    # revoke all remember-me tokens and any other pending reset tokens.
-    execute_db("DELETE FROM auth_tokens WHERE user_id = ?", [reset["user_id"]])
-    execute_db("UPDATE password_resets SET used = 1 WHERE user_id = ? AND used = 0", [reset["user_id"]])
+    with transaction() as db:
+        reset = db.execute(
+            "SELECT * FROM password_resets WHERE token = ? AND used = 0 AND expires_at > ?",
+            [token, datetime.utcnow().isoformat()],
+        ).fetchone()
+        if not reset:
+            return jsonify({"error": "Invalid or expired reset token"}), 400
+        db.execute(
+            "UPDATE users SET password_hash = ?, session_version = session_version + 1 WHERE id = ?",
+            [password_hash, reset["user_id"]],
+        )
+        db.execute("DELETE FROM auth_tokens WHERE user_id = ?", [reset["user_id"]])
+        db.execute("UPDATE password_resets SET used = 1 WHERE user_id = ?", [reset["user_id"]])
 
     return jsonify({"success": True, "message": "Password reset successful"})
 
@@ -402,9 +426,9 @@ def change_password():
     if not user:
         return jsonify({"error": "Not authenticated"}), 401
 
-    data = request.get_json()
-    current_password = data.get("current_password", "")
-    new_password = data.get("new_password", "")
+    data = json_object()
+    current_password = text_field(data, "current_password", strip=False)
+    new_password = text_field(data, "new_password", strip=False)
 
     if not current_password or not new_password:
         return jsonify({"error": "Both passwords required"}), 400
@@ -414,8 +438,15 @@ def change_password():
         return jsonify({"error": "Current password is incorrect"}), 401
 
     new_hash = generate_password_hash(new_password)
-    execute_db("UPDATE users SET password_hash = ? WHERE id = ?", [new_hash, user["id"]])
-    # Changing the password revokes all remember-me tokens on other devices.
-    execute_db("DELETE FROM auth_tokens WHERE user_id = ?", [user["id"]])
+    with transaction() as db:
+        updated = db.execute(
+            "UPDATE users SET password_hash = ?, session_version = session_version + 1 WHERE id = ? AND password_hash = ?",
+            [new_hash, user["id"], user["password_hash"]],
+        )
+        if updated.rowcount != 1:
+            return jsonify({"error": "Password changed on another device. Please sign in again."}), 409
+        db.execute("DELETE FROM auth_tokens WHERE user_id = ?", [user["id"]])
+        db.execute("UPDATE password_resets SET used = 1 WHERE user_id = ?", [user["id"]])
+    session["session_version"] = user["session_version"] + 1
 
     return jsonify({"success": True, "message": "Password changed successfully"})

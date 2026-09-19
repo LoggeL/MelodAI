@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react'
+import { useState, useRef, useCallback, useEffect, useId, forwardRef, useImperativeHandle } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faMagnifyingGlass, faXmark } from '@fortawesome/free-solid-svg-icons'
 import { tracks } from '../../services/api'
@@ -18,115 +18,153 @@ export const SearchBar = forwardRef<SearchBarHandle, Props>(function SearchBar({
   const [results, setResults] = useState<SearchResult[]>([])
   const [showResults, setShowResults] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [activeIndex, setActiveIndex] = useState(-1)
   const [libraryIds, setLibraryIds] = useState<Set<string>>(new Set())
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const searchSeqRef = useRef(0)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const listId = useId()
 
-  // Fetch library track IDs on mount
   useEffect(() => {
-    tracks.library()
-      .then(lib => setLibraryIds(new Set(lib.map(t => t.id))))
-      .catch(() => {})
+    let cancelled = false
+    tracks.library().then(lib => {
+      if (!cancelled) setLibraryIds(new Set(lib.filter(t => t.complete).map(t => t.id)))
+    }).catch(() => {})
+    return () => { cancelled = true }
   }, [])
 
-  const doSearch = useCallback(async (q: string) => {
-    if (q.length < 2) { setShowResults(false); return }
-    // Sequence guard: a slow response for an old query must not overwrite
-    // the results of a newer one (API layer retries make this likely).
-    const seq = ++searchSeqRef.current
-    setLoading(true)
-    setShowResults(true)
+  const cancelSearch = useCallback(() => {
+    searchSeqRef.current += 1
+    if (timeoutRef.current) clearTimeout(timeoutRef.current)
+  }, [])
+
+  const doSearch = useCallback(async (q: string, seq: number) => {
     try {
       const data = await tracks.search(q)
       if (seq !== searchSeqRef.current) return
       setResults(data)
-    } catch {
+    } catch (err) {
       if (seq !== searchSeqRef.current) return
       setResults([])
+      setError(err instanceof Error ? err.message : 'Search failed. Please try again.')
+    } finally {
+      if (seq === searchSeqRef.current) setLoading(false)
     }
-    setLoading(false)
   }, [])
+
+  const startSearch = useCallback((value: string, immediate = false) => {
+    cancelSearch()
+    setQuery(value)
+    setActiveIndex(-1)
+    setResults([])
+    setError('')
+    const q = value.trim()
+    const canSearch = q.length >= 2
+    setShowResults(canSearch)
+    setLoading(canSearch)
+    if (!canSearch) return
+    const seq = searchSeqRef.current
+    if (immediate) void doSearch(q, seq)
+    else timeoutRef.current = setTimeout(() => void doSearch(q, seq), 300)
+  }, [cancelSearch, doSearch])
 
   useImperativeHandle(ref, () => ({
     search: (q: string) => {
-      setQuery(q)
-      doSearch(q)
+      startSearch(q, true)
       inputRef.current?.focus()
-    }
-  }), [doSearch])
-
-  const handleInput = useCallback((val: string) => {
-    setQuery(val)
-    if (timeoutRef.current) clearTimeout(timeoutRef.current)
-    if (val.trim().length < 2) { setShowResults(false); return }
-    timeoutRef.current = setTimeout(() => doSearch(val.trim()), 300)
-  }, [doSearch])
+    },
+  }), [startSearch])
 
   const handleClear = useCallback(() => {
-    setQuery('')
-    setShowResults(false)
-  }, [])
+    startSearch('')
+    inputRef.current?.focus()
+  }, [startSearch])
 
   const handleSelect = useCallback((item: SearchResult) => {
-    onSelect(item.id, { title: item.title, artist: item.artist, img_url: item.img_url })
+    cancelSearch()
     setQuery('')
+    setResults([])
+    setLoading(false)
     setShowResults(false)
-  }, [onSelect])
+    setActiveIndex(-1)
+    onSelect(item.id, { title: item.title, artist: item.artist, img_url: item.img_url })
+  }, [cancelSearch, onSelect])
 
-  // Clear pending debounce on unmount
-  useEffect(() => {
-    return () => {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current)
-    }
-  }, [])
+  useEffect(() => cancelSearch, [cancelSearch])
 
-  // Close on outside click
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
-        setShowResults(false)
-      }
+    if (showResults && activeIndex >= 0) document.getElementById(`${listId}-${activeIndex}`)?.scrollIntoView({ block: 'nearest' })
+  }, [activeIndex, showResults, listId])
+
+  useEffect(() => {
+    const handler = (e: PointerEvent) => {
+      if (!wrapperRef.current?.contains(e.target as Node)) setShowResults(false)
     }
-    document.addEventListener('click', handler)
-    return () => document.removeEventListener('click', handler)
+    document.addEventListener('pointerdown', handler)
+    return () => document.removeEventListener('pointerdown', handler)
   }, [])
 
   return (
-    <div className={styles.wrapper} ref={wrapperRef}>
+    <div className={styles.wrapper} ref={wrapperRef} onBlur={e => {
+      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setShowResults(false)
+    }}>
       <span className={styles.icon}><FontAwesomeIcon icon={faMagnifyingGlass} /></span>
       <input
         ref={inputRef}
-        type="text"
+        type="search"
+        role="combobox"
+        aria-label="Search for a song"
+        aria-autocomplete="list"
+        aria-expanded={showResults}
+        aria-controls={showResults ? listId : undefined}
+        aria-activedescendant={showResults && activeIndex >= 0 ? `${listId}-${activeIndex}` : undefined}
         className={styles.input}
         placeholder="Search for a song..."
         value={query}
-        onChange={e => handleInput(e.target.value)}
+        onChange={e => startSearch(e.target.value)}
+        onFocus={() => { if (query.trim().length >= 2) setShowResults(true) }}
+        onKeyDown={e => {
+          if (e.key === 'Escape') { setShowResults(false); setActiveIndex(-1) }
+          if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault()
+            setShowResults(true)
+            if (results.length) setActiveIndex(index => e.key === 'ArrowDown'
+              ? (index + 1) % results.length
+              : (index <= 0 ? results.length - 1 : index - 1))
+          }
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            if (showResults && activeIndex >= 0 && results[activeIndex]) handleSelect(results[activeIndex])
+            else startSearch(query, true)
+          }
+        }}
         autoComplete="off"
       />
-      {query && (
-        <button className={styles.clear} onClick={handleClear} aria-label="Clear search">
-          <FontAwesomeIcon icon={faXmark} />
-        </button>
-      )}
-
+      {query && <button type="button" className={styles.clear} onClick={handleClear} aria-label="Clear search"><FontAwesomeIcon icon={faXmark} /></button>}
       {showResults && (
         <div className={styles.results}>
-          {loading && <div className={styles.spinner}>Searching...</div>}
-          {!loading && results.length === 0 && <div className={styles.spinner}>No results found</div>}
-          {!loading && results.map(item => (
-            <div key={item.id} className={styles.resultItem} onClick={() => handleSelect(item)}>
-              <img src={item.img_url || '/logo.svg'} alt="" loading="lazy" />
-              <div className={styles.resultInfo}>
-                <div className={styles.resultTitle}>{item.title}</div>
-                <div className={styles.resultArtist}>{item.artist}</div>
+          <div role="status" aria-live="polite">
+            {loading && <p className={styles.spinner}>Searching...</p>}
+            {!loading && error && <p className={styles.spinner}>{error}</p>}
+            {!loading && !error && results.length === 0 && <p className={styles.spinner}>No songs found. Try another title or artist.</p>}
+          </div>
+          <div id={listId} role="listbox" aria-label="Song search results" aria-busy={loading}>
+            {!loading && results.map((item, index) => (
+              <div key={item.id} id={`${listId}-${index}`} role="option" aria-selected={index === activeIndex}
+                className={`${styles.resultItem} ${index === activeIndex ? styles.resultActive : ''}`}
+                onPointerDown={e => e.preventDefault()}
+                onClick={() => handleSelect(item)}>
+                <img src={item.img_url || '/logo.svg'} alt="" loading="lazy" />
+                <div className={styles.resultInfo}>
+                  <div className={styles.resultTitle}>{item.title}</div>
+                  <div className={styles.resultArtist}>{item.artist}</div>
+                </div>
+                {libraryIds.has(item.id) && <span className={styles.libraryBadge}>In library</span>}
               </div>
-              {libraryIds.has(item.id) && (
-                <span className={styles.libraryBadge}>IN LIBRARY</span>
-              )}
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       )}
     </div>

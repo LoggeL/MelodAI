@@ -16,12 +16,13 @@ cd frontend && npm run build        # Production build → outputs to src/static
 ```
 
 ### Testing
-All tests require Flask running on port 5000.
+Unit and integration tests run offline; the integration command starts an isolated Flask app with temporary storage. Browser tests require a separate running test app. Live pipeline tests require explicit opt-in and real provider credentials; see `frontend/e2e/README.md`.
 ```bash
-cd frontend && npm run test:e2e         # All E2E tests (62 tests, ~60s timeout)
-cd frontend && npm run test:integration # Integration tests only (auth, track, admin)
-cd frontend && npm run test:browser     # Puppeteer browser tests (32 tests)
-cd frontend && npm run test:pipeline    # Live API pipeline test (~2.5 min, costs ~$0.05-0.10)
+uv run python -m unittest discover -s tests -v # Offline backend tests
+cd frontend && npm test                 # Frontend unit and React regression tests
+cd frontend && npm run test:integration # Isolated offline HTTP integration tests
+cd frontend && npm run test:browser     # Browser tests against a dedicated test app
+cd frontend && npm run test:pipeline    # Opt-in paid provider pipeline test
 ```
 
 Run a single test file:
@@ -51,8 +52,8 @@ cd frontend && npm install     # Frontend deps
 
 ### Frontend (React + TypeScript + Vite)
 - **Routing**: React Router with 5 pages — `/login`, `/` (player), `/about`, `/library`, `/admin/*`
-- **Audio engine**: `frontend/src/hooks/usePlayer.ts` — Web Audio API with dual GainNodes (vocals + instrumental), independent volume control, preloading, animation-frame lyrics sync
-- **API layer**: `frontend/src/services/api.ts` — Fetch wrapper with retry logic
+- **Audio engine**: `frontend/src/hooks/AudioPlayback.ts` owns audio resources; `usePlayer.ts` coordinates queue, route, and synchronization state
+- **API layer**: `frontend/src/services/http.ts` handles bounded safe retries and errors; `api.ts` defines endpoint contracts
 - **Styling**: CSS Modules + CSS custom properties for dark/light theming
 
 ### Processing Pipeline (6 threaded stages in `src/routes/track.py`)
@@ -87,7 +88,7 @@ Copy `example.env` to `.env` and fill in the required values.
 ## Important Constraints
 - **Do NOT modify `src/services/deezer.py`** — Complex decryption logic, 707 lines
 - **TypeScript strict mode** — No unused locals/parameters allowed
-- **Auto-reprocess on startup**: Flask auto-reprocesses incomplete tracks after 5s. During tests, clear the processing queue via `remove_from_queue()` when deleting tracks to avoid race conditions.
+- **Auto-reprocess on startup**: Flask auto-reprocesses incomplete tracks after 5s. Isolated tests disable startup hooks through `STARTUP_HOOKS=False`; live pipeline tests use a fresh dedicated store.
 - **Admin auto-creation**: If `ADMIN_USERNAME` and `ADMIN_PASSWORD` env vars are set, the admin account is created on startup if it doesn't exist.
 - **Error logging**: 500 errors are caught by Flask's error handler and logged via `src/utils/error_logging.py`.
 - Pipeline test track: Deezer ID 3135556 ("Harder, Better, Faster, Stronger" by Daft Punk)

@@ -296,3 +296,20 @@
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
 }
+
+.songButton { display: flex; align-items: center; flex: 1; min-width: 0; gap: 8px; min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+.songButton .title, .songButton .artist { display: block; }
+.songButton:disabled { opacity: 1; cursor: default; }
+.item { padding-block: 4px; }
+.iconBtn { min-width: 36px; min-height: 36px; }
+.addBtn { min-width: 36px; min-height: 36px; opacity: 1; }
+.emptyState p { opacity: 1; }
+@media (max-width: 380px) {
+  .controls { flex-wrap: wrap; }
+  .filterInput { flex-basis: 100%; min-height: 40px; }
+}
+
+.statusText { display: block; color: var(--text-secondary); font-size: .7rem; line-height: 1.5; }
+.failedText { color: var(--danger); }
+.failed { background: var(--danger); }
+.unknown { background: var(--text-muted); }

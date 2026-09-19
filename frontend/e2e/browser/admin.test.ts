@@ -1,9 +1,10 @@
+import { REGULAR_PASS, testEmail } from '../config'
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import type { Browser, Page } from 'puppeteer'
 import { launchBrowser, newPage, loginViaUI, BASE, ADMIN_USER, ADMIN_PASS, waitForIdle } from '../helpers'
 
 const TEST_USER = `e2eregular_${Date.now()}`
-const TEST_PASS = 'testpass456'
+const TEST_PASS = REGULAR_PASS
 
 let browser: Browser
 let page: Page
@@ -13,7 +14,7 @@ beforeAll(async () => {
   await fetch(`${BASE}/api/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: TEST_USER, password: TEST_PASS }),
+    body: JSON.stringify({ username: TEST_USER, email: testEmail(TEST_USER), password: TEST_PASS }),
   })
 
   browser = await launchBrowser()

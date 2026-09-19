@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import styles from './AboutPage.module.css'
 
@@ -7,6 +8,8 @@ function LmfLogo({ className }: { className?: string }) {
   return (
     <svg
       className={className}
+      role="img"
+      aria-label="LMF"
       version="1.0"
       xmlns="http://www.w3.org/2000/svg"
       width="251"
@@ -26,9 +29,22 @@ function LmfLogo({ className }: { className?: string }) {
 function UiMockupSvg() {
   // Animation duration for the full "playback" cycle
   const cycle = '8s'
+  const previewRef = useRef<SVGSVGElement>(null)
+
+  useEffect(() => {
+    const preference = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const sync = () => {
+      if (preference.matches) { previewRef.current?.pauseAnimations(); previewRef.current?.setCurrentTime(0) }
+      else previewRef.current?.unpauseAnimations()
+    }
+    sync()
+    preference.addEventListener('change', sync)
+    return () => preference.removeEventListener('change', sync)
+  }, [])
 
   return (
     <svg
+      ref={previewRef}
       className={styles.uiMockupSvg}
       viewBox="0 0 600 360"
       xmlns="http://www.w3.org/2000/svg"
@@ -220,14 +236,13 @@ function UiMockupSvg() {
 
 export function AboutPage() {
   return (
-    <div className={styles.page}>
+    <main className={styles.page}>
       <div className={styles.accentLine} />
       <div className={styles.about}>
         <div className={styles.header}>
           <img src="/logo.svg" alt="MelodAI" />
           <div className={styles.titleRow}>
             <h1 className={styles.headerTitle}>MelodAI</h1>
-            <span className={styles.version}>v2.0</span>
           </div>
           <p>AI-Powered Karaoke Experience</p>
         </div>
@@ -237,13 +252,13 @@ export function AboutPage() {
           <div className={styles.uiMockup}>
             <UiMockupSvg />
           </div>
-          <p>MelodAI is a web-based karaoke application that uses AI to create an immersive singing experience. Search for any song, and our pipeline automatically separates vocals from instrumentals, extracts word-level timed lyrics, and presents a synchronized karaoke player.</p>
+          <p>MelodAI is a web-based karaoke application that uses AI to create an immersive singing experience. Search for a song, and our pipeline automatically separates vocals from instrumentals, extracts word-level timed lyrics, and presents a synchronized karaoke player.</p>
         </div>
 
         <div className={styles.section}>
           <h2>How It Works</h2>
           <ul>
-            <li><strong>Search</strong> for any song using the Deezer catalog</li>
+            <li><strong>Search</strong> for songs using the Deezer catalog</li>
             <li><strong>Demucs AI</strong> separates vocals from instrumental tracks</li>
             <li><strong>WhisperX</strong> extracts word-level timed lyrics with speaker detection</li>
             <li><strong>LLM post-processing</strong> formats lyrics into natural lines</li>
@@ -270,6 +285,6 @@ export function AboutPage() {
           <Link to="/" className={styles.backBtn}>Back to Player</Link>
         </div>
       </div>
-    </div>
+    </main>
   )
 }

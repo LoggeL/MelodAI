@@ -11,7 +11,7 @@
 /* ─── Page Shell ─── */
 
 .page {
-  height: 100vh;
+  height: 100dvh;
   overflow: auto;
   background-color: var(--bg);
   background-image:
@@ -704,4 +704,52 @@
   .healthCard { padding: var(--spacing-lg); }
   .songTitle { font-size: 0.92rem; }
   .songArtist { font-size: 0.8rem; }
+}
+
+/* Shared admin surfaces and controls. Tables scroll within their own region. */
+.container { min-width: 0; width: 100%; }
+.nav { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 8px; }
+.navTab { flex-shrink: 0; text-decoration: none; }
+.section h2 { font-size: 1.15rem; margin-bottom: var(--spacing-md); }
+.sectionHeader { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: var(--spacing-md); }
+.sectionHeader h2, .sectionHeader h3 { margin: 0; }
+.tableScroll { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; border-radius: var(--radius-sm); }
+.tableScroll .table { min-width: 580px; }
+.rowActions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.actionBtn, .primaryBtn { min-height: 40px; }
+.actionBtn:disabled, .primaryBtn:disabled { opacity: .5; cursor: not-allowed; }
+.fieldLabel { display: grid; gap: 6px; font-size: .82rem; font-weight: 600; color: var(--text-secondary); }
+.dialogForm { display: grid; gap: 16px; }
+.filterInput { max-width: 100%; min-height: 42px; }
+.filters { align-items: end; }
+.sortButton, .detailButton { background: transparent; border: 0; color: inherit; font: inherit; text-align: left; padding: 6px 0; cursor: pointer; }
+.sortButton { white-space: nowrap; font-weight: 700; }
+.detailButton { width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.detailButton:hover { text-decoration: underline; }
+.subtle { color: var(--text-secondary); font-size: .78rem; }
+.notice { padding: 16px; margin-bottom: 16px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border); }
+.notice p { margin-top: 8px; font-size: .8rem; color: var(--text-secondary); }
+.songLink { flex: 1; min-width: 150px; display: flex; align-items: center; gap: 12px; color: var(--text); text-decoration: none; }
+.songLink:hover .songTitle { text-decoration: underline; }
+.songBadges { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pendingInfo { min-width: 0; overflow-wrap: anywhere; }
+.keyDisplay { overflow-wrap: anywhere; }
+
+@media (max-width: 640px) {
+  .container { padding: 20px 14px; }
+  .header { align-items: start; gap: 16px; flex-direction: column; }
+  .title { font-size: 1.9rem; }
+  .section { padding: 16px; }
+  .navTab { padding: 10px 14px; }
+  .filters { flex-wrap: wrap; }
+  .fieldLabel { width: 100%; }
+  .filterInput { width: 100%; }
+  .songItem { flex-wrap: wrap; gap: 12px; padding: 14px 0; }
+  .songLink { flex-basis: calc(100% - 100px); }
+  .songBadges { order: 3; width: 100%; }
+  .pendingCard { align-items: start; gap: 12px; flex-wrap: wrap; }
+  .pendingActions { width: 100%; }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .statValue { font-size: 1.7rem; overflow-wrap: anywhere; }
+  .pagination { flex-wrap: wrap; }
 }

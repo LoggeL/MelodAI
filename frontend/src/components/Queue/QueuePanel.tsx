@@ -4,6 +4,7 @@ import {
   faMusic, faGripVertical, faRotateRight, faXmark,
   faDice, faShuffle, faTrashCan, faPlay, faVolumeHigh,
 } from '@fortawesome/free-solid-svg-icons'
+import { Modal } from '../common/Modal'
 import type { QueueItem } from '../../types'
 import styles from './QueuePanel.module.css'
 
@@ -74,6 +75,15 @@ export function QueuePanel({
             <div
               key={item.id + '-' + i}
               className={cls}
+              tabIndex={0}
+              aria-label={`${item.title} by ${item.artist}${isActive ? ', current song' : ''}`}
+              onKeyDown={event => {
+                if (event.target !== event.currentTarget) return
+                if ((event.key === 'Enter' || event.key === ' ') && item.ready) { event.preventDefault(); onPlay(i) }
+                if (event.altKey && event.key === 'ArrowUp' && i > 0) { event.preventDefault(); onReorder(i, i - 1) }
+                if (event.altKey && event.key === 'ArrowDown' && i < queue.length - 1) { event.preventDefault(); onReorder(i, i + 1) }
+              }}
+              title="Enter to play. Alt + Up or Down to reorder."
               draggable
               onDragStart={() => setDragIdx(i)}
               onDragEnd={() => { setDragIdx(null); setDragOverIdx(null) }}
@@ -124,12 +134,12 @@ export function QueuePanel({
 
               <div className={styles.actions} onClick={e => e.stopPropagation()}>
                 {item.error && (
-                  <button className={styles.removeBtn} onClick={() => onRetry(i)} title="Retry">
+                  <button className={styles.removeBtn} onClick={() => onRetry(i)} title="Retry" aria-label={`Retry ${item.title}`}>
                     <FontAwesomeIcon icon={faRotateRight} />
                   </button>
                 )}
                 {!isActive && (
-                  <button className={styles.removeBtn} onClick={() => onRemove(i)} title="Remove">
+                  <button className={styles.removeBtn} onClick={() => onRemove(i)} title="Remove" aria-label={`Remove ${item.title} from queue`}>
                     <FontAwesomeIcon icon={faXmark} />
                   </button>
                 )}
@@ -140,21 +150,13 @@ export function QueuePanel({
       </div>
 
       {showConfirm && (
-        <div className={styles.modalBackdrop} onClick={() => setShowConfirm(false)}>
-          <div className={styles.modal} onClick={e => e.stopPropagation()}>
-            <div className={styles.modalIcon}>
-              <FontAwesomeIcon icon={faTrashCan} />
-            </div>
-            <h3 className={styles.modalTitle}>Clear Queue?</h3>
-            <p className={styles.modalText}>
-              Remove all songs except the currently playing one?
-            </p>
-            <div className={styles.modalActions}>
-              <button className={styles.modalBtn} onClick={() => setShowConfirm(false)}>Cancel</button>
-              <button className={`${styles.modalBtn} ${styles.modalBtnDanger}`} onClick={() => { onClear(); setShowConfirm(false) }}>Clear</button>
-            </div>
-          </div>
-        </div>
+        <Modal title="Clear queue?" size="small" onClose={() => setShowConfirm(false)}
+          footer={<>
+            <button className="button" onClick={() => setShowConfirm(false)}>Cancel</button>
+            <button className="button button-danger" onClick={() => { onClear(); setShowConfirm(false) }}>Clear queue</button>
+          </>}>
+          <p>Remove all songs except the currently selected one?</p>
+        </Modal>
       )}
     </>
   )

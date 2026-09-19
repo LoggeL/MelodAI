@@ -6,8 +6,8 @@ export default defineConfig({
   server: {
     port: 3000,
     proxy: {
-      '/api': 'http://localhost:5000',
-      '/songs': 'http://localhost:5000',
+      '/api': process.env.API_PROXY_TARGET || 'http://localhost:5000',
+      '/songs': process.env.API_PROXY_TARGET || 'http://localhost:5000',
     },
   },
   build: {

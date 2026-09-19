@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 
-const BASE = process.env.E2E_BASE_URL || 'http://localhost:5000'
-const ADMIN_USER = process.env.E2E_ADMIN_USER || 'hyper.xjo@gmail.com'
-const ADMIN_PASS = process.env.E2E_ADMIN_PASS || '404noswagfound'
+import { BASE, ADMIN_USER, ADMIN_PASS, extractCookie, REGULAR_PASS, testEmail } from '../config'
 const PENDING_USER = `pendinguser_${Date.now()}`
-const PENDING_PASS = 'pendingpass1'
+const PENDING_PASS = REGULAR_PASS
 
 let adminCookie = ''
+let memberCookie = ''
+let memberId = 0
 let pendingUserId = 0
 
 async function post(path: string, body: Record<string, unknown> = {}, c = adminCookie): Promise<Response> {
@@ -27,32 +27,47 @@ async function del(path: string, c = adminCookie): Promise<Response> {
 
 describe('Admin API - /admin/*', () => {
   beforeAll(async () => {
-    // Login with the .env admin (created on startup)
+    // Login with the explicitly configured test admin
     const loginResp = await fetch(`${BASE}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: ADMIN_USER, password: ADMIN_PASS }),
     })
-    adminCookie = (loginResp.headers.get('set-cookie') || '').split(';')[0]
+    expect(loginResp.status).toBe(200)
+    adminCookie = extractCookie(loginResp)
+    expect(adminCookie).toMatch(/^session=.+/)
+
+    const keyResp = await post('/api/admin/invite-keys')
+    expect(keyResp.status).toBe(200)
+    const { key } = await keyResp.json()
+    const memberName = `${PENDING_USER}_member`
+    const memberResp = await post('/api/auth/register', {
+      username: memberName, email: testEmail(memberName), password: REGULAR_PASS, invite_key: key,
+    }, '')
+    expect(memberResp.status).toBe(200)
+    memberCookie = extractCookie(memberResp)
+    expect(memberCookie).toMatch(/^session=.+/)
+    const users = await (await get('/api/admin/users')).json()
+    memberId = users.find((user: { username: string }) => user.username === memberName).id
 
     // Register a pending user
     await fetch(`${BASE}/api/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: PENDING_USER, password: PENDING_PASS }),
+      body: JSON.stringify({ username: PENDING_USER, email: testEmail(PENDING_USER), password: PENDING_PASS }),
     })
   })
 
   describe('Auth guard', () => {
     it('should reject unauthenticated access to /admin/users', async () => {
       const resp = await get('/api/admin/users', '')
-      expect([401, 302, 403]).toContain(resp.status)
+      expect(resp.status).toBe(401)
     })
 
     it('should reject non-admin access to /admin/users', async () => {
-      // Login as approved non-admin (if one existed) — for now just test no-cookie
-      const resp = await get('/api/admin/users', '')
-      expect([401, 302, 403]).toContain(resp.status)
+      const resp = await get('/api/admin/users', memberCookie)
+      expect(resp.status).toBe(403)
+      expect((await resp.json()).error).toBe('Admin access required')
     })
   })
 
@@ -202,14 +217,12 @@ describe('Admin API - /admin/*', () => {
       expect(resp.status).toBe(200)
       const data = await resp.json()
       expect(Array.isArray(data)).toBe(true)
-      // If songs exist, check shape
-      if (data.length > 0) {
-        expect(data[0]).toHaveProperty('id')
-        expect(data[0]).toHaveProperty('title')
-        expect(data[0]).toHaveProperty('artist')
-        expect(data[0]).toHaveProperty('complete')
-        expect(data[0]).toHaveProperty('file_sizes')
-      }
+      expect(data.length).toBeGreaterThan(0)
+      expect(data[0]).toHaveProperty('id')
+      expect(data[0]).toHaveProperty('title')
+      expect(data[0]).toHaveProperty('artist')
+      expect(data[0]).toHaveProperty('complete')
+      expect(data[0]).toHaveProperty('file_sizes')
     })
   })
 
@@ -230,12 +243,11 @@ describe('Admin API - /admin/*', () => {
       expect(resp.status).toBe(200)
       const data = await resp.json()
       expect(Array.isArray(data)).toBe(true)
-      if (data.length > 0) {
-        expect(data[0]).toHaveProperty('component')
-        expect(data[0]).toHaveProperty('status')
-        expect(data[0]).toHaveProperty('message')
-        expect(data[0]).toHaveProperty('checked_at')
-      }
+      expect(data.length).toBeGreaterThan(0)
+      expect(data[0]).toHaveProperty('component')
+      expect(data[0]).toHaveProperty('status')
+      expect(data[0]).toHaveProperty('message')
+      expect(data[0]).toHaveProperty('checked_at')
     })
 
     it('GET /admin/status/queue should return processing queue', async () => {
@@ -265,6 +277,7 @@ describe('Admin API - /admin/*', () => {
       const users = await usersResp.json()
       const user = users.find((u: any) => u.id === pendingUserId)
       expect(user).toBeUndefined()
+      expect((await del(`/api/admin/users/${memberId}`)).status).toBe(200)
     })
   })
 })

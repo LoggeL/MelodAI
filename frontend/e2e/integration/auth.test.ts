@@ -1,18 +1,9 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 
-const BASE = process.env.E2E_BASE_URL || 'http://localhost:5000'
-// Use the .env admin credentials (created on startup)
-const ADMIN_USER = process.env.E2E_ADMIN_USER || 'hyper.xjo@gmail.com'
-const ADMIN_PASS = process.env.E2E_ADMIN_PASS || '404noswagfound'
+import { BASE, ADMIN_USER, ADMIN_PASS, extractCookie, REGULAR_PASS, testEmail } from '../config'
 const REGULAR_USER = `testuser_${Date.now()}`
-const REGULAR_PASS = 'testpass456'
 
 let adminCookie = ''
-
-async function extractCookie(resp: Response): Promise<string> {
-  const setCookie = resp.headers.get('set-cookie') || ''
-  return setCookie.split(';')[0] || ''
-}
 
 async function post(path: string, body: Record<string, unknown>, cookie = ''): Promise<Response> {
   return fetch(`${BASE}${path}`, {
@@ -50,14 +41,14 @@ describe('Auth API - /auth/*', () => {
     })
 
     it('should reject duplicate of existing admin username', async () => {
-      const resp = await post('/api/auth/register', { username: ADMIN_USER, password: 'whatever1' })
+      const resp = await post('/api/auth/register', { username: ADMIN_USER, email: testEmail(ADMIN_USER), password: REGULAR_PASS })
       expect(resp.status).toBe(409)
       const data = await resp.json()
       expect(data.error).toContain('already taken')
     })
 
     it('should register new user as pending (no invite key)', async () => {
-      const resp = await post('/api/auth/register', { username: REGULAR_USER, password: REGULAR_PASS })
+      const resp = await post('/api/auth/register', { username: REGULAR_USER, email: testEmail(REGULAR_USER), password: REGULAR_PASS })
       expect(resp.status).toBe(200)
       const data = await resp.json()
       expect(data.success).toBe(true)
@@ -67,7 +58,8 @@ describe('Auth API - /auth/*', () => {
     it('should reject invalid invite key', async () => {
       const resp = await post('/api/auth/register', {
         username: 'badkey_user',
-        password: 'test1234',
+        email: testEmail('badkey_user'),
+        password: REGULAR_PASS,
         invite_key: 'invalid-key-12345',
       })
       expect(resp.status).toBe(400)
@@ -234,7 +226,8 @@ describe('Auth API - /auth/*', () => {
       const newUser = `invited_${Date.now()}`
       const resp = await post('/api/auth/register', {
         username: newUser,
-        password: 'test1234',
+        email: testEmail(newUser),
+        password: REGULAR_PASS,
         invite_key: inviteKey,
       })
       expect(resp.status).toBe(200)
@@ -246,7 +239,8 @@ describe('Auth API - /auth/*', () => {
     it('should reject reuse of the same invite key', async () => {
       const resp = await post('/api/auth/register', {
         username: `reuse_${Date.now()}`,
-        password: 'test1234',
+        email: testEmail(`reuse_${Date.now()}`),
+        password: REGULAR_PASS,
         invite_key: inviteKey,
       })
       expect(resp.status).toBe(400)

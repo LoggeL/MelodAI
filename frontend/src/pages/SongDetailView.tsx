@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, Fragment } from 'react'
+import { errorMessage } from './account/errors'
+import { useState, useEffect, useCallback, useRef, Fragment } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
@@ -10,6 +11,8 @@ import {
 import { admin } from '../services/api'
 import { useToast } from '../hooks/useToast'
 import type { SongDetail } from '../types'
+import { PageState } from '../components/common/PageState'
+import { ConfirmAction, type Confirmation } from './admin/AdminAction'
 import styles from './SongDetailView.module.css'
 
 interface SongDetailViewProps {
@@ -57,39 +60,48 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
   const [fetchingRef, setFetchingRef] = useState(false)
   const [fetchingRefAI, setFetchingRefAI] = useState(false)
   const navigate = useNavigate()
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(null)
+  const requestId = useRef(0)
+  const cancelRequest = useCallback(() => { requestId.current++ }, [])
   const toast = useToast()
 
   const load = useCallback(async () => {
+    const current = ++requestId.current
+    setError(null)
     try {
       const result = await admin.songDetails(trackId)
+      if (current !== requestId.current) return
       if ('error' in result && typeof (result as Record<string, unknown>).error === 'string') {
         setError((result as Record<string, unknown>).error as string)
       } else {
         setData(result)
       }
-    } catch {
-      setError('Failed to load song details')
+    } catch (e) {
+      if (current === requestId.current) setError(errorMessage(e))
+    } finally {
+      if (current === requestId.current) setLoading(false)
     }
-    setLoading(false)
   }, [trackId])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { void load(); return cancelRequest }, [load, cancelRequest])
 
   const toggle = (key: string) => setExpanded(prev => ({ ...prev, [key]: !prev[key] }))
 
   const [showReprocessMenu, setShowReprocessMenu] = useState(false)
 
-  const handleReprocess = async (fromStage?: string) => {
+  const handleReprocess = (fromStage = 'all') => {
     setShowReprocessMenu(false)
-    await admin.reprocessSong(trackId, fromStage)
-    toast.success('Reprocessing started' + (fromStage && fromStage !== 'all' ? ` (from ${fromStage})` : ''))
+    setConfirmation({
+      title: 'Reprocess this song?',
+      description: `Processing will restart from ${fromStage === 'all' ? 'the beginning' : fromStage}. This replaces generated files and may use paid processing services.`,
+      label: 'Start reprocessing', action: () => admin.reprocessSong(trackId, fromStage), success: 'Reprocessing started',
+    })
   }
 
-  const handleDelete = async () => {
-    await admin.deleteSong(trackId)
-    toast.success('Song deleted')
-    navigate('/admin/songs')
-  }
+  const handleDelete = () => setConfirmation({
+    title: 'Delete this song?', description: 'The song and all generated audio and lyrics will be permanently removed for everyone.',
+    label: 'Delete song', action: async () => { await admin.deleteSong(trackId); navigate('/admin/songs') }, success: 'Song deleted',
+  })
 
   const handleFetchRef = async () => {
     setFetchingRef(true)
@@ -123,42 +135,11 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
     setFetchingRefAI(false)
   }
 
-  if (loading) return (
-    <>
-      <Link to="/admin/songs" className={styles.backLink}>
-        <FontAwesomeIcon icon={faArrowLeft} /> Back to Songs
-      </Link>
-      <div className={styles.loadingHeader}>
-        <div className={`${styles.skeleton} ${styles.loadingArt}`} />
-        <div className={styles.loadingInfo}>
-          <div className={styles.skeleton} style={{ width: 250, height: 28 }} />
-          <div className={styles.skeleton} style={{ width: 160, height: 18 }} />
-          <div className={styles.skeleton} style={{ width: 300, height: 14 }} />
-          <div className={styles.skeleton} style={{ width: 200, height: 14 }} />
-        </div>
-      </div>
-      <div className={styles.stats}>
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className={styles.statCard}>
-            <div className={styles.skeleton} style={{ width: 40, height: 32, margin: '0 auto 8px' }} />
-            <div className={styles.skeleton} style={{ width: 60, height: 12, margin: '0 auto' }} />
-          </div>
-        ))}
-      </div>
-    </>
-  )
-
-  if (error) return (
-    <>
-      <Link to="/admin/songs" className={styles.backLink}>
-        <FontAwesomeIcon icon={faArrowLeft} /> Back to Songs
-      </Link>
-      <div className={styles.errorState}>
-        <h2>Track not found</h2>
-        <p>{error}</p>
-      </div>
-    </>
-  )
+  if (loading) return <PageState title="Loading song details" loading />
+  if (error) return <>
+    <Link to="/admin/songs" className={styles.backLink}><FontAwesomeIcon icon={faArrowLeft} /> Back to songs</Link>
+    <PageState title="Could not load song details" description={error} action={<button className={styles.actionBtn} onClick={load}>Try again</button>} />
+  </>
 
   if (!data) return null
 
@@ -208,15 +189,15 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
                 <FontAwesomeIcon icon={faPlay} /> Play Song
               </button>
             )}
-            <div className={styles.reprocessDropdown}>
-              <button className={`${styles.actionBtn} ${showReprocessMenu ? styles.actionBtnOpen : ''}`} onClick={() => setShowReprocessMenu(prev => !prev)}>
+            <div className={styles.reprocessDropdown} onKeyDown={e => { if (e.key === 'Escape') { setShowReprocessMenu(false); e.stopPropagation() } }}>
+              <button className={`${styles.actionBtn} ${showReprocessMenu ? styles.actionBtnOpen : ''}`} aria-expanded={showReprocessMenu} aria-controls="song-reprocess-options" onClick={() => setShowReprocessMenu(prev => !prev)}>
                 <FontAwesomeIcon icon={faRotateRight} /> Reprocess
                 <FontAwesomeIcon icon={faChevronDown} className={`${styles.dropdownChevron} ${showReprocessMenu ? styles.dropdownChevronOpen : ''}`} />
               </button>
               {showReprocessMenu && (
                 <>
                   <div className={styles.reprocessBackdrop} onClick={() => setShowReprocessMenu(false)} />
-                  <div className={styles.reprocessMenu}>
+                  <div id="song-reprocess-options" className={styles.reprocessMenu}>
                     <div className={styles.reprocessMenuHeader}>Reprocess from stage</div>
                     <button onClick={() => handleReprocess('all')}>
                       <FontAwesomeIcon icon={faRotateRight} className={styles.reprocessMenuIcon} /> Reprocess All
@@ -270,7 +251,7 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
         <div className={styles.sectionTitle}>
           <FontAwesomeIcon icon={faFileAudio} className={styles.sectionIcon} /> Files
         </div>
-        <table className={styles.table}>
+        <div className={styles.tableScroll} tabIndex={0} role="region" aria-label="Song details table"><table className={styles.table}>
           <thead>
             <tr>
               <th>File</th>
@@ -293,7 +274,7 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </div>
 
       {/* Processed Lyrics */}
@@ -335,7 +316,7 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
 
         {data.lyrics ? (
           <div className={styles.collapsible}>
-            <div className={styles.collapsibleHeader} onClick={() => toggle('lyrics')}>
+            <button type="button" className={styles.collapsibleHeader} aria-expanded={!!expanded['lyrics']} onClick={() => toggle('lyrics')}>
               <span className={styles.collapsibleTitle}>
                 Processed Lyrics
                 <span className={styles.collapsibleBadge}>
@@ -354,7 +335,7 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
                 icon={faChevronDown}
                 className={`${styles.chevron} ${expanded['lyrics'] ? styles.chevronOpen : ''}`}
               />
-            </div>
+            </button>
             {expanded['lyrics'] && (
               <div className={styles.collapsibleBody}>
                 <div className={styles.lyricsBlock}>
@@ -389,7 +370,7 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
 
         {/* Reference Lyrics */}
         <div className={styles.collapsible}>
-          <div className={styles.collapsibleHeader} onClick={() => toggle('reference')}>
+          <button type="button" className={styles.collapsibleHeader} aria-expanded={!!expanded['reference']} onClick={() => toggle('reference')}>
             <span className={styles.collapsibleTitle}>
               <FontAwesomeIcon icon={faWandMagicSparkles} style={{ fontSize: '0.75rem' }} />
               Reference Lyrics
@@ -403,7 +384,7 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
               icon={faChevronDown}
               className={`${styles.chevron} ${expanded['reference'] ? styles.chevronOpen : ''}`}
             />
-          </div>
+          </button>
           {expanded['reference'] && (
             <div className={styles.collapsibleBody}>
               {data.reference_lyrics ? (
@@ -444,7 +425,7 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
 
         {data.lyrics_raw ? (
           <div className={styles.collapsible}>
-            <div className={styles.collapsibleHeader} onClick={() => toggle('lyrics_raw')}>
+            <button type="button" className={styles.collapsibleHeader} aria-expanded={!!expanded['lyrics_raw']} onClick={() => toggle('lyrics_raw')}>
               <span className={styles.collapsibleTitle}>
                 Raw Lyrics (WhisperX)
                 <span className={styles.collapsibleBadge}>
@@ -455,7 +436,7 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
                 icon={faChevronDown}
                 className={`${styles.chevron} ${expanded['lyrics_raw'] ? styles.chevronOpen : ''}`}
               />
-            </div>
+            </button>
             {expanded['lyrics_raw'] && (
               <div className={styles.collapsibleBody}>
                 <div className={styles.lyricsBlock}>
@@ -480,7 +461,7 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
           <div className={styles.sectionTitle}>
             <FontAwesomeIcon icon={faExclamationTriangle} className={styles.sectionIcon} /> Processing Failures
           </div>
-          <table className={styles.table}>
+          <div className={styles.tableScroll} tabIndex={0} role="region" aria-label="Song details table"><table className={styles.table}>
             <thead>
               <tr>
                 <th>Stage</th>
@@ -499,7 +480,7 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         </div>
       )}
 
@@ -509,7 +490,7 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
           <div className={styles.sectionTitle}>
             <FontAwesomeIcon icon={faFileLines} className={styles.sectionIcon} /> Error Log
           </div>
-          <table className={styles.table}>
+          <div className={styles.tableScroll} tabIndex={0} role="region" aria-label="Song details table"><table className={styles.table}>
             <thead>
               <tr>
                 <th>Type</th>
@@ -521,10 +502,10 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
             <tbody>
               {data.errors.map(e => (
                 <Fragment key={e.id}>
-                  <tr className={styles.errorRow} onClick={() => setExpandedError(expandedError === e.id ? null : e.id)}>
+                  <tr className={styles.errorRow}>
                     <td><span className={`${styles.tag} ${styles.tagDanger}`}>{e.error_type}</span></td>
                     <td>{e.source}</td>
-                    <td style={{ maxWidth: 400, wordBreak: 'break-word' }}>{e.error_message}</td>
+                    <td style={{ maxWidth: 400, wordBreak: 'break-word' }}>{e.stack_trace ? <button className={styles.detailButton} aria-expanded={expandedError === e.id} onClick={() => setExpandedError(expandedError === e.id ? null : e.id)}>{e.error_message}</button> : e.error_message}</td>
                     <td style={{ whiteSpace: 'nowrap' }}>{formatDate(e.created_at)}</td>
                   </tr>
                   {expandedError === e.id && e.stack_trace && (
@@ -537,7 +518,7 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
                 </Fragment>
               ))}
             </tbody>
-          </table>
+          </table></div>
         </div>
       )}
 
@@ -547,7 +528,7 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
           <div className={styles.sectionTitle}>
             <FontAwesomeIcon icon={faPlay} className={styles.sectionIcon} /> Recent Plays
           </div>
-          <table className={styles.table}>
+          <div className={styles.tableScroll} tabIndex={0} role="region" aria-label="Song details table"><table className={styles.table}>
             <thead>
               <tr>
                 <th>User</th>
@@ -562,9 +543,10 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         </div>
       )}
+      {confirmation && <ConfirmAction confirmation={confirmation} onClose={() => setConfirmation(null)} />}
     </>
   )
 }

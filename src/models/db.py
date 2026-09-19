@@ -1,5 +1,6 @@
 import sqlite3
 import os
+from contextlib import contextmanager
 from flask import g, current_app
 
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "database.db")
@@ -7,9 +8,10 @@ DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "database.db"
 
 def get_db():
     if "db" not in g:
-        g.db = sqlite3.connect(DB_PATH, timeout=20)
+        g.db = sqlite3.connect(current_app.config.get("DATABASE", DB_PATH), timeout=20)
         g.db.row_factory = sqlite3.Row
         g.db.execute("PRAGMA journal_mode=WAL")
+        g.db.execute("PRAGMA foreign_keys=ON")
     return g.db
 
 
@@ -20,18 +22,23 @@ def close_db(e=None):
 
 
 def init_db():
-    db = sqlite3.connect(DB_PATH, timeout=20)
+    db_path = current_app.config.get("DATABASE", DB_PATH)
+    if db_path != ":memory:":
+        os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
+    db = get_db()
     schema_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "schema.sql")
     with open(schema_path, "r") as f:
         db.executescript(f.read())
     _run_migrations(db)
-    db.close()
 
 
 def _run_migrations(db):
     """Add columns/tables that may not exist in older databases."""
     cur = db.execute("PRAGMA table_info(users)")
     columns = [row[1] for row in cur.fetchall()]
+    if "session_version" not in columns:
+        db.execute("ALTER TABLE users ADD COLUMN session_version INTEGER NOT NULL DEFAULT 0")
+        db.commit()
     if "credits" not in columns:
         db.execute("ALTER TABLE users ADD COLUMN credits INTEGER DEFAULT 50")
         db.commit()
@@ -93,6 +100,29 @@ def _run_migrations(db):
     )""")
     db.commit()
 
+    for statement in (
+        "CREATE INDEX IF NOT EXISTS usage_logs_user_action ON usage_logs(user_id, action)",
+        "CREATE INDEX IF NOT EXISTS auth_tokens_user ON auth_tokens(user_id)",
+        "CREATE INDEX IF NOT EXISTS password_resets_user ON password_resets(user_id)",
+        "CREATE INDEX IF NOT EXISTS playlists_user ON playlists(user_id)",
+        "CREATE INDEX IF NOT EXISTS processing_failures_track ON processing_failures(track_id)",
+    ):
+        db.execute(statement)
+    db.commit()
+
+
+@contextmanager
+def transaction():
+    """Serialize read/modify/write operations, rolling back every failed write."""
+    db = get_db()
+    db.execute("BEGIN IMMEDIATE")
+    try:
+        yield db
+        db.commit()
+    except BaseException:
+        db.rollback()
+        raise
+
 
 def query_db(query, args=(), one=False):
     db = get_db()
@@ -103,12 +133,20 @@ def query_db(query, args=(), one=False):
 
 def execute_db(query, args=()):
     db = get_db()
-    db.execute(query, args)
-    db.commit()
+    try:
+        db.execute(query, args)
+        db.commit()
+    except BaseException:
+        db.rollback()
+        raise
 
 
 def insert_db(query, args=()):
     db = get_db()
-    cur = db.execute(query, args)
-    db.commit()
-    return cur.lastrowid
+    try:
+        cur = db.execute(query, args)
+        db.commit()
+        return cur.lastrowid
+    except BaseException:
+        db.rollback()
+        raise

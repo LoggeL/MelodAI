@@ -1,0 +1,8 @@
+{
+  "tracks": [
+    { "id": "139470659", "title": "First Light", "artist": "Offline Ensemble", "album": "Integration Sessions", "duration": 1, "img_url": "", "preview_url": "" },
+    { "id": "12345", "title": "Second Verse", "artist": "Offline Ensemble", "album": "Integration Sessions", "duration": 1, "img_url": "", "preview_url": "" },
+    { "id": "67890", "title": "Final Chorus", "artist": "Offline Ensemble", "album": "Integration Sessions", "duration": 1, "img_url": "", "preview_url": "" }
+  ],
+  "lyrics": { "language": "en", "lines": [ { "start": 0, "end": 1, "text": "Our first light", "words": [ { "start": 0, "end": 0.3, "word": "Our" }, { "start": 0.3, "end": 0.6, "word": "first" }, { "start": 0.6, "end": 1, "word": "light" } ] } ] }
+}

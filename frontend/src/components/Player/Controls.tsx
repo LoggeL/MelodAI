@@ -4,6 +4,7 @@ import { faBackwardStep, faPlay, faForwardStep, faExpand } from '@fortawesome/fr
 import styles from './Controls.module.css'
 
 interface Props {
+  disabled?: boolean
   isPlaying: boolean
   currentTime: number
   duration: number
@@ -30,7 +31,7 @@ function formatTime(seconds: number): string {
 // mix=0: pure vocals, mix=50: both equal, mix=100: pure instrumental
 function computeInitialMixVol(vv: number, iv: number): { mix: number; vol: number } {
   const vol = Math.max(vv, iv)
-  if (vol === 0) return { mix: 50, vol: 100 }
+  if (vol === 0) return { mix: 50, vol: 0 }
   const mix = vv >= iv
     ? Math.round((iv / vv) * 50)
     : Math.round(100 - (vv / iv) * 50)
@@ -95,6 +96,19 @@ function ArcKnob({ value, label, knobId, centerMark, centerText, innerLabels, on
   return (
     <div className={styles.knobContainer}>
       <svg
+        role="slider"
+        tabIndex={0}
+        aria-label={label === 'MIX' ? 'Vocal and instrumental mix' : 'Master volume'}
+        aria-valuemin={0} aria-valuemax={100} aria-valuenow={value}
+        onKeyDown={event => {
+          let next = value
+          if (event.key === 'ArrowUp' || event.key === 'ArrowRight') next += 5
+          else if (event.key === 'ArrowDown' || event.key === 'ArrowLeft') next -= 5
+          else if (event.key === 'Home') next = 0
+          else if (event.key === 'End') next = 100
+          else return
+          event.preventDefault(); event.stopPropagation(); onChange(Math.max(0, Math.min(100, next)))
+        }}
         width={K.size}
         height={K.size}
         viewBox={`0 0 ${K.size} ${K.size}`}
@@ -130,7 +144,7 @@ function ArcKnob({ value, label, knobId, centerMark, centerText, innerLabels, on
         <circle cx={K.cx} cy={K.cy} r={K.r + 3} fill="none" stroke="rgba(0,0,0,0.35)" strokeWidth="6" />
 
         {/* Background track */}
-        <path d={bgPath} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth={K.stroke} strokeLinecap="round" />
+        <path d={bgPath} fill="none" stroke="var(--border-strong)" strokeWidth={K.stroke} strokeLinecap="round" />
 
         {/* Filled track */}
         {fillPath && (
@@ -155,7 +169,7 @@ function ArcKnob({ value, label, knobId, centerMark, centerText, innerLabels, on
               key={tick}
               x1={inner.x} y1={inner.y}
               x2={outer.x} y2={outer.y}
-              stroke={active ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.1)'}
+              stroke={active ? 'var(--text-secondary)' : 'var(--border-strong)'}
               strokeWidth="1"
               strokeLinecap="round"
             />
@@ -167,7 +181,7 @@ function ArcKnob({ value, label, knobId, centerMark, centerText, innerLabels, on
           <line
             x1={cmInner.x} y1={cmInner.y}
             x2={cmOuter.x} y2={cmOuter.y}
-            stroke={Math.abs(value - 50) < 4 ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.25)'}
+            stroke={Math.abs(value - 50) < 4 ? 'var(--text)' : 'var(--text-muted)'}
             strokeWidth="1.5"
             strokeLinecap="round"
           />
@@ -178,7 +192,7 @@ function ArcKnob({ value, label, knobId, centerMark, centerText, innerLabels, on
           cx={dot.x}
           cy={dot.y}
           r={3.5}
-          fill={value > 0 ? '#fff' : 'rgba(255,255,255,0.15)'}
+          fill={value > 0 ? 'var(--text)' : 'var(--text-muted)'}
           filter={value > 0 ? `url(#${glowId})` : undefined}
         />
 
@@ -233,7 +247,7 @@ function ArcKnob({ value, label, knobId, centerMark, centerText, innerLabels, on
 // ── Controls ──────────────────────────────────────────────────────────────────
 
 export function Controls({
-  isPlaying, currentTime, duration, analyserRef, thumbnail,
+  disabled = false, isPlaying, currentTime, duration, analyserRef, thumbnail,
   initialVocalsVolume, initialInstrumentalVolume,
   onTogglePlay, onSeek, onPrev, onNext,
   onVocalsVolume, onInstrumentalVolume,
@@ -266,7 +280,7 @@ export function Controls({
     const wrapper = wrapperRef.current
     if (!canvas || !wrapper) return
     const ctx = canvas.getContext('2d')
-    if (!ctx) return
+    if (!ctx || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
 
     let cachedRgb = '217, 4, 41'
     let rgbFrame = 0
@@ -373,8 +387,8 @@ export function Controls({
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement).tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      const target = e.target as HTMLElement
+      if (disabled || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || target.closest('input, textarea, select, button, a, [role=slider], [role=combobox], [contenteditable=true], dialog')) return
       switch (e.key) {
         case ' ':  e.preventDefault(); onTogglePlay(); break
         case 'ArrowLeft': e.preventDefault(); onSeek(Math.max(0, currentTime - 5)); break
@@ -386,7 +400,7 @@ export function Controls({
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [onTogglePlay, onSeek, onNext, onPrev, toggleFullscreen, currentTime, duration])
+  }, [onTogglePlay, onSeek, onNext, onPrev, toggleFullscreen, currentTime, duration, disabled])
 
   return (
     <div className={styles.controls}>
@@ -396,6 +410,14 @@ export function Controls({
         <div className={styles.progress}>
           <span className={styles.time}>{formatTime(currentTime)}</span>
           <div
+            role="slider" tabIndex={disabled ? -1 : 0} aria-label="Playback position"
+            aria-disabled={disabled} aria-valuemin={0} aria-valuemax={Math.max(0, duration)}
+            aria-valuenow={Math.min(currentTime, duration)} aria-valuetext={`${formatTime(currentTime)} of ${formatTime(duration)}`}
+            onKeyDown={event => {
+              if (disabled) return
+              const time = event.key === 'Home' ? 0 : event.key === 'End' ? duration : event.key === 'ArrowLeft' ? currentTime - 5 : event.key === 'ArrowRight' ? currentTime + 5 : null
+              if (time !== null) { event.preventDefault(); event.stopPropagation(); onSeek(Math.max(0, Math.min(duration, time))) }
+            }}
             className={styles.barWrapper}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
@@ -414,7 +436,7 @@ export function Controls({
       <div className={styles.volumeRow}>
         <span className={styles.volLabel}>VOX</span>
         <input
-          type="range" min={0} max={100} value={mix}
+          aria-label="Vocal and instrumental mix" type="range" min={0} max={100} value={mix}
           className={styles.volSlider}
           onChange={e => setMix(Number(e.target.value))}
         />
@@ -422,7 +444,7 @@ export function Controls({
         <span className={styles.volDivider} />
         <span className={styles.volLabel}>VOL</span>
         <input
-          type="range" min={0} max={100} value={masterVol}
+          aria-label="Master volume" type="range" min={0} max={100} value={masterVol}
           className={styles.volSlider}
           onChange={e => setMasterVol(Number(e.target.value))}
         />
@@ -449,12 +471,14 @@ export function Controls({
         </div>
 
         <div className={styles.playback}>
-          <button className={styles.controlBtn} onClick={onPrev} title="Previous (P)">
+          <button className={styles.controlBtn} disabled={disabled} aria-label="Previous song" onClick={onPrev} title="Previous (P)">
             <FontAwesomeIcon icon={faBackwardStep} />
           </button>
           <div ref={wrapperRef} className={styles.playBtnWrapper}>
             <button
               className={`${styles.playBtn} ${isPlaying ? styles.playBtnPlaying : ''}`}
+              disabled={disabled}
+              aria-label={isPlaying ? 'Pause' : 'Play'}
               onClick={onTogglePlay}
               title="Play/Pause (Space)"
             >
@@ -471,13 +495,13 @@ export function Controls({
               )}
             </button>
           </div>
-          <button className={styles.controlBtn} onClick={onNext} title="Next (N)">
+          <button className={styles.controlBtn} disabled={disabled} aria-label="Next song" onClick={onNext} title="Next (N)">
             <FontAwesomeIcon icon={faForwardStep} />
           </button>
         </div>
 
         <div className={styles.rightControls}>
-          <button className={styles.controlBtn} onClick={toggleFullscreen} title="Fullscreen (F)">
+          <button className={styles.controlBtn} aria-label="Toggle fullscreen" onClick={toggleFullscreen} title="Fullscreen (F)">
             <FontAwesomeIcon icon={faExpand} />
           </button>
         </div>

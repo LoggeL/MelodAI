@@ -46,21 +46,23 @@ def _get_current_user():
     user_id = session.get("user_id")
     if user_id:
         user = query_db("SELECT * FROM users WHERE id = ?", [user_id], one=True)
-        if user and user["is_approved"]:
+        if user and user["is_approved"] and session.get("session_version", 0) == user["session_version"]:
             return user
+        session.clear()
 
     # Check auth_token cookie (remember me)
     token = request.cookies.get("auth_token")
     if token:
-        auth = query_db(
-            "SELECT * FROM auth_tokens WHERE token = ? AND expires_at > ?",
+        user = query_db(
+            """SELECT users.* FROM users JOIN auth_tokens ON auth_tokens.user_id = users.id
+               WHERE auth_tokens.token = ? AND auth_tokens.expires_at > ? AND users.is_approved = 1""",
             [token, datetime.utcnow().isoformat()],
             one=True,
         )
-        if auth:
-            user = query_db("SELECT * FROM users WHERE id = ?", [auth["user_id"]], one=True)
-            if user and user["is_approved"]:
-                session["user_id"] = user["id"]
-                return user
+        if user:
+            session["user_id"] = user["id"]
+            session["session_version"] = user["session_version"]
+            session.permanent = True
+            return user
 
     return None

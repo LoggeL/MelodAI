@@ -1,10 +1,8 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 
-const BASE = process.env.E2E_BASE_URL || 'http://localhost:5000'
-const ADMIN_USER = process.env.E2E_ADMIN_USER || 'hyper.xjo@gmail.com'
-const ADMIN_PASS = process.env.E2E_ADMIN_PASS || '404noswagfound'
+import { BASE, ADMIN_USER, ADMIN_PASS, extractCookie, REGULAR_PASS, testEmail } from '../config'
 const CREDIT_TEST_USER = `credituser_${Date.now()}`
-const CREDIT_TEST_PASS = 'testpass789'
+const CREDIT_TEST_PASS = REGULAR_PASS
 
 let adminCookie = ''
 let userCookie = ''
@@ -34,7 +32,9 @@ describe('Credits, Profile Stats & Change Password API', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: ADMIN_USER, password: ADMIN_PASS }),
     })
-    adminCookie = (loginResp.headers.get('set-cookie') || '').split(';')[0]
+    expect(loginResp.status).toBe(200)
+    adminCookie = extractCookie(loginResp)
+    expect(adminCookie).toMatch(/^session=.+/)
 
     // Generate invite key and register test user (auto-approved)
     const keyResp = await post('/api/admin/invite-keys', {}, adminCookie)
@@ -43,9 +43,11 @@ describe('Credits, Profile Stats & Change Password API', () => {
     const regResp = await fetch(`${BASE}/api/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: CREDIT_TEST_USER, password: CREDIT_TEST_PASS, invite_key: key }),
+      body: JSON.stringify({ username: CREDIT_TEST_USER, email: testEmail(CREDIT_TEST_USER), password: CREDIT_TEST_PASS, invite_key: key }),
     })
-    userCookie = (regResp.headers.get('set-cookie') || '').split(';')[0]
+    expect(regResp.status).toBe(200)
+    userCookie = extractCookie(regResp)
+    expect(userCookie).toMatch(/^session=.+/)
 
     // Get user ID from admin users list
     const usersResp = await get('/api/admin/users', adminCookie)
@@ -57,7 +59,7 @@ describe('Credits, Profile Stats & Change Password API', () => {
   describe('GET /credits', () => {
     it('should reject unauthenticated request', async () => {
       const resp = await get('/api/credits', '')
-      expect([401, 302]).toContain(resp.status)
+      expect(resp.status).toBe(401)
     })
 
     it('should return credits for authenticated user', async () => {
@@ -75,7 +77,7 @@ describe('Credits, Profile Stats & Change Password API', () => {
       const resp = await post(`/api/admin/users/${testUserId}/credits`, {}, adminCookie)
       expect(resp.status).toBe(400)
       const data = await resp.json()
-      expect(data.error).toContain('credits required')
+      expect(data.error).toBe('credits must be an integer between 0 and 1000000')
     })
 
     it('should set user credits', async () => {
@@ -101,24 +103,17 @@ describe('Credits, Profile Stats & Change Password API', () => {
   })
 
   describe('POST /play/:track_id/credit', () => {
-    let endpointExists = false
-
     beforeAll(async () => {
       // Set credits to 10 for play credit tests
       await post(`/api/admin/users/${testUserId}/credits`, { credits: 10 }, adminCookie)
-      // Check if endpoint exists (may not be in running server)
-      const probe = await post('/api/play/12345/credit', {}, adminCookie)
-      endpointExists = probe.status !== 404
     })
 
     it('should reject unauthenticated request', async () => {
-      if (!endpointExists) return
       const resp = await post('/api/play/12345/credit', {}, '')
-      expect([401, 302]).toContain(resp.status)
+      expect(resp.status).toBe(401)
     })
 
     it('should deduct 1 credit for non-admin user', async () => {
-      if (!endpointExists) return
       const resp = await post('/api/play/12345/credit', {}, userCookie)
       expect(resp.status).toBe(200)
       const data = await resp.json()
@@ -127,7 +122,6 @@ describe('Credits, Profile Stats & Change Password API', () => {
     })
 
     it('should not deduct credits for admin user', async () => {
-      if (!endpointExists) return
       const beforeResp = await get('/api/auth/check', adminCookie)
       const beforeData = await beforeResp.json()
       const creditsBefore = beforeData.credits
@@ -140,7 +134,6 @@ describe('Credits, Profile Stats & Change Password API', () => {
     })
 
     it('should reject when user has insufficient credits', async () => {
-      if (!endpointExists) return
       // Set credits to 0
       await post(`/api/admin/users/${testUserId}/credits`, { credits: 0 }, adminCookie)
 
@@ -155,7 +148,7 @@ describe('Credits, Profile Stats & Change Password API', () => {
   describe('GET /auth/profile/stats', () => {
     it('should reject unauthenticated request', async () => {
       const resp = await get('/api/auth/profile/stats', '')
-      expect([401, 302]).toContain(resp.status)
+      expect(resp.status).toBe(401)
     })
 
     it('should return profile stats', async () => {
@@ -186,7 +179,7 @@ describe('Credits, Profile Stats & Change Password API', () => {
         current_password: 'test',
         new_password: 'test',
       }, '')
-      expect([401, 302]).toContain(resp.status)
+      expect(resp.status).toBe(401)
     })
 
     it('should reject empty passwords', async () => {

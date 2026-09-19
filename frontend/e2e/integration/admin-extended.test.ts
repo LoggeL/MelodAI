@@ -1,8 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 
-const BASE = process.env.E2E_BASE_URL || 'http://localhost:5000'
-const ADMIN_USER = process.env.E2E_ADMIN_USER || 'hyper.xjo@gmail.com'
-const ADMIN_PASS = process.env.E2E_ADMIN_PASS || '404noswagfound'
+import { BASE, ADMIN_USER, ADMIN_PASS, extractCookie } from '../config'
 
 let adminCookie = ''
 
@@ -29,7 +27,9 @@ describe('Admin Extended API', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: ADMIN_USER, password: ADMIN_PASS }),
     })
-    adminCookie = (loginResp.headers.get('set-cookie') || '').split(';')[0]
+    expect(loginResp.status).toBe(200)
+    adminCookie = extractCookie(loginResp)
+    expect(adminCookie).toMatch(/^session=.+/)
   })
 
   // ─── Error Log Endpoints ───
@@ -37,7 +37,7 @@ describe('Admin Extended API', () => {
   describe('GET /admin/errors', () => {
     it('should reject unauthenticated request', async () => {
       const resp = await get('/api/admin/errors', '')
-      expect([401, 302, 403]).toContain(resp.status)
+      expect(resp.status).toBe(401)
     })
 
     it('should return paginated error list', async () => {
@@ -82,23 +82,22 @@ describe('Admin Extended API', () => {
     it('should return errors with expected fields', async () => {
       const resp = await get('/api/admin/errors')
       const data = await resp.json()
-      if (data.errors.length > 0) {
-        const err = data.errors[0]
-        expect(err).toHaveProperty('id')
-        expect(err).toHaveProperty('error_type')
-        expect(err).toHaveProperty('source')
-        expect(err).toHaveProperty('error_message')
-        expect(err).toHaveProperty('resolved')
-        expect(err).toHaveProperty('created_at')
-        expect(typeof err.resolved).toBe('boolean')
-      }
+      expect(data.errors.length).toBeGreaterThan(0)
+      const err = data.errors[0]
+      expect(err).toHaveProperty('id')
+      expect(err).toHaveProperty('error_type')
+      expect(err).toHaveProperty('source')
+      expect(err).toHaveProperty('error_message')
+      expect(err).toHaveProperty('resolved')
+      expect(err).toHaveProperty('created_at')
+      expect(typeof err.resolved).toBe('boolean')
     })
   })
 
   describe('POST /admin/errors/:id/resolve', () => {
     it('should reject unauthenticated request', async () => {
       const resp = await post('/api/admin/errors/1/resolve', {}, '')
-      expect([401, 302, 403]).toContain(resp.status)
+      expect(resp.status).toBe(401)
     })
 
     it('should return 404 for non-existent error', async () => {
@@ -106,33 +105,32 @@ describe('Admin Extended API', () => {
       expect(resp.status).toBe(404)
     })
 
-    it('should toggle resolution status if errors exist', async () => {
+    it('should toggle resolution status of a seeded error', async () => {
       // Get an error to toggle
       const listResp = await get('/api/admin/errors')
       const listData = await listResp.json()
-      if (listData.errors.length > 0) {
-        const errorId = listData.errors[0].id
-        const wasBefore = listData.errors[0].resolved
+      expect(listData.errors.length).toBeGreaterThan(0)
+      const errorId = listData.errors[0].id
+      const wasBefore = listData.errors[0].resolved
 
-        const resp = await post(`/api/admin/errors/${errorId}/resolve`)
-        expect(resp.status).toBe(200)
-        const data = await resp.json()
-        expect(data.success).toBe(true)
-        expect(data.resolved).toBe(!wasBefore)
+      const resp = await post(`/api/admin/errors/${errorId}/resolve`)
+      expect(resp.status).toBe(200)
+      const data = await resp.json()
+      expect(data.success).toBe(true)
+      expect(data.resolved).toBe(!wasBefore)
 
-        // Toggle back
-        const resp2 = await post(`/api/admin/errors/${errorId}/resolve`)
-        expect(resp2.status).toBe(200)
-        const data2 = await resp2.json()
-        expect(data2.resolved).toBe(wasBefore)
-      }
+      // Toggle back
+      const resp2 = await post(`/api/admin/errors/${errorId}/resolve`)
+      expect(resp2.status).toBe(200)
+      const data2 = await resp2.json()
+      expect(data2.resolved).toBe(wasBefore)
     })
   })
 
   describe('DELETE /admin/errors/resolved', () => {
     it('should reject unauthenticated request', async () => {
       const resp = await del('/api/admin/errors/resolved', '')
-      expect([401, 302, 403]).toContain(resp.status)
+      expect(resp.status).toBe(401)
     })
 
     it('should clear resolved errors', async () => {
@@ -148,7 +146,7 @@ describe('Admin Extended API', () => {
   describe('GET /admin/storage', () => {
     it('should reject unauthenticated request', async () => {
       const resp = await get('/api/admin/storage', '')
-      expect([401, 302, 403]).toContain(resp.status)
+      expect(resp.status).toBe(401)
     })
 
     it('should return storage stats', async () => {
@@ -186,7 +184,7 @@ describe('Admin Extended API', () => {
   describe('GET /admin/songs/:id/details', () => {
     it('should reject unauthenticated request', async () => {
       const resp = await get('/api/admin/songs/12345/details', '')
-      expect([401, 302, 403]).toContain(resp.status)
+      expect(resp.status).toBe(401)
     })
 
     it('should return 404 for non-existent track', async () => {
@@ -200,24 +198,23 @@ describe('Admin Extended API', () => {
       // First check if any songs exist
       const songsResp = await get('/api/admin/songs')
       const songs = await songsResp.json()
-      if (songs.length > 0) {
-        const songId = songs[0].id
-        const resp = await get(`/api/admin/songs/${songId}/details`)
-        expect(resp.status).toBe(200)
-        const data = await resp.json()
-        expect(data).toHaveProperty('id')
-        expect(data).toHaveProperty('metadata')
-        expect(data).toHaveProperty('complete')
-        expect(data).toHaveProperty('files')
-        expect(data).toHaveProperty('usage')
-        expect(data).toHaveProperty('favorites_count')
-        expect(data).toHaveProperty('playlist_count')
-        expect(typeof data.complete).toBe('boolean')
-        expect(typeof data.usage).toBe('object')
-        expect(data.usage).toHaveProperty('play_count')
-        expect(data.usage).toHaveProperty('download_count')
-        expect(data.usage).toHaveProperty('recent_plays')
-      }
+      expect(songs.length).toBeGreaterThan(0)
+      const songId = songs[0].id
+      const resp = await get(`/api/admin/songs/${songId}/details`)
+      expect(resp.status).toBe(200)
+      const data = await resp.json()
+      expect(data).toHaveProperty('id')
+      expect(data).toHaveProperty('metadata')
+      expect(data).toHaveProperty('complete')
+      expect(data).toHaveProperty('files')
+      expect(data).toHaveProperty('usage')
+      expect(data).toHaveProperty('favorites_count')
+      expect(data).toHaveProperty('playlist_count')
+      expect(typeof data.complete).toBe('boolean')
+      expect(typeof data.usage).toBe('object')
+      expect(data.usage).toHaveProperty('play_count')
+      expect(data.usage).toHaveProperty('download_count')
+      expect(data.usage).toHaveProperty('recent_plays')
     })
   })
 
@@ -226,7 +223,7 @@ describe('Admin Extended API', () => {
   describe('DELETE /admin/invite-keys/used', () => {
     it('should reject unauthenticated request', async () => {
       const resp = await del('/api/admin/invite-keys/used', '')
-      expect([401, 302, 403]).toContain(resp.status)
+      expect(resp.status).toBe(401)
     })
 
     it('should delete used invite keys and return count', async () => {

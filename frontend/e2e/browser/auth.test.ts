@@ -1,9 +1,10 @@
+import { REGULAR_PASS, testEmail } from '../config'
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import type { Browser } from 'puppeteer'
 import { launchBrowser, newPage, BASE, ADMIN_USER, ADMIN_PASS, exists, waitForIdle } from '../helpers'
 
 const TEST_USER = `e2euser_${Date.now()}`
-const TEST_PASS = 'testpass456'
+const TEST_PASS = REGULAR_PASS
 
 let browser: Browser
 
@@ -131,6 +132,7 @@ describe('Auth E2E - Login Page', () => {
         await usernameInput.click({ clickCount: 3 })
         await usernameInput.type(TEST_USER)
       }
+      await page.type('input[name="email"]', testEmail(TEST_USER))
       const passwordInput = await page.$('input[name="password"]')
       if (passwordInput) {
         await passwordInput.click({ clickCount: 3 })

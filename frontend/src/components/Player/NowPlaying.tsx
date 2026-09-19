@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faDownload, faShareNodes } from '@fortawesome/free-solid-svg-icons'
 import type { QueueItem } from '../../types'
@@ -14,10 +14,20 @@ interface Props {
 
 export function NowPlaying({ track, isFavorite, onToggleFavorite }: Props) {
   const [showDownload, setShowDownload] = useState(false)
+  const downloadRef = useRef<HTMLDivElement>(null)
+  const [downloading, setDownloading] = useState(false)
+  useEffect(() => {
+    if (!showDownload) return
+    const close = (event: MouseEvent) => { if (!downloadRef.current?.contains(event.target as Node)) setShowDownload(false) }
+    const key = (event: KeyboardEvent) => { if (event.key === 'Escape') { setShowDownload(false); downloadRef.current?.querySelector('button')?.focus() } }
+    document.addEventListener('mousedown', close); document.addEventListener('keydown', key)
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', key) }
+  }, [showDownload])
   const toast = useToast()
 
   const handleDownload = useCallback(async (type: string) => {
-    if (!track) return
+    if (!track || downloading) return
+    setDownloading(true)
     setShowDownload(false)
     const fileMap: Record<string, string> = { vocals: 'vocals.mp3', no_vocals: 'no_vocals.mp3', song: 'song.mp3' }
     const labelMap: Record<string, string> = { vocals: 'Vocals', no_vocals: 'Instrumental', song: 'Full' }
@@ -27,20 +37,24 @@ export function NowPlaying({ track, isFavorite, onToggleFavorite }: Props) {
     toast.success(`Downloading ${labelMap[type]}...`)
     try {
       const resp = await fetch(url)
+      if (!resp.ok) throw new Error('Download unavailable')
       const blob = await resp.blob()
       const a = document.createElement('a')
       a.href = URL.createObjectURL(blob)
       a.download = filename
+      document.body.appendChild(a)
       a.click()
-      URL.revokeObjectURL(a.href)
+      a.remove()
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000)
     } catch {
       toast.error('Download failed')
-    }
-  }, [track, toast])
+    } finally { setDownloading(false) }
+  }, [track, toast, downloading])
 
   const handleShare = useCallback(() => {
     if (!track) return
     const url = `${window.location.origin}/song/${track.id}`
+    if (!navigator.clipboard) { toast.warning('Clipboard is unavailable in this browser'); return }
     navigator.clipboard.writeText(url).then(
       () => toast.success('Link copied to clipboard!'),
       () => toast.warning('Could not copy link')
@@ -66,8 +80,8 @@ export function NowPlaying({ track, isFavorite, onToggleFavorite }: Props) {
             title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
           />
         )}
-        <div className={styles.downloadWrapper}>
-          <button className={styles.btn} onClick={() => setShowDownload(!showDownload)} title="Download">
+        <div ref={downloadRef} className={styles.downloadWrapper}>
+          <button className={styles.btn} onClick={() => setShowDownload(!showDownload)} disabled={downloading} aria-expanded={showDownload} aria-label="Download song" title="Download">
             <FontAwesomeIcon icon={faDownload} />
           </button>
           {showDownload && (
@@ -78,7 +92,7 @@ export function NowPlaying({ track, isFavorite, onToggleFavorite }: Props) {
             </div>
           )}
         </div>
-        <button className={styles.btn} onClick={handleShare} title="Share">
+        <button className={styles.btn} onClick={handleShare} title="Share" aria-label="Copy song link">
           <FontAwesomeIcon icon={faShareNodes} />
         </button>
       </div>

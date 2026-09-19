@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS users (
     email TEXT COLLATE NOCASE,
     display_name TEXT,
     password_hash TEXT NOT NULL,
+    session_version INTEGER NOT NULL DEFAULT 0,
     is_admin INTEGER DEFAULT 0,
     is_approved INTEGER DEFAULT 0,
     credits INTEGER DEFAULT 50,

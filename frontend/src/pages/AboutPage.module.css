@@ -1,6 +1,6 @@
 .page {
   overflow: auto;
-  height: 100vh;
+  height: 100dvh;
 }
 
 /* Gradient accent line at the top of the page */
