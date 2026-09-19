@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type PointerEvent } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faBackwardStep, faPlay, faForwardStep, faExpand } from '@fortawesome/free-solid-svg-icons'
+import { faBackwardStep, faPlay, faForwardStep, faExpand, faVolumeHigh } from '@fortawesome/free-solid-svg-icons'
+import { Modal } from '../common/Modal'
 import styles from './Controls.module.css'
 
 interface Props {
@@ -260,6 +261,10 @@ export function Controls({
   )
   const [mix, setMix] = useState(initMix)
   const [masterVol, setMasterVol] = useState(initVol)
+  const [soundOpen, setSoundOpen] = useState(false)
+  const soundId = useId()
+  const mixDescription = mix === 100 ? 'Music only' : mix === 0 ? 'Vocals only'
+    : mix === 50 ? 'Vocals + music' : mix > 50 ? 'More music' : 'More vocals'
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
@@ -432,25 +437,12 @@ export function Controls({
         </div>
       </div>
 
-      {/* Mobile-only volume row */}
-      <div className={styles.volumeRow}>
-        <span className={styles.volLabel}>VOX</span>
-        <input
-          aria-label="Vocal and instrumental mix" type="range" min={0} max={100} value={mix}
-          className={styles.volSlider}
-          onChange={e => setMix(Number(e.target.value))}
-        />
-        <span className={styles.volLabel}>INST</span>
-        <span className={styles.volDivider} />
-        <span className={styles.volLabel}>VOL</span>
-        <input
-          aria-label="Master volume" type="range" min={0} max={100} value={masterVol}
-          className={styles.volSlider}
-          onChange={e => setMasterVol(Number(e.target.value))}
-        />
-      </div>
-
       <div className={styles.buttonsRow}>
+        <button type="button" className={styles.soundButton} aria-haspopup="dialog"
+          onClick={event => { event.currentTarget.focus(); setSoundOpen(true) }}>
+          <FontAwesomeIcon icon={faVolumeHigh} />
+          <span>Sound</span>
+        </button>
         <div className={styles.leftControls}>
           <div className={styles.knobPanel}>
             <ArcKnob
@@ -506,6 +498,45 @@ export function Controls({
           </button>
         </div>
       </div>
+
+      {soundOpen && (
+        <Modal title="Sound" size="small" onClose={() => setSoundOpen(false)}
+          footer={<button type="button" className="button" onClick={() => setSoundOpen(false)}>Done</button>}>
+          <div className={styles.soundSettings}>
+            <div className={styles.soundPresets} role="group" aria-label="Singing presets">
+              <button type="button" aria-pressed={mix === 100} onClick={() => setMix(100)}>
+                <strong>Karaoke</strong><span>Music only</span>
+              </button>
+              <button type="button" aria-pressed={mix === 50} onClick={() => setMix(50)}>
+                <strong>With vocals</strong><span>Sing along</span>
+              </button>
+            </div>
+            <div className={styles.soundControl}>
+              <div className={styles.soundLabel}>
+                <label htmlFor={`${soundId}-balance`}>Vocals &amp; music</label>
+                <span>{mixDescription}</span>
+              </div>
+              <p id={`${soundId}-balance-help`}>Move towards music to turn down the original singer.</p>
+              <input id={`${soundId}-balance`} type="range" min={0} max={100} value={mix}
+                aria-describedby={`${soundId}-balance-help`}
+                aria-valuetext={`${Math.min(100, 2 * (100 - mix))}% vocals, ${Math.min(100, 2 * mix)}% music`}
+                className={styles.soundSlider} onChange={e => setMix(Number(e.target.value))} />
+              <div className={styles.soundEndpoints} aria-hidden="true"><span>Vocals only</span><span>Music only</span></div>
+            </div>
+            <div className={styles.soundControl}>
+              <div className={styles.soundLabel}>
+                <label htmlFor={`${soundId}-volume`}>Volume</label>
+                <span>{masterVol === 0 ? 'Muted' : `${masterVol}%`}</span>
+              </div>
+              <p id={`${soundId}-volume-help`}>Adjust the overall playback volume.</p>
+              <input id={`${soundId}-volume`} type="range" min={0} max={100} value={masterVol}
+                aria-describedby={`${soundId}-volume-help`} aria-valuetext={masterVol === 0 ? 'Muted' : `${masterVol}%`}
+                className={styles.soundSlider} onChange={e => setMasterVol(Number(e.target.value))} />
+              <div className={styles.soundEndpoints} aria-hidden="true"><span>Mute</span><span>Full volume</span></div>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }
