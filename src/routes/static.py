@@ -51,6 +51,7 @@ def about_page():
 @static_bp.route("/admin/songs")
 @static_bp.route("/admin/songs/<track_id>")
 @static_bp.route("/admin/status")
+@static_bp.route("/admin/logs")
 @static_bp.route("/admin/errors")
 def admin_page(**_kwargs):
     return _serve_spa()
