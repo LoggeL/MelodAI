@@ -319,87 +319,61 @@
   right: var(--spacing-xl);
 }
 
-/* ── Mobile volume row (hidden on desktop) ───────────────────────────────── */
-
-.volumeRow {
-  display: none;
+/* Mobile sound settings keep touch targets separate from playback. */
+.soundButton { display: none; }
+.soundSettings { display: flex; flex-direction: column; gap: 24px; }
+.soundPresets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.soundPresets button {
+  display: flex; flex-direction: column; gap: 4px; align-items: flex-start;
+  padding: 14px; min-height: 72px; border: 1px solid var(--border-strong);
+  border-radius: 10px; background: var(--surface); color: var(--text); text-align: left; cursor: pointer;
 }
-
-/* ── Responsive ──────────────────────────────────────────────────────────── */
+.soundPresets button[aria-pressed='true'] { border-color: var(--primary); background: var(--primary-glow); }
+.soundPresets strong { font-size: 0.9rem; }
+.soundPresets span { color: var(--text-secondary); font-size: 0.75rem; }
+.soundControl + .soundControl { padding-top: 24px; border-top: 1px solid var(--border); }
+.soundLabel { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.soundLabel label { color: var(--text); font-size: 0.95rem; font-weight: 600; }
+.soundLabel > span { color: var(--text-secondary); font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+.soundControl p { margin: 6px 0 8px; font-size: 0.8rem; line-height: 1.5; color: var(--text-secondary); }
+.soundEndpoints { display: flex; justify-content: space-between; gap: 12px; color: var(--text-secondary); font-size: 0.75rem; }
+.soundSlider {
+  display: block; width: 100%; height: 44px; margin: 0; padding: 0;
+  appearance: none; -webkit-appearance: none; background: transparent;
+  cursor: pointer; touch-action: pan-y; accent-color: var(--primary);
+}
+.soundSlider::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: var(--border-strong); }
+.soundSlider::-moz-range-track { height: 6px; border-radius: 3px; background: var(--border-strong); }
+.soundSlider::-webkit-slider-thumb {
+  appearance: none; -webkit-appearance: none; width: 26px; height: 26px; margin-top: -10px;
+  border: 3px solid var(--bg-elevated); border-radius: 50%; background: var(--text); box-shadow: 0 0 0 1px var(--text-secondary);
+}
+.soundSlider::-moz-range-thumb {
+  width: 20px; height: 20px; border: 3px solid var(--bg-elevated); border-radius: 50%;
+  background: var(--text); box-shadow: 0 0 0 1px var(--text-secondary);
+}
+.soundSlider:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 6px; }
 
 @media (max-width: 768px) {
-  .controls {
-    position: sticky;
-    bottom: 0;
-    z-index: 100;
+  .controls { position: sticky; bottom: 0; z-index: 100; padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .progressRow { padding: 4px var(--spacing-md) 0; }
+  .barWrapper { height: 44px; }
+  .thumb { transform: translateY(-50%) scale(1); }
+  .buttonsRow {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    padding: 0 var(--spacing-md) 10px; gap: 8px;
   }
-  .progressRow { padding: var(--spacing-xs) var(--spacing-md) 0; }
-  .buttonsRow { padding: var(--spacing-xs) var(--spacing-md) var(--spacing-xs); gap: var(--spacing-sm); }
+  .playback { gap: 4px; }
+  .playback .controlBtn { width: 44px; height: 48px; padding: 10px; }
   .leftControls { display: none; }
-  .rightControls {
-    position: static;
-    gap: var(--spacing-xs);
-  }
+  .rightControls { position: static; justify-self: end; }
   .knobPanel { display: none; }
-
-  .volumeRow {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px var(--spacing-md) 2px;
-    position: relative;
-    z-index: 1;
+  .soundButton {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; justify-self: start;
+    gap: 4px; min-width: 48px; min-height: 48px; border: 0; border-radius: 10px;
+    background: var(--surface-hover); color: var(--text); font-size: 1rem; cursor: pointer;
   }
-
-  .volLabel {
-    font-size: 0.6rem;
-    font-weight: 800;
-    font-family: var(--font-heading);
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    white-space: nowrap;
-  }
-
-  .volSlider {
-    flex: 1;
-    -webkit-appearance: none;
-    appearance: none;
-    height: 3px;
-    border-radius: 2px;
-    background: var(--text-muted);
-    accent-color: var(--primary);
-    outline: none;
-    cursor: pointer;
-  }
-
-  .volSlider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    background: var(--primary);
-    box-shadow: 0 0 6px var(--primary-glow);
-    cursor: pointer;
-  }
-
-  .volSlider::-moz-range-thumb {
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    background: var(--primary);
-    box-shadow: 0 0 6px var(--primary-glow);
-    border: none;
-    cursor: pointer;
-  }
-
-  .volDivider {
-    width: 1px;
-    height: 14px;
-    background: var(--border);
-    flex-shrink: 0;
-  }
+  .soundButton span { font-size: 0.65rem; font-weight: 600; }
 }
 
 /* ── Large screens / projector ───────────────────────────────────────────── */

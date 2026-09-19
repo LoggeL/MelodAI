@@ -19,6 +19,7 @@ export function Modal({ title, onClose, children, footer, size = 'medium', busy 
   useEffect(() => {
     const element = dialog.current!
     const notificationContainer = notifications.current!
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
     element.showModal()
     return () => {
       element.close()
@@ -29,6 +30,8 @@ export function Modal({ title, onClose, children, footer, size = 'medium', busy 
         while (notificationContainer.firstChild) globalNotifications.appendChild(notificationContainer.firstChild)
         while (globalNotifications.children.length > 4) globalNotifications.firstElementChild?.remove()
       }
+      // React may remove the portal before close() restores native focus.
+      if (opener?.isConnected) opener.focus({ preventScroll: true })
     }
   }, [])
   return createPortal(
