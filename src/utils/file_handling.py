@@ -3,7 +3,6 @@ import os
 import shutil
 import subprocess
 import tempfile
-from pathlib import Path
 from flask import current_app, has_app_context
 from src.utils.constants import SONGS_DIR, TRACK_FILES
 
@@ -17,12 +16,13 @@ def _validate_song_path(path):
 
     Raises ValueError if the resolved path escapes SONGS_PATH.
     """
-    resolved = Path(path).resolve()
-    try:
-        resolved.relative_to(Path(get_songs_path()).resolve())
-    except ValueError:
+    root = os.path.realpath(get_songs_path())
+    resolved = os.path.realpath(path)
+    # Include the separator so a sibling such as "songs-backup" cannot match.
+    # Resolve both paths first to reject escapes through symlinks as well as "..".
+    if resolved != root and not resolved.startswith(os.path.join(root, "")):
         raise ValueError("Path traversal detected")
-    return str(resolved)
+    return resolved
 
 
 def normalize_track_id(track_id):
