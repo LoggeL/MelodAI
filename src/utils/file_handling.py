@@ -18,9 +18,11 @@ def _validate_song_path(path):
     """
     root = os.path.realpath(get_songs_path())
     resolved = os.path.realpath(path)
+    if resolved == root:
+        return root
     # Include the separator so a sibling such as "songs-backup" cannot match.
     # Resolve both paths first to reject escapes through symlinks as well as "..".
-    if resolved != root and not resolved.startswith(os.path.join(root, "")):
+    if not resolved.startswith(os.path.join(root, "")):
         raise ValueError("Path traversal detected")
     return resolved
 

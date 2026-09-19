@@ -29,6 +29,9 @@ class SongPathTest(unittest.TestCase):
         self.assertEqual(path, str(self.songs / "123" / "song.mp3"))
         self.assertFalse(Path(path).parent.exists())
 
+    def test_accepts_storage_root_itself(self):
+        self.assertEqual(_validate_song_path(self.songs), str(self.songs))
+
     def test_normalizes_internal_parent_segments(self):
         path = self.songs / "123" / ".." / "456" / "song.mp3"
         self.assertEqual(
