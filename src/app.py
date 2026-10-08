@@ -88,6 +88,9 @@ def create_app(config=None):
 
     @app.errorhandler(HTTPException)
     def handle_http_error(error):
+        from src.routes.static import is_spa_fallback, spa_not_found
+        if error.code == 404 and is_spa_fallback(request.path, request.method):
+            return spa_not_found()
         if request.path.startswith(("/api/", "/songs/")):
             response = error.get_response()
             response.data = app.json.dumps({"error": error.description})

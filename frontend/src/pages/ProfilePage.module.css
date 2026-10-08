@@ -37,3 +37,14 @@
 .password { margin-top: var(--s-7); display: grid; gap: var(--s-4); max-width: 560px; }
 .form { display: grid; gap: var(--s-4); }
 .form :global(.btn) { justify-self: start; }
+
+/* Lieblingssong: a title instead of a number, clamped to two lines. */
+.favorite {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  font-size: var(--fs-lg); line-height: 1.2; color: var(--ink); text-decoration: none;
+}
+.favorite:hover { text-decoration: underline; text-decoration-color: var(--vocal); text-underline-offset: .15em; }
+.statNote { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.statWide { grid-column: 1 / -1; }
+@media (min-width: 600px) { .statWide { grid-column: auto; } }
+@media (min-width: 900px) { .statStrip { grid-template-columns: repeat(5, minmax(0, 1fr)); } }

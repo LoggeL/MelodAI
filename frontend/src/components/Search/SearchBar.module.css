@@ -86,7 +86,7 @@
 .balance { font-family: var(--mono); color: var(--ink-2); white-space: nowrap; }
 .resultItem {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) auto;
+  grid-template-columns: 44px minmax(0, 1fr) auto auto;
   align-items: center;
   gap: var(--s-3);
   min-height: 60px;
@@ -102,6 +102,7 @@
 .album { color: var(--muted); }
 .match { background: transparent; color: inherit; text-decoration: underline 2px var(--vocal); text-underline-offset: 3px; }
 .bar { margin-top: 4px; }
+.duration { font: 500 var(--fs-xs)/1 var(--mono); color: var(--muted); font-feature-settings: 'tnum'; white-space: nowrap; }
 .action { display: inline-flex; justify-content: flex-end; }
 .addLabel {
   display: inline-grid;

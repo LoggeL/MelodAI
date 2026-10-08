@@ -64,9 +64,9 @@
 .listTable th { padding: 0 var(--s-2); }
 @media (min-width: 600px) { .listTable td { padding: 6px var(--s-4); } .listTable th { padding: 0 var(--s-4); } }
 .thumbCell { width: 56px; min-width: 56px; }
-.thumbButton { position: relative; display: block; padding: 0; border: 0; background: transparent; border-radius: var(--r-sm); overflow: hidden; }
+.thumbButton { position: relative; display: block; padding: 2px; border: 0; background: transparent; border-radius: var(--r-sm); overflow: hidden; }
 .thumbButton:disabled { cursor: default; }
-@media (max-width: 899px), (pointer: coarse) { .thumbButton { padding: 2px; } }
+@media (min-width: 900px) and (pointer: fine) { .thumbButton { padding: 0; } }
 .listThumb { width: 40px; min-width: 40px; height: 40px; border-radius: var(--r-sm); object-fit: cover; display: block; overflow: hidden; }
 .thumbPlay { position: absolute; inset: 0; display: grid; place-items: center; background: color-mix(in srgb, var(--stage-0) 55%, transparent); color: var(--ink); opacity: 0; transition: opacity var(--dur-1) var(--ease); }
 .thumbButton:hover .thumbPlay, .thumbButton:focus-visible .thumbPlay { opacity: 1; }
@@ -92,15 +92,7 @@
 .playlistActions { display: flex; gap: var(--s-2); }
 .playlistCard { position: relative; min-width: 0; }
 .playlistOpen { display: grid; gap: 2px; width: 100%; padding: 0; border: 0; background: transparent; color: var(--ink); text-align: left; }
-.mosaic {
-  position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: 3px; aspect-ratio: 1; margin-bottom: var(--s-2);
-  border-radius: var(--r-md); overflow: hidden; box-shadow: var(--shadow-1);
-}
-.mosaic i:nth-child(1) { background: var(--vocal-tint); }
-.mosaic i:nth-child(2) { background: var(--stage-3); }
-.mosaic i:nth-child(3) { background: var(--stage-2); }
-.mosaic i:nth-child(4) { background: var(--inst-tint); }
-.mosaic :global(.icon) { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: var(--ink-2); }
+.mosaic { margin-bottom: var(--s-2); }
 .playlistOpen:hover .mosaic { outline: 2px solid var(--line-strong); }
 .playlistName { font-weight: 700; font-size: var(--fs-sm); overflow-wrap: anywhere; }
 .playlistCount { font: 500 var(--fs-xs)/1.3 var(--mono); color: var(--muted); }
@@ -128,3 +120,5 @@
 .newForm { display: grid; gap: var(--s-3); margin-top: var(--s-4); padding-top: var(--s-4); border-top: 1px solid var(--line); }
 .addList { display: grid; gap: 2px; max-height: 50vh; overflow-y: auto; margin-top: var(--s-3); }
 .addRow { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: var(--s-3); padding: var(--s-2) 0; border-bottom: 1px solid var(--line); }
+
+.durationCell { font: 500 var(--fs-xs)/1.3 var(--mono); color: var(--muted); font-feature-settings: 'tnum'; white-space: nowrap; }

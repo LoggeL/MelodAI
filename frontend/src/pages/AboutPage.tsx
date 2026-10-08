@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Logo } from '../components/common/Logo'
 import { Icon } from '../components/common/Icon'
@@ -5,9 +6,9 @@ import { LyricPreview } from '../components/Player/LyricPreview'
 import { PIPELINE_STEPS } from '../utils/pipeline'
 import styles from './AboutPage.module.css'
 
-const TECH: Array<[string, string]> = [
-  ['Stimmtrennung', 'Demucs über Replicate trennt Gesang und Instrumental in zwei Spuren.'],
-  ['Transkription', 'WhisperX setzt Wort-Zeitstempel, ein Sprachmodell über OpenRouter baut daraus Zeilen.'],
+const TECH: Array<[string, ReactNode]> = [
+  ['Stimmtrennung', <>BS-RoFormer trennt Gesang und Instrumental direkt auf dem Server-Prozessor, über <a href="https://github.com/LoggeL/turbo-roformer" target="_blank" rel="noreferrer">turbo-roformer</a>. Fällt der lokale Dienst aus, springt Demucs auf Replicate ein.</>],
+  ['Transkription', <>Whisper mit wav2vec2-Alignment setzt die Wort-Zeitstempel ebenfalls lokal, über <a href="https://github.com/LoggeL/turbo-lyrics" target="_blank" rel="noreferrer">turbo-lyrics</a>; Ersatz ist WhisperX auf Replicate. Ein Sprachmodell über OpenRouter baut daraus Zeilen.</>],
   ['Katalog', 'Suche und Originalaufnahmen kommen von Deezer, Referenztexte von lrclib.'],
   ['Server', 'Flask und SQLite, die Verarbeitung läuft in Hintergrund-Threads.'],
   ['Oberfläche', 'React mit TypeScript und der Web Audio API für die zwei Spuren.'],

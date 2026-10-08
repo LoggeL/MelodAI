@@ -4,8 +4,8 @@
 .heading { font-size: var(--fs-lg); font-weight: 800; font-variation-settings: 'wdth' var(--wdth-marquee); letter-spacing: -.01em; }
 .count { font: 500 var(--fs-xs)/1 var(--mono); color: var(--muted); white-space: nowrap; }
 .actionBtns { display: flex; gap: 2px; }
-.actionBtn { width: 40px; height: 40px; }
-@media (max-width: 899px), (pointer: coarse) { .actionBtn { width: var(--tap); height: var(--tap); } }
+.actionBtn { width: var(--tap); height: var(--tap); }
+@media (min-width: 900px) and (pointer: fine) { .actionBtn { width: 40px; height: 40px; } }
 .actionBtn:disabled { opacity: .4; cursor: not-allowed; }
 
 .list { list-style: none; margin: 0; padding: var(--s-1) var(--s-2); display: grid; gap: 2px; }
@@ -34,6 +34,7 @@
 .artist { color: var(--ink-2); font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bar { margin-top: 4px; }
 .errorLine { grid-column: 4 / -1; margin-top: -4px; color: var(--vocal); font-size: var(--fs-xs); font-weight: 600; }
+.duration { font: 500 var(--fs-xs)/1 var(--mono); color: var(--muted); font-feature-settings: 'tnum'; white-space: nowrap; }
 .slot { display: inline-flex; align-items: center; gap: var(--s-1); justify-content: flex-end; }
 .remove { opacity: 0; transition: opacity var(--dur-1) var(--ease); }
 .item:hover .remove, .item:focus-within .remove, .remove:focus-visible { opacity: 1; }

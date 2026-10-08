@@ -21,9 +21,11 @@
 .album { color: var(--muted); }
 .chips { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-top: var(--s-1); }
 .actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: var(--s-2); }
-@media (max-width: 599px) {
-  .actions > :global(.btn), .reprocessDropdown { flex: 1 1 auto; }
-  .reprocessDropdown > :global(.btn) { width: 100%; }
+.actions > :global(.btn), .reprocessDropdown { flex: 1 1 auto; }
+.reprocessDropdown > :global(.btn) { width: 100%; }
+@media (min-width: 600px) {
+  .actions > :global(.btn), .reprocessDropdown { flex: 0 1 auto; }
+  .reprocessDropdown > :global(.btn) { width: auto; }
 }
 @media (min-width: 900px) {
   .head { grid-template-columns: 96px minmax(0, 1fr) auto; gap: var(--s-5); align-items: center; }
@@ -33,19 +35,20 @@
 }
 
 /* Reprocess menu */
-.reprocessDropdown { position: relative; }
+/* Phones: the menu spans the action row; from 600 it hangs off the button. */
+.actions { position: relative; }
 .dropdownChevron { transition: transform var(--dur-2) var(--ease); }
 .dropdownChevronOpen { transform: rotate(180deg); }
 .reprocessBackdrop { position: fixed; inset: 0; z-index: var(--z-popover); }
 .reprocessMenu {
   position: absolute; top: calc(100% + 6px); right: 0; z-index: calc(var(--z-popover) + 1);
-  display: grid; width: min(300px, calc(100vw - 32px)); padding: var(--s-1);
+  display: grid; left: 0; width: auto; padding: var(--s-1);
   border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--stage-2); box-shadow: var(--shadow-2);
 }
-@media (max-width: 599px) {
-  .actions { position: relative; }
-  .reprocessDropdown { position: static; }
-  .reprocessMenu { left: 0; right: 0; width: auto; }
+@media (min-width: 600px) {
+  .actions { position: static; }
+  .reprocessDropdown { position: relative; }
+  .reprocessMenu { left: auto; width: min(300px, calc(100vw - 32px)); }
 }
 .reprocessMenuHeader { padding: var(--s-2) var(--s-3); font: 600 11px/1.4 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 .reprocessMenu button {

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { tracks } from '../../services/api'
-import type { LibraryTrack, ProcessingStatus } from '../../types'
+import type { LibraryTrack, ProcessingStatus, SongMeta } from '../../types'
 import { useToast } from '../../hooks/useToast'
 import { HeartButton } from '../HeartButton/HeartButton'
 import { Icon } from '../common/Icon'
@@ -13,8 +13,8 @@ import styles from './LibraryPanel.module.css'
 const ACTIVE_STATUSES = new Set(['pending', 'queued', 'metadata', 'downloading', 'splitting', 'lyrics', 'processing'])
 
 interface Props {
-  onAddToQueue: (id: string, meta: { title: string; artist: string; img_url: string | null }) => void
-  onPlayNow: (id: string, meta: { title: string; artist: string; img_url: string | null }) => void
+  onAddToQueue: (id: string, meta: SongMeta) => void
+  onPlayNow: (id: string, meta: SongMeta) => void
   favorites?: Set<string>
   onToggleFavorite?: (trackId: string) => void
   onSearchDeezer?: (query: string) => void
@@ -114,7 +114,7 @@ export function LibraryPanel({ onAddToQueue, favorites, onToggleFavorite, onSear
   const handleAddAll = useCallback(() => {
     const ready = filtered.filter(s => s.complete).slice(0, 50)
     if (!ready.length) return
-    ready.forEach(s => onAddToQueue(s.id, { title: s.title, artist: s.artist, img_url: s.img_url }))
+    ready.forEach(s => onAddToQueue(s.id, { title: s.title, artist: s.artist, img_url: s.img_url, duration: s.duration }))
     toast.success(`${ready.length} ${ready.length === 1 ? 'Song' : 'Songs'} zur Setlist hinzugefügt.`)
   }, [filtered, onAddToQueue, toast])
 
@@ -202,7 +202,7 @@ export function LibraryPanel({ onAddToQueue, favorites, onToggleFavorite, onSear
           return (
             <div key={song.id} className={styles.item}>
               <button type="button" className={styles.songButton} disabled={!song.complete}
-                onClick={() => onAddToQueue(song.id, { title: song.title, artist: song.artist, img_url: song.img_url })}
+                onClick={() => onAddToQueue(song.id, { title: song.title, artist: song.artist, img_url: song.img_url, duration: song.duration })}
                 aria-label={song.complete ? `${song.title} von ${song.artist} zur Setlist hinzufügen` : `${song.title}: ${statusLabel}`}
                 title={song.complete ? 'Zur Setlist hinzufügen' : failed ? de(status?.detail || '') || statusLabel : statusLabel}>
                 <Cover className={styles.thumb} src={song.img_url} />

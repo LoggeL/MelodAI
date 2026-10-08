@@ -17,11 +17,16 @@ from src.utils.file_handling import (
     get_song_dir, load_metadata, save_metadata, load_lyrics,
     save_lyrics, save_lyrics_raw, track_file_exists, get_track_file_path,
     is_track_complete, get_all_track_ids, compress_audio_file,
-    is_valid_track_id,
+    is_valid_track_id, stored_duration, track_duration,
 )
 from src.utils.status_checks import set_processing_status, get_processing_status, remove_from_queue, claim_processing
 
 track_bp = Blueprint("track", __name__, url_prefix="/api")
+
+# Older songs without a stored duration are measured once (ffprobe) and cached in metadata.json. This bounds
+# how many such measurements a single list request may run.
+DURATION_PROBES_PER_REQUEST = 8
+PLAYLIST_COVER_COUNT = 4
 
 
 def _upgrade_cover_url(url: str) -> str:
@@ -47,19 +52,21 @@ def search():
         _log_usage("search", q)
         return jsonify(cached_results)
 
-    from src.services.deezer import deezer_search, TYPE_TRACK
+    from src.services.catalog import search_tracks
     try:
-        results = deezer_search(q, TYPE_TRACK)
+        results = search_tracks(q)
     except Exception as e:
         from src.utils.error_logging import log_api_error
         log_api_error(str(e), traceback.format_exc(), source="/search")
         # Don't leak internal exception details to users
         return jsonify({"error": "Search is temporarily unavailable"}), 500
 
-    # Upgrade cover images from 56x56 to 500x500
+    # Upgrade cover images from 56x56 to 200x200; songs in the library keep their stored duration.
     for r in results:
         if "img_url" in r:
             r["img_url"] = _upgrade_cover_url(r["img_url"])
+        if not r.get("duration") and is_valid_track_id(r.get("id", "")):
+            r["duration"] = stored_duration(load_metadata(r["id"]))
 
     cache.set(cache_key, results)
 
@@ -165,6 +172,7 @@ def track_info(track_id):
 
     status = get_processing_status(track_id)
     complete = is_track_complete(track_id)
+    meta["duration"] = track_duration(track_id, meta, [1])
 
     if "img_url" in meta:
         meta["img_url"] = _upgrade_cover_url(meta["img_url"])
@@ -316,6 +324,7 @@ def create_lyric_translation(track_id):
 def library():
     track_ids = get_all_track_ids()
     tracks = []
+    probe_budget = [DURATION_PROBES_PER_REQUEST]
     for tid in track_ids:
         meta = load_metadata(tid)
         if meta:
@@ -324,7 +333,7 @@ def library():
                 "title": meta.get("title", "Unknown"),
                 "artist": meta.get("artist", "Unknown"),
                 "album": meta.get("album", ""),
-                "duration": meta.get("duration", 0),
+                "duration": track_duration(tid, meta, probe_budget),
                 "img_url": _upgrade_cover_url(meta.get("img_url", "")),
                 "complete": is_track_complete(tid),
             })
@@ -487,6 +496,24 @@ def list_playlists():
         FROM playlists LEFT JOIN playlist_tracks ON playlist_tracks.playlist_id = playlists.id
         WHERE playlists.user_id = ? GROUP BY playlists.id ORDER BY playlists.created_at DESC
     """, [user_id])
+    # Covers for the 2×2 mosaic: the first tracks (by position) that still exist and have a cover.
+    rows = query_db("""
+        SELECT playlist_tracks.playlist_id, playlist_tracks.track_id FROM playlist_tracks
+        JOIN playlists ON playlists.id = playlist_tracks.playlist_id
+        WHERE playlists.user_id = ? ORDER BY playlist_tracks.playlist_id, playlist_tracks.position, playlist_tracks.id
+    """, [user_id])
+    covers: dict = {}
+    meta_cache: dict = {}
+    for row in rows:
+        found = covers.setdefault(row["playlist_id"], [])
+        if len(found) >= PLAYLIST_COVER_COUNT:
+            continue
+        track_id = row["track_id"]
+        if track_id not in meta_cache:
+            meta_cache[track_id] = load_metadata(track_id)
+        cover = _upgrade_cover_url((meta_cache[track_id] or {}).get("img_url") or "")
+        if cover:
+            found.append(cover)
     result = []
     for p in playlists:
         result.append({
@@ -494,6 +521,7 @@ def list_playlists():
             "name": p["name"],
             "track_count": p["track_count"],
             "created_at": p["created_at"],
+            "covers": covers.get(p["id"], []),
         })
     return jsonify(result)
 
@@ -536,6 +564,7 @@ def get_playlist_tracks(playlist_id):
         [playlist_id],
     )
     tracks = []
+    probe_budget = [DURATION_PROBES_PER_REQUEST]
     for r in rows:
         meta = load_metadata(r["track_id"])
         if meta:
@@ -544,7 +573,7 @@ def get_playlist_tracks(playlist_id):
                 "title": meta.get("title", "Unknown"),
                 "artist": meta.get("artist", "Unknown"),
                 "album": meta.get("album", ""),
-                "duration": meta.get("duration", 0),
+                "duration": track_duration(r["track_id"], meta, probe_budget),
                 "img_url": _upgrade_cover_url(meta.get("img_url", "")),
                 "complete": is_track_complete(r["track_id"]),
                 "position": r["position"],
@@ -1060,11 +1089,20 @@ def _stage_complete(track_id):
     log_event("info", "pipeline", f"Processing complete for track {track_id}", track_id=str(track_id))
     set_processing_status(track_id, STATUS_COMPLETE, 100, "Ready to play!")
 
-    # Clean up deezer_data from metadata (it's large and no longer needed)
+    # Clean up deezer_data from metadata (it's large and no longer needed). Songs without a Deezer duration
+    # get the measured length of song.mp3, so lists never have to probe them later.
     meta = load_metadata(track_id)
-    if meta and "deezer_data" in meta:
-        del meta["deezer_data"]
-        save_metadata(track_id, meta)
+    if meta:
+        changed = "deezer_data" in meta
+        meta.pop("deezer_data", None)
+        if not stored_duration(meta):
+            from src.utils.file_handling import probe_duration
+            seconds = probe_duration(get_track_file_path(track_id, "song"))
+            if seconds:
+                meta["duration"] = seconds
+                changed = True
+        if changed:
+            save_metadata(track_id, meta)
 
 
 def _download_file(url, output_path):

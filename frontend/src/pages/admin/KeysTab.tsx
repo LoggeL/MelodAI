@@ -59,12 +59,23 @@ export function KeysTab() {
     </div>}
     {keys.length === 0 ? <PageState icon="key" title="Noch keine Schlüssel." description="Erstell einen Schlüssel, damit jemand ohne Wartezeit mitmachen kann." /> : <div className="table-wrap">
       <table className="table table--cards">
-        <thead><tr><th scope="col">Schlüssel</th><th scope="col">Status</th><th scope="col">Benutzt von</th><th scope="col">Erstellt</th></tr></thead>
+        <thead><tr><th scope="col">Schlüssel</th><th scope="col">Erstellt</th><th scope="col">Benutzt von</th><th scope="col">Status</th><th scope="col"><span className="sr-only">Aktionen</span></th></tr></thead>
         <tbody>{keys.slice((currentPage - 1) * 20, currentPage * 20).map(key => <tr key={key.id}>
           <td className="cell-main"><div className={styles.keyRow}><code className={styles.keyDisplay}>{key.key}</code>{!key.used_by && <CopyButton value={key.key} />}</div></td>
-          <td data-label="Status" className="cell-inline"><span className={`chip ${key.used_by ? '' : 'chip--ok'}`}>{key.used_by ? 'Eingelöst' : 'Frei'}</span></td>
-          <td data-label="Benutzt von" className="cell-inline">{key.used_by || <span className={styles.subtle}>–</span>}{key.used_at && <span className={`${styles.subtle} ${styles.mono}`}>{formatDateTime(key.used_at)}</span>}</td>
           <td data-label="Erstellt" className={`cell-inline ${styles.mono} ${styles.nowrap}`}>{formatDateTime(key.created_at)}</td>
+          <td data-label="Benutzt von" className="cell-inline">{key.used_by || <span className={styles.subtle}>–</span>}{key.used_at && <span className={`${styles.subtle} ${styles.mono}`}>{formatDateTime(key.used_at)}</span>}</td>
+          <td data-label="Status" className="cell-inline"><span className={`chip ${key.used_by ? '' : 'chip--ok'}`}>{key.used_by ? 'Eingelöst' : 'Frei'}</span></td>
+          <td className="cell-acts num"><div className={styles.tableActions}>
+            {!key.used_by && <button type="button" className={`${styles.actionBtn} ${styles.danger}`} disabled={busy}
+              aria-label={`Schlüssel ${key.key} widerrufen`}
+              onClick={() => setConfirmation({
+                title: 'Schlüssel widerrufen?',
+                description: `Der Schlüssel ${key.key} wird gelöscht. Wer ihn schon bekommen hat, kann sich damit nicht mehr registrieren.`,
+                label: 'Widerrufen',
+                action: () => admin.revokeInviteKey(key.id),
+                success: 'Schlüssel widerrufen.',
+              })}><Icon name="x" size={16} /> Widerrufen</button>}
+          </div></td>
         </tr>)}</tbody>
       </table>
     </div>}

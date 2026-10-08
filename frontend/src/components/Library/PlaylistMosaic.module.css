@@ -1,0 +1,13 @@
+/* Playlist cover (§4.5): 2×2 mosaic of the first songs' covers. */
+.mosaic {
+  position: relative; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 3px; aspect-ratio: 1;
+  border-radius: var(--r-md); overflow: hidden; box-shadow: var(--shadow-1); background: var(--stage-3);
+}
+.single { grid-template-columns: 1fr; grid-template-rows: 1fr; gap: 0; }
+.tile { display: block; width: 100%; height: 100%; min-width: 0; min-height: 0; object-fit: cover; }
+.mosaic > i { background: var(--stage-2); }
+.empty > i:nth-child(1) { background: var(--vocal-tint); }
+.empty > i:nth-child(2) { background: var(--stage-3); }
+.empty > i:nth-child(3) { background: var(--stage-2); }
+.empty > i:nth-child(4) { background: var(--inst-tint); }
+.mosaic :global(.icon) { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: var(--ink-2); }

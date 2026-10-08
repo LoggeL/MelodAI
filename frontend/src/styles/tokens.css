@@ -16,10 +16,16 @@
 @font-face { font-family: 'JetBrains Mono'; font-style: normal; font-display: swap; font-weight: 600; src: url('../assets/fonts/jetbrains-mono-600.woff2') format('woff2'); }
 /* Arial tuned to Archivo's line box (typo metrics 878 / 210 / 0 per 1000, divided by size-adjust) so the swap does not shift lines. */
 @font-face { font-family: 'Archivo Fallback'; src: local('Arial'), local('ArialMT'), local('Liberation Sans'); size-adjust: 98%; ascent-override: 89.6%; descent-override: 21.4%; line-gap-override: 0%; }
+/* Lyric lines run Archivo at wdth 82 and weight 700–800. Measured on a German sample line at 700:
+   Archivo wdth 82 = 54.0 em, Arial Narrow Bold = 53.5 em, Arial Bold = 65.2 em per 130 characters.
+   So Arial Narrow needs ~101 %, plain Arial ~83 %; the overrides keep Archivo's 878 / 210 line box. */
+@font-face { font-family: 'Archivo Narrow Fallback'; font-weight: 100 900; src: local('Arial Narrow Bold'), local('ArialNarrow-Bold'), local('Liberation Sans Narrow Bold'), local('LiberationSansNarrow-Bold'); size-adjust: 101%; ascent-override: 86.9%; descent-override: 20.8%; line-gap-override: 0%; }
+@font-face { font-family: 'Archivo Condensed Fallback'; font-weight: 100 900; src: local('Arial Bold'), local('Arial-BoldMT'), local('Liberation Sans Bold'), local('LiberationSans-Bold'); size-adjust: 83%; ascent-override: 105.8%; descent-override: 25.3%; line-gap-override: 0%; }
 
 :root {
   /* type */
   --font: 'Archivo Variable', 'Archivo', 'Archivo Fallback', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-lyric: 'Archivo Variable', 'Archivo', 'Archivo Narrow Fallback', 'Archivo Condensed Fallback', system-ui, sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
   --wdth-ui: 100; --wdth-lyric: 82; --wdth-marquee: 116;
   --fs-xs: 0.75rem;
@@ -28,8 +34,9 @@
   --fs-lg: 1.25rem;
   --fs-xl: 1.75rem;
   --fs-2xl: clamp(2.25rem, 1.4rem + 2.4vw, 3.75rem);
-  --fs-lyric-near: clamp(1.375rem, 0.85rem + 1.55vw, 3rem);
-  --fs-lyric: clamp(2.125rem, 0.9rem + 3.4vw, 6rem);
+  /* Phones first; the wider clamps start at 600 px (bottom of this file). */
+  --fs-lyric-near: clamp(1.375rem, 1.1rem + 1vw, 1.75rem);
+  --fs-lyric: clamp(2.375rem, 1.6rem + 3vw, 3.5rem);
   --lyric-mode: 1;
   --lyric-user: 1;
   --lyric-fit: 1;
@@ -46,7 +53,7 @@
   --dur-1: 120ms; --dur-2: 220ms; --dur-3: 480ms;
 
   /* layout */
-  --header-h: 64px; --desk-h: 136px; --desk-mobile-h: 128px; --setlist-w: 360px; --page-max: 1440px; --tap: 44px;
+  --header-h: 56px; --desk-h: 136px; --desk-mobile-h: 128px; --setlist-w: 360px; --page-max: 1440px; --tap: 44px;
   --z-header: 30; --z-desk: 40; --z-drawer: 60; --z-popover: 70; --z-dialog: 80; --z-toast: 90;
 }
 
@@ -95,13 +102,12 @@
   --fader-cap: #FFFFFF;
 }
 
-@media (max-width: 599px) {
+@media (min-width: 600px) {
   :root {
-    --header-h: 56px;
-    --fs-lyric: clamp(2.375rem, 1.6rem + 3vw, 3.5rem);
-    --fs-lyric-near: clamp(1.375rem, 1.1rem + 1vw, 1.75rem);
+    --fs-lyric-near: clamp(1.375rem, 0.85rem + 1.55vw, 3rem);
+    --fs-lyric: clamp(2.125rem, 0.9rem + 3.4vw, 6rem);
   }
 }
-@media (max-width: 899px) {
-  :root { --header-h: 56px; }
+@media (min-width: 900px) {
+  :root { --header-h: 64px; }
 }

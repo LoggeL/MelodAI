@@ -3,6 +3,7 @@ import { Icon } from '../common/Icon'
 import { Cover } from '../common/Cover'
 import type { QueueItem } from '../../types'
 import { pipelineLabel } from '../../utils/pipeline'
+import { formatDuration } from '../../utils/format'
 import styles from './QueuePanel.module.css'
 
 interface Props {
@@ -91,12 +92,15 @@ export function QueuePanel({ queue, currentIndex, onPlay, onRemove, onReorder, o
               <span className={styles.slot} onClick={e => e.stopPropagation()}>
                 {isActive && <span className="chip chip--live chip--solid">Läuft</span>}
                 {processing && <span className="chip chip--work">{Math.round(item.progress)} %</span>}
+                {!isActive && !processing && !item.error && !!item.duration && (
+                  <span className={styles.duration} aria-label={`Dauer ${formatDuration(item.duration)}`}>{formatDuration(item.duration)}</span>
+                )}
                 {item.error && (
                   <button type="button" className="btn btn--sm" onClick={() => onRetry(i)} aria-label={`${item.title} erneut versuchen`}>
                     <Icon name="redo" size={16} /> Erneut
                   </button>
                 )}
-                {!isActive && (
+                {(!isActive || item.error) && (
                   <button type="button" className={`iconbtn iconbtn--sm ${styles.remove}`} onClick={() => onRemove(i)}
                     title="Entfernen" aria-label={`${item.title} aus der Setlist entfernen`}>
                     <Icon name="x" size={18} />

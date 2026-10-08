@@ -17,6 +17,24 @@ _DEFAULT_OG = (
 )
 
 
+# Paths that never fall back to the SPA: API and audio routes answer with JSON, build assets with a
+# plain 404 (a missing script must not be answered with HTML).
+_NO_SPA_PREFIXES = ("/api/", "/songs/", "/assets/")
+
+
+def is_spa_fallback(path, method):
+    """True when an unknown URL should render the SPA, which then shows its German 404 page."""
+    if method not in ("GET", "HEAD") or path == "/api" or path.startswith(_NO_SPA_PREFIXES):
+        return False
+    # File-like URLs (/robots.txt, /old.js) keep a plain 404.
+    return "." not in path.rsplit("/", 1)[-1]
+
+
+def spa_not_found():
+    """index.html with HTTP 404: the client router renders NotFound, crawlers and monitors still see 404."""
+    return _serve_spa(), 404, {"Content-Type": "text/html; charset=utf-8"}
+
+
 def _serve_spa(og_tags=None):
     """Serve the React SPA index.html, optionally injecting OG meta tags."""
     index_path = os.path.join(STATIC_DIR, "index.html")

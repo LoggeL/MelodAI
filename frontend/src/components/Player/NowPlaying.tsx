@@ -1,14 +1,18 @@
-import { useState, useCallback, useEffect, useRef, useId } from 'react'
+import { lazy, Suspense, useState, useCallback, useEffect, useRef, useId } from 'react'
 import type { LyricTranslation, QueueItem, TranslationLanguage } from '../../types'
 import { useToast } from '../../hooks/useToast'
 import { HeartButton } from '../HeartButton/HeartButton'
 import { Icon } from '../common/Icon'
 import { Cover } from '../common/Cover'
-import { Modal } from '../common/Modal'
-import { LyricScale } from './LyricScale'
+import { DOWNLOADS, type DownloadOption, type TranslationMode } from './downloads'
+import { loadOptionsSheet, loadTranslationPanel, preload } from './lazyParts'
 import styles from './NowPlaying.module.css'
 
-export type TranslationMode = 'original' | 'translation' | 'both'
+export type { TranslationMode } from './downloads'
+
+const TranslationPanel = lazy(() => loadTranslationPanel().then(module => ({ default: module.TranslationPanel })))
+const OptionsSheet = lazy(() => loadOptionsSheet().then(module => ({ default: module.OptionsSheet })))
+const pending = <p className={styles.pending} role="status">Lädt …</p>
 
 interface Props {
   track: QueueItem | null
@@ -26,17 +30,6 @@ interface Props {
   lyricScale?: number
   onLyricScale?: (scale: number) => void
 }
-
-const LANGUAGES: Array<{ code: TranslationLanguage; label: string }> = [
-  { code: 'de', label: 'Deutsch' },
-  { code: 'en', label: 'Englisch' },
-]
-
-const DOWNLOADS = [
-  { type: 'no_vocals', file: 'no_vocals.mp3', label: 'Nur Instrumental', name: 'Instrumental' },
-  { type: 'vocals', file: 'vocals.mp3', label: 'Nur Gesang', name: 'Gesang' },
-  { type: 'song', file: 'song.mp3', label: 'Ganzer Song', name: 'Original' },
-] as const
 
 function useDismiss(open: boolean, close: () => void, ref: React.RefObject<HTMLElement | null>) {
   useEffect(() => {
@@ -66,7 +59,7 @@ export function NowPlaying({
   useDismiss(menu === 'download', closeMenu, downloadRef)
   const toast = useToast()
 
-  const handleDownload = useCallback(async (option: typeof DOWNLOADS[number]) => {
+  const handleDownload = useCallback(async (option: DownloadOption) => {
     if (!track || downloading) return
     setDownloading(true)
     setMenu(null)
@@ -101,28 +94,10 @@ export function NowPlaying({
 
   if (!track) return null
 
-  const translationAvailable = !!translation?.available
-  const translationPanel = (
-    <div className={styles.translationPanel}>
-      <label className="field">
-        <span className="field-label">Sprache</span>
-        <select className="input" value={translationLanguage} aria-label="Übersetzungssprache"
-          onChange={e => onTranslationLanguageChange?.(e.target.value as TranslationLanguage)}>
-          {LANGUAGES.map(lang => <option key={lang.code} value={lang.code}>{lang.label}</option>)}
-        </select>
-      </label>
-      <div className="seg" role="group" aria-label="Anzeige">
-        <button type="button" aria-pressed={translationMode === 'original'} onClick={() => onTranslationModeChange?.('original')}>Original</button>
-        <button type="button" aria-pressed={translationMode === 'translation'} disabled={!translationAvailable && !translationLoading} onClick={() => onTranslationModeChange?.('translation')}>Übersetzung</button>
-        <button type="button" aria-pressed={translationMode === 'both'} disabled={!translationAvailable && !translationLoading} onClick={() => onTranslationModeChange?.('both')}>Beide</button>
-      </div>
-      {!translationAvailable && (
-        <button type="button" className="btn btn--primary" onClick={onTranslate} disabled={translationLoading} aria-busy={translationLoading}>
-          {translationLoading ? <><span className="spinner" aria-hidden="true" /><span className="spinner-text">Lädt …</span> Übersetzt …</> : <><Icon name="lang" /> Übersetzen</>}
-        </button>
-      )}
-    </div>
-  )
+  const translationProps = {
+    translation, translationLanguage, translationMode, translationLoading,
+    onTranslationLanguageChange, onTranslationModeChange, onTranslate,
+  }
 
   return (
     <div className={styles.wrapper}>
@@ -138,10 +113,13 @@ export function NowPlaying({
         <div ref={translationRef} className={`${styles.menuAnchor} ${styles.desktopOnly}`}>
           <button type="button" className={`btn btn--pill ${styles.chipBtn}`} aria-expanded={menu === 'translation'} aria-controls={translationPanelId}
             aria-label="Übersetzung" title="Übersetzung"
+            onPointerEnter={() => preload(loadTranslationPanel)} onFocus={() => preload(loadTranslationPanel)}
             onClick={() => setMenu(menu === 'translation' ? null : 'translation')}>
             <Icon name="lang" /><span className={styles.chipLabel}>Übersetzung</span><Icon name="chevron" size={16} className={`${styles.chipLabel} ${menu === 'translation' ? styles.flip : ''}`} />
           </button>
-          <div id={translationPanelId} className={styles.popover} hidden={menu !== 'translation'}>{translationPanel}</div>
+          <div id={translationPanelId} className={styles.popover} hidden={menu !== 'translation'}>
+            {menu === 'translation' && <Suspense fallback={pending}><TranslationPanel {...translationProps} /></Suspense>}
+          </div>
         </div>
         {onToggleFavorite && (
           <HeartButton active={isFavorite || false} onClick={() => onToggleFavorite(track.id)} />
@@ -162,37 +140,17 @@ export function NowPlaying({
         <button type="button" className={`iconbtn ${styles.desktopOnly}`} onClick={handleShare} title="Link kopieren" aria-label="Link kopieren">
           <Icon name="share" />
         </button>
-        <button type="button" className={`iconbtn ${styles.mobileOnly}`} aria-haspopup="dialog" aria-label="Weitere Optionen" onClick={() => setSheetOpen(true)}>
+        <button type="button" className={`iconbtn ${styles.mobileOnly}`} aria-haspopup="dialog" aria-label="Weitere Optionen"
+          onPointerDown={() => preload(loadOptionsSheet)} onFocus={() => preload(loadOptionsSheet)} onClick={() => setSheetOpen(true)}>
           <Icon name="more" />
         </button>
       </div>
 
       {sheetOpen && (
-        <Modal title="Optionen" variant="sheet" size="small" onClose={() => setSheetOpen(false)}>
-          <div className={styles.sheet}>
-            <section>
-              <h3 className="kicker">Übersetzung</h3>
-              {translationPanel}
-            </section>
-            {onLyricScale && (
-              <section>
-                <h3 className="kicker">Textgröße</h3>
-                <LyricScale value={lyricScale} onChange={onLyricScale} />
-              </section>
-            )}
-            <section>
-              <h3 className="kicker">Herunterladen</h3>
-              <div className={styles.sheetList}>
-                {DOWNLOADS.map(option => (
-                  <button key={option.type} type="button" className="btn" disabled={downloading} onClick={() => handleDownload(option)}>
-                    <Icon name="download" /> {option.label}
-                  </button>
-                ))}
-              </div>
-            </section>
-            <button type="button" className="btn btn--block" onClick={handleShare}><Icon name="share" /> Link kopieren</button>
-          </div>
-        </Modal>
+        <Suspense fallback={<span className="sr-only" role="status">Lädt …</span>}>
+          <OptionsSheet {...translationProps} lyricScale={lyricScale} onLyricScale={onLyricScale}
+            downloading={downloading} onDownload={handleDownload} onShare={handleShare} onClose={() => setSheetOpen(false)} />
+        </Suspense>
       )}
     </div>
   )

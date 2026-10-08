@@ -1,14 +1,15 @@
 import { useState, useRef, useCallback, useEffect, useId, forwardRef, useImperativeHandle, useMemo, type CSSProperties } from 'react'
 import { tracks } from '../../services/api'
-import type { QueueItem, SearchResult } from '../../types'
+import type { QueueItem, SearchResult, SongMeta } from '../../types'
 import { Icon } from '../common/Icon'
 import { Cover } from '../common/Cover'
 import { de } from '../../utils/messages'
 import { pipelineLabel } from '../../utils/pipeline'
+import { formatDuration } from '../../utils/format'
 import styles from './SearchBar.module.css'
 
 interface Props {
-  onSelect: (id: string, meta: { title: string; artist: string; img_url: string | null }) => void
+  onSelect: (id: string, meta: SongMeta) => void
   /** Credits shown in the „Neu laden“ group (non-admins only). */
   credits?: number
   isAdmin?: boolean
@@ -143,7 +144,7 @@ export const SearchBar = forwardRef<SearchBarHandle, Props>(function SearchBar({
     setShowResults(false)
     setActiveIndex(-1)
     setSheetOpen(false)
-    onSelect(item.id, { title: item.title, artist: item.artist, img_url: item.img_url })
+    onSelect(item.id, { title: item.title, artist: item.artist, img_url: item.img_url, duration: item.duration })
   }, [cancelSearch, onSelect, query, recent])
 
   useEffect(() => cancelSearch, [cancelSearch])
@@ -213,6 +214,7 @@ export const SearchBar = forwardRef<SearchBarHandle, Props>(function SearchBar({
           <div className={styles.resultArtist}><Highlight text={item.artist} query={query} />{item.album ? <span className={styles.album}> · {item.album}</span> : null}</div>
           {processing && <span className={`meter meter--inst meter--thin ${styles.bar}`} aria-hidden="true"><i style={{ '--v': `${queued.progress}%` } as CSSProperties} /></span>}
         </div>
+        {item.duration ? <span className={styles.duration}>{formatDuration(item.duration)}</span> : <span aria-hidden="true" />}
         <span className={styles.action}>
           {playing ? <span className="chip chip--live chip--solid"><span className="live-dot" aria-hidden="true" />Läuft</span>
             : processing ? <span className="chip chip--work">{pipelineLabel(queued.status, queued.progress)}</span>

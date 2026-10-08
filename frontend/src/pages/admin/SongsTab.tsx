@@ -6,7 +6,7 @@ import { Cover } from '../../components/common/Cover'
 import { Icon } from '../../components/common/Icon'
 import { PageState } from '../../components/common/PageState'
 import type { AdminSong } from '../../types'
-import { formatBytes, formatInt, formatPercent } from '../../utils/format'
+import { formatBytes, formatDate, formatDateTime, formatInt, formatPercent } from '../../utils/format'
 import { ConfirmAction, type Confirmation } from './AdminAction'
 import { ResplitPanel } from './ResplitPanel'
 import { LoadError, Pagination, SearchField, SectionHead } from './shared'
@@ -87,7 +87,7 @@ export function SongsTab() {
     </div>
     {filtered.length === 0 ? <PageState icon="music" title={query || status !== 'all' ? 'Keine passenden Songs.' : 'Noch keine verarbeiteten Songs.'} description={query || status !== 'all' ? 'Versuch einen anderen Suchbegriff oder Filter.' : 'Songs erscheinen hier, sobald die Verarbeitung startet.'} /> : <div className="table-wrap">
       <table className="table table--cards">
-        <thead><tr><th scope="col">Song</th><th scope="col">Status</th><th scope="col">Konfidenz</th><th scope="col">Dateien</th><th scope="col" className="num">Größe</th><th scope="col" className="num"><span className="sr-only">Aktionen</span></th></tr></thead>
+        <thead><tr><th scope="col">Song</th><th scope="col">Status</th><th scope="col">Konfidenz</th><th scope="col">Dateien</th><th scope="col" className="num">Größe</th><th scope="col">Hinzugefügt</th><th scope="col" className="num"><span className="sr-only">Aktionen</span></th></tr></thead>
         <tbody>{filtered.slice((currentPage - 1) * 20, currentPage * 20).map(song => {
           const present = filesPresent(song)
           const broken = !song.complete
@@ -104,6 +104,7 @@ export function SongsTab() {
             </span>}</td>
             <td data-label="Dateien" className="cell-inline"><span className={styles.dots} aria-hidden="true">{Array.from({ length: FILE_COUNT }, (_, i) => <i key={i} className={i < present ? styles.on : undefined} />)}</span><span className="sr-only">{present} von {FILE_COUNT} Dateien</span></td>
             <td data-label="Größe" className="num cell-inline">{formatBytes(totalSize(song))}</td>
+            <td data-label="Hinzugefügt" className={`cell-inline ${styles.mono} ${styles.nowrap}`}>{song.added_at ? <time dateTime={song.added_at} title={formatDateTime(song.added_at)}>{formatDate(song.added_at)}</time> : '–'}</td>
             <td className={broken ? 'num' : 'cell-acts num'}><div className={styles.tableActions}>
               {broken
                 ? <button type="button" className={`${styles.actionBtn} ${styles.reprocessWide}`} onClick={() => reprocess(song)}><Icon name="redo" size={16} /> Neu verarbeiten</button>

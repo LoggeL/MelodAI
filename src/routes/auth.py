@@ -332,6 +332,11 @@ def profile_stats():
         "SELECT COUNT(*) as c FROM favorites WHERE user_id = ?",
         [user_id], one=True
     )
+    # Calendar month in UTC, like the stored timestamps.
+    month = query_db(
+        "SELECT COUNT(*) as c FROM usage_logs WHERE user_id = ? AND action = 'play' AND created_at >= date('now', 'start of month')",
+        [user_id], one=True
+    )
 
     return jsonify({
         "credits": user["credits"] or 0,
@@ -339,11 +344,38 @@ def profile_stats():
         "total_plays": plays["c"] if plays else 0,
         "playlists_count": playlists["c"] if playlists else 0,
         "favorites_count": favs["c"] if favs else 0,
+        "plays_this_month": month["c"] if month else 0,
+        "favorite_song": _favorite_song(user_id),
         "member_since": user["created_at"],
         "display_name": user["display_name"] or user["username"],
         "username": user["username"],
         "is_admin": bool(user["is_admin"]),
     })
+
+
+def _favorite_song(user_id):
+    """The song this user played most often (ties: the most recently played), or None."""
+    from src.utils.file_handling import is_valid_track_id, load_metadata
+
+    rows = query_db(
+        "SELECT detail, COUNT(*) AS plays, MAX(id) AS last FROM usage_logs WHERE user_id = ? AND action = 'play' "
+        "GROUP BY detail ORDER BY plays DESC, last DESC LIMIT 5",
+        [user_id],
+    )
+    for row in rows:
+        track_id = row["detail"]
+        meta = load_metadata(track_id) if is_valid_track_id(track_id or "") else None
+        if not meta:
+            continue  # deleted song: fall back to the next most played one
+        img_url = (meta.get("img_url") or "").replace("/56x56", "/200x200", 1)
+        return {
+            "id": str(track_id),
+            "title": meta.get("title", "Unknown"),
+            "artist": meta.get("artist", "Unknown"),
+            "img_url": img_url,
+            "plays": row["plays"],
+        }
+    return None
 
 
 @auth_bp.route("/profile/activity")

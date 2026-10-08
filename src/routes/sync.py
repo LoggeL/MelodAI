@@ -108,6 +108,10 @@ def _validated_queue(body):
             raise BadRequest("Each queue entry must contain a valid track id")
         for field in ("title", "artist", "thumbnail"):
             text_field(item, field, max_length=2000)
+        duration = item.get("duration")
+        if duration is not None and (isinstance(duration, bool) or not isinstance(duration, (int, float))
+                                     or not math.isfinite(duration) or not 0 <= duration <= 86400):
+            raise BadRequest("duration must be a number of seconds")
     index = integer_field(body, "currentIndex", -1, minimum=-1, maximum=max(len(queue) - 1, -1))
     playing = boolean_field(body, "isPlaying")
     if playing and index < 0:

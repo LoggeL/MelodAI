@@ -86,38 +86,7 @@
 .chrome { transition: opacity var(--dur-3) var(--ease); }
 .layout[data-chrome='hidden'] .chrome { opacity: 0; pointer-events: none; }
 
-.tvTop {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 3;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: var(--s-5);
-  padding: var(--s-4);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--stage-0) 80%, transparent), transparent);
-}
-.tvNow { display: flex; align-items: center; gap: var(--s-3); min-width: 0; }
-.tvCover { width: 56px; height: 56px; flex: none; border-radius: var(--r-md); object-fit: cover; overflow: hidden; box-shadow: var(--shadow-2); }
-.tvMeta, .tvNext { display: grid; gap: 2px; min-width: 0; }
-.tvMeta strong, .tvNext strong {
-  font-size: var(--fs-lg);
-  font-weight: 800;
-  font-variation-settings: 'wdth' var(--wdth-marquee);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.tvMeta span, .tvNext span { color: var(--ink-2); font-size: var(--fs-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tvNext { display: none; text-align: right; max-width: 40%; }
-.tvNext :global(.kicker) { justify-self: end; color: var(--spot); }
-
-@media (min-width: 900px) {
-  .tvTop { padding: var(--s-5) var(--s-6); }
-  .tvNext { display: grid; }
-}
+.panelPending { padding: var(--s-4); color: var(--muted); font-size: var(--fs-sm); }
 
 @media (prefers-reduced-motion: reduce) {
   .backdrop, .chrome { transition: none; }

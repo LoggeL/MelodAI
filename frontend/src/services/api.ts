@@ -2,7 +2,7 @@ import type {
   SearchResult, LyricsData, LibraryTrack, TrackMetadata,
   User, InviteKey, UsageLog, AdminStats, HealthCheck, StorageStats,
   AdminSong, UnfinishedTrack, ProcessingStatus, LyricsEditPayload, Playlist,
-  ErrorLogResponse, AppLogResponse, SongDetail, ActivityResponse, DeezerConfigStatus,
+  ErrorLogResponse, AppLogResponse, DailyUsage, FavoriteSong, SongDetail, ActivityResponse, DeezerConfigStatus,
   LyricTranslation, TranslationLanguage, SeparationStatus, ResplitBatchStatus,
 } from '../types'
 import { normalizeTrackId, trackPathSegment } from '../utils/trackId'
@@ -32,6 +32,7 @@ export const auth = {
     credits: number; songs_processed: number; total_plays: number;
     playlists_count: number; favorites_count: number; member_since: string;
     display_name: string; username: string; is_admin: boolean;
+    plays_this_month?: number; favorite_song?: FavoriteSong | null;
   }>('/api/auth/profile/stats'),
   changePassword: (current_password: string, new_password: string) =>
     request<{ success?: boolean; error?: string; message?: string }>(
@@ -96,8 +97,10 @@ export const admin = {
   setCredits: (id: number, credits: number) => request('/api/admin/users/' + id + '/credits', { method: 'POST', body: JSON.stringify({ credits }) }),
   inviteKeys: () => request<InviteKey[]>('/api/admin/invite-keys'),
   generateInviteKey: () => request<{ key: string }>('/api/admin/invite-keys', { method: 'POST' }),
+  revokeInviteKey: (id: number) => request<{ success: boolean }>(`/api/admin/invite-keys/${id}`, { method: 'DELETE' }),
   deleteUsedInviteKeys: () => request<{ success: boolean; deleted: number }>('/api/admin/invite-keys/used', { method: 'DELETE' }),
   stats: () => request<AdminStats>('/api/admin/stats'),
+  dailyUsage: (days = 14) => request<DailyUsage[]>(`/api/admin/usage/daily?days=${days}`),
   usageLogs: (page: number, username?: string, action?: string) => {
     const params = new URLSearchParams({ page: String(page), per_page: '50' })
     if (username) params.set('username', username)

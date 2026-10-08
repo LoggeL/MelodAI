@@ -236,6 +236,40 @@ describe('Admin Extended API', () => {
     })
   })
 
+  describe('DELETE /admin/invite-keys/:id', () => {
+    it('should reject unauthenticated request', async () => {
+      expect((await del('/api/admin/invite-keys/1', '')).status).toBe(401)
+    })
+
+    it('should revoke an unused key once', async () => {
+      const created = await (await post('/api/admin/invite-keys')).json()
+      const keys = await (await get('/api/admin/invite-keys')).json() as Array<{ id: number; key: string }>
+      const id = keys.find(k => k.key === created.key)!.id
+      expect((await del(`/api/admin/invite-keys/${id}`)).status).toBe(200)
+      expect((await del(`/api/admin/invite-keys/${id}`)).status).toBe(404)
+      const after = await (await get('/api/admin/invite-keys')).json() as Array<{ key: string }>
+      expect(after.some(k => k.key === created.key)).toBe(false)
+    })
+  })
+
+  // ─── Daily usage ───
+
+  describe('GET /admin/usage/daily', () => {
+    it('should reject unauthenticated request', async () => {
+      expect((await get('/api/admin/usage/daily', '')).status).toBe(401)
+    })
+
+    it('should return one row per day, newest first', async () => {
+      const resp = await get('/api/admin/usage/daily?days=7')
+      expect(resp.status).toBe(200)
+      const days = await resp.json() as Array<Record<string, number | string>>
+      expect(days).toHaveLength(7)
+      expect(Object.keys(days[0]).sort()).toEqual(['credits', 'day', 'downloads', 'plays', 'searches'])
+      expect(String(days[0].day) > String(days[1].day)).toBe(true)
+      expect(days.reduce((sum, d) => sum + Number(d.searches), 0)).toBeGreaterThan(0)
+    })
+  })
+
   // ─── Usage Logs - Username Filter ───
 
   describe('GET /admin/usage-logs - username filter', () => {
