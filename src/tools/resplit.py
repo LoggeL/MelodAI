@@ -30,8 +30,11 @@ log = logging.getLogger(__name__)
 
 STATE_VERSION = 1
 MAX_ATTEMPTS = 3
-UNAVAILABLE_LIMIT = 5
-RETRY_DELAYS = (15, 60, 180, 300, 600)
+# The worker manager disables local separation for SEPARATION_FAILURE_BACKOFF (600 s) after repeated crashes; the
+# retry schedule outlasts that comfortably before the batch gives up (~50 min in total).
+UNAVAILABLE_LIMIT = 8
+RETRY_DELAYS = (15, 60, 180, 300, 600, 900)
+RESUME_LOCK_WAIT = 180
 ACTIVE_STATUSES = ("running",)
 
 
@@ -170,7 +173,9 @@ class ResplitBatch:
             print(f"Resuming the re-split batch ({pending} songs pending)")
             self._stop.clear()
             with self._lock:
-                self._thread = threading.Thread(target=self._run_safely, name="resplit", daemon=True)
+                # During a start-first deploy the previous container may still hold the lock for a few seconds.
+                self._thread = threading.Thread(target=self._run_safely, kwargs={"lock_wait": RESUME_LOCK_WAIT},
+                                                name="resplit", daemon=True)
                 self._thread.start()
             return True
         return False
@@ -226,9 +231,9 @@ class ResplitBatch:
     def _interruptible_sleep(self, seconds):
         self._stop.wait(seconds)
 
-    def _run_safely(self):
+    def _run_safely(self, lock_wait=0):
         try:
-            self.run()
+            self.run(lock_wait=lock_wait)
         except BatchBusy as e:
             log.warning("Re-split batch not started: %s", e)
         except Exception as e:
@@ -240,10 +245,17 @@ class ResplitBatch:
                     state["error"] = f"{type(e).__name__}: {e}"[:300]
                     self.save_state(state)
 
-    def run(self):
-        """Process pending items until done, stopped or the worker stays unavailable. Holds the file lock."""
-        if not self._acquire():
-            raise BatchBusy("another re-split runner is active")
+    def run(self, lock_wait=0):
+        """Process pending items until done, stopped or the worker stays unavailable. Holds the file lock.
+
+        ``lock_wait`` seconds: keep retrying the lock while another runner (e.g. the container being replaced
+        by a deploy) still holds it."""
+        deadline = time.monotonic() + lock_wait
+        while not self._acquire():
+            if time.monotonic() >= deadline or self._stop.is_set():
+                raise BatchBusy("another re-split runner is active")
+            log.info("Re-split lock is held by another runner; retrying")
+            self._sleep(5)
         try:
             self._run_locked()
         finally:
@@ -277,9 +289,25 @@ class ResplitBatch:
                 if not state or track_id not in state["items"]:
                     return
                 item = state["items"][track_id]
+                if outcome == "lost":
+                    unavailable_in_a_row = 0
+                    # The worker crashed, hung or stopped answering on this song. Retry it later (the worker is
+                    # restarted by the next job) and give up on it after MAX_ATTEMPTS so one bad file cannot
+                    # block the batch. The old stems stay in place.
+                    item["crashes"] = item.get("crashes", 0) + 1
+                    item["error"] = error
+                    if item["crashes"] >= MAX_ATTEMPTS:
+                        item.update(status="failed", error=f"worker lost {item['crashes']}x: {error}"[:300],
+                                    finished_at=_now())
+                    else:
+                        state["order"].remove(track_id)
+                        state["order"].append(track_id)
+                    self.save_state(state)
+                    log.warning("Separation worker lost on %s (%s)", track_id, error)
+                    self._sleep(RETRY_DELAYS[0])
+                    continue
                 if outcome == "unavailable":
                     unavailable_in_a_row += 1
-                    item["attempts"] = item.get("attempts", 0) + 1
                     item["error"] = error
                     if unavailable_in_a_row >= UNAVAILABLE_LIMIT:
                         state["status"] = "error"
@@ -323,7 +351,7 @@ class ResplitBatch:
                 self._sleep(5)
 
     def _process(self, track_id, force=False):
-        """Returns (outcome, message, info) with outcome in done|skipped|deferred|failed|unavailable|aborted."""
+        """Returns (outcome, message, info), outcome in done|skipped|deferred|failed|lost|unavailable|aborted."""
         from src.services import separation as sep
         from src.utils.file_handling import track_file_exists
         from src.utils.status_checks import get_processing_status
@@ -366,6 +394,8 @@ class ResplitBatch:
                 )
                 print(f"Re-split {track_id} done (rtf {record.get('rtf')}, {record.get('compute_backend')})")
                 return "done", None, {"rtf": record.get("rtf"), "backups": backups}
+            except sep.WorkerLost as e:
+                return "lost", str(e), None
             except sep.SeparationUnavailable as e:
                 return "unavailable", str(e), None
             except sep.SeparationAborted as e:

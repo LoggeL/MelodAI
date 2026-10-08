@@ -19,8 +19,10 @@ export type ResplitAction = 'start' | 'resume' | 'stop' | null
 /** Which control the panel offers for the current state. */
 export function resplitAction(status: SeparationStatus): ResplitAction {
   const batch = status.batch
-  if (batch.status === 'running') return 'stop'
+  // "running" on disk without a live runner (e.g. the resume lost a race during a deploy): offer to resume it.
+  if (batch.status === 'running' && batch.running) return 'stop'
   if (status.split_backend !== 'local') return null
+  if (batch.status === 'running' && (batch.counts.pending ?? 0) > 0) return 'resume'
   if ((batch.status === 'stopped' || batch.status === 'error') && (batch.counts.pending ?? 0) > 0) return 'resume'
   return 'start'
 }

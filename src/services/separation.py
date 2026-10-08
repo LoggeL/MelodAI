@@ -15,6 +15,7 @@ import json
 import logging
 import os
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -31,6 +32,9 @@ BACKUP_FILES = {"vocals": "vocals.demucs.mp3", "no_vocals": "no_vocals.demucs.mp
 STEM_FILES = {"vocals": "vocals.mp3", "no_vocals": "no_vocals.mp3"}
 TEMP_PREFIX = ".separation-"
 STALE_TEMP_SECONDS = 6 * 3600
+# At startup only folders older than this are removed: during a start-first deploy the previous container's worker
+# may still be writing into its temp folder on the shared volume for a few more seconds.
+STARTUP_TEMP_MIN_AGE = 30 * 60
 DEMUCS_MODEL = "cjwbw/demucs:25a173108cff36ef9f80f854c162d01df9e6528be175794b81158fa03836d953"
 
 DEFAULTS = {
@@ -49,13 +53,21 @@ DEFAULTS = {
     "SEPARATION_START_TIMEOUT": 30.0,
     "SEPARATION_FAILURE_BACKOFF": 600.0,
     "SEPARATION_IDLE_TIMEOUT": 60.0,
-    "SEPARATION_STALL_TIMEOUT": 600.0,
+    "SEPARATION_HEARTBEAT": 5.0,
+    "SEPARATION_STALL_TIMEOUT": 300.0,
     "SEPARATION_JOB_TIMEOUT": 1800.0,
+    "SEPARATION_QUEUE_TIMEOUT": 900.0,
+    "SEPARATION_MAX_DURATION": 1200.0,
+    "SEPARATION_INTERACTIVE_REQUIRE_KERNELS": True,
 }
 
 
 class SeparationUnavailable(RuntimeError):
     """The worker could not be reached, crashed, timed out or could not load its model."""
+
+
+class WorkerLost(SeparationUnavailable):
+    """The worker crashed, hung or stopped responding while this job was submitted (it may be the job's fault)."""
 
 
 class SeparationFailed(RuntimeError):
@@ -130,6 +142,7 @@ class WorkerManager:
         self._lock = threading.Lock()
         self._proc = None
         self._crashes = []
+        self._crashed_pids = set()
         self._atexit_registered = False
         self._unavailable_until = 0.0
         self.last_error = ""
@@ -169,6 +182,7 @@ class WorkerManager:
                "--precision", str(c["SEPARATION_PRECISION"]),
                "--threads", str(int(c["SEPARATION_THREADS"])),
                "--nice", str(int(c["SEPARATION_NICE"])),
+               "--heartbeat", str(float(c["SEPARATION_HEARTBEAT"])),
                "--parent-pid", str(os.getpid())]
         if c.get("SEPARATION_MODEL_DIR"):
             cmd += ["--model-dir", str(c["SEPARATION_MODEL_DIR"])]
@@ -241,16 +255,45 @@ class WorkerManager:
                 proc.kill()
                 proc.wait(5)
 
-    def mark_crashed(self):
+    def mark_crashed(self, pid=None):
         """A job lost its worker. The next job restarts it; a second crash within the backoff window disables
-        local separation for the backoff period (the pipeline then falls back to Replicate)."""
+        local separation for the backoff period (the pipeline then falls back to Replicate). Several clients
+        that lose the same worker process (``pid``) count as one crash."""
         with self._lock:
+            if pid is not None:
+                if pid in self._crashed_pids:
+                    return
+                self._crashed_pids.add(pid)
             now = time.monotonic()
             backoff = float(self.cfg["SEPARATION_FAILURE_BACKOFF"])
             self._crashes = [t for t in self._crashes if now - t < backoff] + [now]
             if len(self._crashes) >= 2:
                 self.last_error = "separation worker crashed repeatedly"
                 self._unavailable_until = now + backoff
+
+    def kill_worker(self, pid, reason):
+        """SIGKILL a hung worker process (``pid`` as reported by the worker) and count it as a crash.
+
+        A job stuck inside native code never reaches a cancellation point, while the worker's socket threads keep
+        answering, so only killing the process frees the queue. The next job starts a fresh worker."""
+        if not pid:
+            return
+        with self._lock:
+            if pid in self._crashed_pids:
+                return
+            proc = self._proc if self._proc is not None and self._proc.pid == pid else None
+        log.error("Killing separation worker %s: %s", pid, reason)
+        self.last_error = reason
+        try:
+            os.kill(int(pid), signal.SIGKILL)
+        except (OSError, ValueError):
+            pass
+        if proc is not None:
+            try:
+                proc.wait(10)
+            except subprocess.TimeoutExpired:
+                pass
+        self.mark_crashed(pid)
 
     def status(self):
         status = self.ping()
@@ -273,11 +316,16 @@ def get_manager(app=None):
 # ---------------------------------------------------------------------------------------------- job client
 
 def run_job(manager, spec, on_event=None, *, should_abort=None, idle_timeout=60.0, stall_timeout=600.0,
-            total_timeout=None):
+            total_timeout=None, queue_timeout=None):
     """Submit ``spec`` and block until the worker finishes it. Returns the worker's result dict.
 
     ``on_event(message)`` sees every queued/started/progress/preempted/heartbeat message. Raises
-    SeparationUnavailable (worker gone, timeouts), SeparationFailed (job error) or SeparationAborted.
+    SeparationUnavailable when the worker cannot be used (WorkerLost when it crashed, hung or stopped answering
+    while the job was submitted), SeparationFailed (job error) or SeparationAborted.
+
+    A worker that stops answering, or whose running job (this one or another client's) reports no progress for
+    ``stall_timeout`` seconds, is killed so the next job gets a fresh one. ``total_timeout`` limits the whole
+    call, ``queue_timeout`` the time spent waiting in the queue (the caller then falls back to another backend).
     """
     if not manager.ensure_running():
         raise SeparationUnavailable(manager.last_error or "separation worker is not available")
@@ -287,6 +335,8 @@ def run_job(manager, spec, on_event=None, *, should_abort=None, idle_timeout=60.
         raise SeparationUnavailable(f"cannot connect to the separation worker: {e}") from e
     started = time.monotonic()
     last_activity = None
+    queued_since = started
+    worker_pid = None
     try:
         sock.sendall((json.dumps({"op": "separate", "job": spec}) + "\n").encode())
         sock.settimeout(idle_timeout)
@@ -295,17 +345,21 @@ def run_job(manager, spec, on_event=None, *, should_abort=None, idle_timeout=60.
             try:
                 line = reader.readline(256 * 1024)
             except TimeoutError as e:
-                raise SeparationUnavailable("the separation worker stopped responding") from e
+                manager.kill_worker(worker_pid, f"no message from the worker for {int(idle_timeout)} s")
+                raise WorkerLost("the separation worker stopped responding") from e
             except OSError as e:
-                raise SeparationUnavailable(f"lost the separation worker: {e}") from e
+                manager.mark_crashed(worker_pid)
+                raise WorkerLost(f"lost the separation worker: {e}") from e
             if not line:
-                manager.mark_crashed()
-                raise SeparationUnavailable("the separation worker closed the connection")
+                manager.mark_crashed(worker_pid)
+                raise WorkerLost("the separation worker closed the connection")
             try:
                 message = json.loads(line)
             except ValueError as e:
-                raise SeparationUnavailable("invalid message from the separation worker") from e
+                raise WorkerLost("invalid message from the separation worker") from e
             event = message.get("event")
+            if event == "accepted":
+                worker_pid = message.get("pid")
             if event == "done":
                 return message.get("result") or {}
             if event == "error":
@@ -316,16 +370,29 @@ def run_job(manager, spec, on_event=None, *, should_abort=None, idle_timeout=60.
             now = time.monotonic()
             if event in ("started", "progress"):
                 last_activity = now
-            elif event in ("queued", "preempted"):
+                queued_since = None
+            elif event == "preempted":
                 last_activity = None
+                queued_since = now
             if on_event is not None:
                 on_event(message)
             if should_abort is not None and should_abort():
                 raise SeparationAborted("separation cancelled")
-            if total_timeout and now - started > total_timeout:
-                raise SeparationUnavailable(f"separation took longer than {int(total_timeout)} s")
             if last_activity is not None and now - last_activity > stall_timeout:
-                raise SeparationUnavailable(f"no separation progress for {int(stall_timeout)} s")
+                manager.kill_worker(worker_pid, f"job {spec.get('label', '')} made no progress for "
+                                                f"{int(stall_timeout)} s")
+                raise WorkerLost(f"no separation progress for {int(stall_timeout)} s")
+            running_idle = message.get("running_idle_s") if event == "heartbeat" else None
+            if last_activity is None and running_idle is not None and float(running_idle) > stall_timeout:
+                manager.kill_worker(worker_pid, f"the running job made no progress for {int(float(running_idle))} s")
+                raise WorkerLost("the separation worker is stuck on another job")
+            if total_timeout and now - started > total_timeout:
+                if last_activity is not None:  # this job is the one running: free the worker for the next
+                    manager.kill_worker(worker_pid, f"job {spec.get('label', '')} exceeded {int(total_timeout)} s")
+                    raise WorkerLost(f"separation took longer than {int(total_timeout)} s")
+                raise SeparationUnavailable(f"separation took longer than {int(total_timeout)} s")
+            if queue_timeout and queued_since is not None and now - queued_since > queue_timeout:
+                raise SeparationUnavailable(f"waited more than {int(queue_timeout)} s in the separation queue")
     finally:
         _close(sock)
 
@@ -465,8 +532,8 @@ def _clean_stale_temp_dirs(song_dir):
                 pass
 
 
-def clean_temp_dirs(app=None):
-    """Remove every leftover ``.separation-*`` directory (call at startup, before any job runs)."""
+def clean_temp_dirs(app=None, min_age=STARTUP_TEMP_MIN_AGE):
+    """Remove leftover ``.separation-*`` directories older than ``min_age`` seconds (call at startup)."""
     from flask import has_app_context
     from src.utils.file_handling import get_all_track_ids, get_song_dir
 
@@ -478,9 +545,15 @@ def clean_temp_dirs(app=None):
                 names = os.listdir(song_dir)
             except OSError:
                 continue
+            now = time.time()
             for name in names:
                 path = os.path.join(song_dir, name)
                 if name.startswith(TEMP_PREFIX) and os.path.isdir(path):
+                    try:
+                        if now - os.path.getmtime(path) < min_age:
+                            continue
+                    except OSError:
+                        continue
                     shutil.rmtree(path, ignore_errors=True)
                     removed += 1
         return removed
@@ -507,6 +580,10 @@ def separate_track_locally(track_id, *, priority="interactive", on_event=None, s
     song_path = get_track_file_path(track_id, "song", create=False)
     if not os.path.isfile(song_path) or os.path.getsize(song_path) == 0:
         raise SeparationFailed("song.mp3 is missing")
+    if priority == "interactive" and cfg["SEPARATION_INTERACTIVE_REQUIRE_KERNELS"] and manager.ensure_running():
+        backend = ((manager.ping() or {}).get("info") or {}).get("compute_backend")
+        if backend == "torch":  # several times slower than the kernels: users are better served by Replicate
+            raise SeparationUnavailable("the local worker runs without its fast kernels")
     song_dir = get_song_dir(track_id, create=False)
     _clean_stale_temp_dirs(song_dir)
     workdir = tempfile.mkdtemp(prefix=TEMP_PREFIX, dir=song_dir)
@@ -518,6 +595,7 @@ def separate_track_locally(track_id, *, priority="interactive", on_event=None, s
             "overlap": float(cfg["SEPARATION_OVERLAP"]),
             "bitrate": str(cfg["SEPARATION_BITRATE"]),
             "label": str(track_id),
+            "max_duration_s": float(cfg["SEPARATION_MAX_DURATION"] or 0),
         }
         result = run_job(
             manager, spec, on_event,
@@ -525,6 +603,7 @@ def separate_track_locally(track_id, *, priority="interactive", on_event=None, s
             idle_timeout=float(cfg["SEPARATION_IDLE_TIMEOUT"]),
             stall_timeout=float(cfg["SEPARATION_STALL_TIMEOUT"]),
             total_timeout=float(cfg["SEPARATION_JOB_TIMEOUT"]) if priority == "interactive" else None,
+            queue_timeout=float(cfg["SEPARATION_QUEUE_TIMEOUT"] or 0) if priority == "interactive" else None,
         )
         for path in spec["outputs"].values():
             if not os.path.isfile(path) or os.path.getsize(path) == 0:

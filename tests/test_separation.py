@@ -62,6 +62,7 @@ class SeparationTestBase(unittest.TestCase):
             "SEPARATION_START_TIMEOUT": 20.0,
             "SEPARATION_FAILURE_BACKOFF": 0.0,
             "SEPARATION_IDLE_TIMEOUT": 10.0,
+            "SEPARATION_HEARTBEAT": 0.3,
         }
         config.update(overrides)
         os.makedirs(self.root / "db", exist_ok=True)
@@ -217,6 +218,80 @@ class WorkerProtocolTest(SeparationTestBase):
         song_dir = self.make_song()
         with self.assertRaises(sep.SeparationUnavailable):
             sep.run_job(self.manager(), self.spec(song_dir, input_name="hang.mp3"), stall_timeout=1.0)
+
+    def test_uncancellable_hang_kills_and_replaces_the_worker(self):
+        song_dir = self.make_song()
+        self.assertTrue(self.manager().ensure_running())
+        first_pid = self.manager().status()["pid"]
+        started = time.monotonic()
+        with self.assertRaises(sep.WorkerLost):
+            sep.run_job(self.manager(), self.spec(song_dir, input_name="freeze.mp3"), stall_timeout=1.0)
+        self.assertLess(time.monotonic() - started, 15)
+        sep.run_job(self.manager(), self.spec(song_dir, out="after"))
+        self.assertNotEqual(self.manager().status()["pid"], first_pid)
+
+    def test_waiting_job_kills_a_worker_stuck_on_another_job(self):
+        song_dir = self.make_song()
+        self.assertTrue(self.manager().ensure_running())
+        first_pid = self.manager().status()["pid"]
+        stuck_errors = []
+
+        def stuck_batch():
+            try:
+                sep.run_job(self.manager(), self.spec(song_dir, priority="batch", input_name="freeze.mp3",
+                                                      out="stuck"), stall_timeout=60.0)
+            except sep.SeparationUnavailable as e:
+                stuck_errors.append(e)
+
+        thread = threading.Thread(target=stuck_batch)
+        thread.start()
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline and not (self.manager().status().get("current") or {}).get("job_id"):
+            time.sleep(0.05)
+        with self.assertRaises(sep.WorkerLost):
+            sep.run_job(self.manager(), self.spec(song_dir, out="waiting"), stall_timeout=1.0)
+        thread.join(15)
+        self.assertEqual(len(stuck_errors), 1)
+        self.assertIsInstance(stuck_errors[0], sep.WorkerLost)
+        self.assertEqual(self.manager()._crashed_pids, {first_pid})  # two clients, one crash
+        sep.run_job(self.manager(), self.spec(song_dir, out="fresh"))
+        self.assertNotEqual(self.manager().status()["pid"], first_pid)
+
+    def test_queue_timeout_gives_up_without_killing_the_worker(self):
+        song_dir = self.make_song()
+        self.assertTrue(self.manager().ensure_running())
+        pid = self.manager().status()["pid"]
+        stop = threading.Event()
+
+        def long_job():
+            try:
+                sep.run_job(self.manager(), self.spec(song_dir, input_name="hang.mp3", out="long"),
+                            should_abort=stop.is_set, stall_timeout=60.0)
+            except sep.SeparationAborted:
+                pass
+
+        thread = threading.Thread(target=long_job)
+        thread.start()
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline and not (self.manager().status().get("current") or {}).get("job_id"):
+            time.sleep(0.05)
+        with self.assertRaises(sep.SeparationUnavailable) as caught:
+            sep.run_job(self.manager(), self.spec(song_dir, out="queued"), queue_timeout=1.0, stall_timeout=60.0)
+        self.assertNotIsInstance(caught.exception, sep.WorkerLost)
+        stop.set()
+        thread.join(15)
+        self.assertEqual(self.manager().status()["pid"], pid)
+
+    def test_interactive_jobs_avoid_a_worker_without_kernels(self):
+        self.make_song("55", stems=(b"v", b"i"))
+        manager = sep.get_manager(self.app)
+        with patch.object(sep.WorkerManager, "ensure_running", return_value=True), \
+                patch.object(sep.WorkerManager, "ping",
+                             return_value={"state": "ready", "info": {"compute_backend": "torch"}}), \
+                self.app.app_context():
+            with self.assertRaises(sep.SeparationUnavailable):
+                sep.separate_track_locally("55", priority="interactive", app=self.app)
+        self.assertIsNotNone(manager)
 
     def test_model_load_failure_reports_unavailable(self):
         with patch.dict(os.environ, {"MELODAI_FAKE_SEP_FAIL_LOAD": "1"}):
@@ -383,12 +458,16 @@ class InstallTest(SeparationTestBase):
         self.assertEqual((song_dir / "no_vocals.demucs.mp3").read_bytes(), b"demucs-i")
         self.assertTrue((song_dir / "vocals.mp3").read_bytes().startswith(b"FAKE-VOCALS"))
 
-    def test_clean_temp_dirs_removes_leftovers(self):
+    def test_clean_temp_dirs_removes_old_leftovers_only(self):
         song_dir = self.make_song(stems=(b"v", b"i"))
         (song_dir / ".separation-abc").mkdir()
         (song_dir / ".separation-abc" / "vocals.mp3").write_bytes(b"partial")
+        old = time.time() - sep.STARTUP_TEMP_MIN_AGE - 60
+        os.utime(song_dir / ".separation-abc", (old, old))
+        (song_dir / ".separation-live").mkdir()  # e.g. the previous container's job during a deploy
         self.assertEqual(sep.clean_temp_dirs(self.app), 1)
         self.assertFalse((song_dir / ".separation-abc").exists())
+        self.assertTrue((song_dir / ".separation-live").exists())
         self.assertEqual((song_dir / "vocals.mp3").read_bytes(), b"v")
 
     def test_is_current(self):
@@ -520,6 +599,37 @@ class ResplitTest(SeparationTestBase):
         self.assertIn("down", status["error"])
         self.assertEqual(status["counts"], {"pending": 1})
         self.assertEqual((Path(get_song_dir_for(self.app, "1")) / "vocals.mp3").read_bytes(), b"v")
+
+    def test_song_that_keeps_losing_the_worker_is_failed_and_skipped(self):
+        d1 = self.make_song("1", stems=(b"demucs-v1", b"demucs-i1"))
+        self.make_song("2", stems=(b"v", b"i"))
+        calls = []
+
+        def poison(track_id, **kwargs):
+            calls.append(track_id)
+            if track_id == "1":
+                raise sep.WorkerLost("the separation worker closed the connection")
+            return sep.separate_track_locally(track_id, **kwargs)
+
+        batch = self.batch(separate=poison)
+        batch.start(background=False)
+        status = batch.status()
+        self.assertEqual(status["status"], "done")
+        self.assertEqual(status["counts"], {"failed": 1, "done": 1})
+        self.assertEqual(calls, ["1", "2", "1", "1"])
+        self.assertIn("worker lost 3x", status["failures"][0]["error"])
+        self.assertEqual((d1 / "vocals.mp3").read_bytes(), b"demucs-v1")
+
+    def test_resume_waits_for_a_runner_that_is_still_shutting_down(self):
+        self.make_song("1", stems=(b"v", b"i"))
+        old = self.batch()
+        old.create()
+        self.assertTrue(old._acquire())  # the previous container still holds the lock
+        threading.Timer(0.5, old._release).start()
+        restarted = self.resplit.ResplitBatch(self.app, sleep=lambda s: time.sleep(0.05))
+        self.assertTrue(restarted.resume_if_running())
+        restarted.wait(30)
+        self.assertEqual(restarted.status()["counts"], {"done": 1})
 
     def test_second_runner_is_refused(self):
         self.make_song("1", stems=(b"v", b"i"))

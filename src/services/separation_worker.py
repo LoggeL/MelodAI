@@ -69,9 +69,22 @@ def decode_audio(path, sample_rate=SAMPLE_RATE):
     if proc.returncode != 0:
         raise RuntimeError(f"ffmpeg could not decode the input: {proc.stderr.decode(errors='replace').strip()[-300:]}")
     data = np.frombuffer(proc.stdout, dtype=np.float32)
+    del proc
     if data.size < 2:
         raise RuntimeError("the input contains no audio")
     return np.ascontiguousarray(data[: data.size - data.size % 2].reshape(-1, 2).T)
+
+
+def probe_duration(path):
+    """Container duration in seconds via ffprobe, or None when it cannot be determined."""
+    try:
+        proc = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", str(path)],
+            capture_output=True, timeout=60, check=False,
+        )
+        return float(proc.stdout.decode().strip()) if proc.returncode == 0 else None
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return None
 
 
 def encode_mp3(audio, path, sample_rate=SAMPLE_RATE, bitrate="128k"):
@@ -115,6 +128,12 @@ class TurboEngine:
 
     def run(self, spec, progress, check_abort):
         t0 = time.perf_counter()
+        max_duration = float(spec.get("max_duration_s") or 0)
+        if max_duration:
+            probed = probe_duration(spec["input"])
+            if probed is not None and probed > max_duration:
+                raise ValueError(f"input is {probed / 60:.1f} min long; local separation is limited to "
+                                 f"{max_duration / 60:.0f} min")
         mix = decode_audio(spec["input"])
         duration = mix.shape[1] / SAMPLE_RATE
         overlap = float(spec.get("overlap", 2.0))
@@ -148,8 +167,9 @@ class FakeEngine:
     Tuned through environment variables so tests can drive a real worker process cheaply:
     ``MELODAI_FAKE_SEP_CHUNKS`` (default 4), ``MELODAI_FAKE_SEP_DELAY`` seconds per chunk (0.05),
     ``MELODAI_FAKE_SEP_LOAD_DELAY`` (0), ``MELODAI_FAKE_SEP_FAIL_LOAD`` (unset), ``MELODAI_FAKE_SEP_MODE``
-    (``fail`` | ``crash`` | ``hang``). An input whose file name contains ``fail``/``crash``/``hang`` behaves the
-    same: raise, kill the worker process, or stop reporting progress until the job is cancelled.
+    (``fail`` | ``crash`` | ``hang`` | ``freeze``). An input whose file name contains one of these words behaves
+    the same: raise, kill the worker process, stop reporting progress until the job is cancelled, or stop
+    reporting progress for good without ever checking for cancellation (a hang inside native code).
     """
 
     name = "fake"
@@ -172,6 +192,8 @@ class FakeEngine:
             raise RuntimeError("fake separation failed")
         for k in range(1, total + 1):
             time.sleep(delay)
+            while "freeze" in name:  # uncancellable: only killing the process ends it
+                time.sleep(0.05)
             while "hang" in name:
                 time.sleep(0.05)
                 check_abort()
@@ -235,13 +257,21 @@ class Job:
         self.position = None
         self.progress = None
         self.submitted = time.time()
+        self.last_progress_at = None  # monotonic time of the last progress callback while running
 
     def __lt__(self, other):
         return (self.priority, self.seq) < (other.priority, other.seq)
 
+    def idle_s(self):
+        """Seconds since this running job last reported progress (None when it is not running)."""
+        if self.state != "running" or self.last_progress_at is None:
+            return None
+        return round(time.monotonic() - self.last_progress_at, 1)
+
     def summary(self):
         return {"job_id": self.id, "priority": self.spec.get("priority"), "label": self.spec.get("label", ""),
-                "state": self.state, "progress": self.progress, "position": self.position}
+                "state": self.state, "progress": self.progress, "position": self.position,
+                "idle_s": self.idle_s()}
 
 
 def validate_spec(spec):
@@ -363,8 +393,11 @@ class Worker:
             with self.cond:
                 jobs = [j for j in self._queued_jobs()] + ([self.current] if self.current else [])
                 state = self.state
+                running_idle = self.current.idle_s() if self.current else None
+            # running_idle_s lets every client see a hung job (no progress for a long time even though this
+            # heartbeat thread still answers), so a waiting client can kill and restart the worker.
             for job in jobs:
-                if not job.conn.send({"event": "heartbeat", "state": state}):
+                if not job.conn.send({"event": "heartbeat", "state": state, "running_idle_s": running_idle}):
                     self.cancel(job)
 
     # -------------------------------------------------------------- queue
@@ -386,7 +419,7 @@ class Worker:
             priority = PRIORITIES[spec.get("priority", "interactive")]
             job = Job(spec, conn, priority, next(self.seq))
             heapq.heappush(self.queue, job)
-            conn.send({"event": "accepted", "job_id": job.id, "state": self.state})
+            conn.send({"event": "accepted", "job_id": job.id, "state": self.state, "pid": os.getpid()})
             current = self.current
             if (self.preempt_enabled and current is not None and current.state == "running"
                     and priority < current.priority and not current.preempt):
@@ -469,6 +502,7 @@ class Worker:
                     continue
                 job.state = "running"
                 job.position = None
+                job.last_progress_at = time.monotonic()
                 self.current = job
                 self._broadcast_positions()
             try:
@@ -501,6 +535,7 @@ class Worker:
         def progress(done, total):
             self._check(job)
             job.progress = [int(done), int(total)]
+            job.last_progress_at = time.monotonic()
             if not job.conn.send({"event": "progress", "done": int(done), "total": int(total)}):
                 self.cancel(job)
                 raise JobAborted("cancelled")
@@ -513,6 +548,7 @@ class Worker:
                     job.preempt = False
                     job.state = "queued"
                     job.progress = None
+                    job.last_progress_at = None
                     self.stats["preempted"] += 1
                     heapq.heappush(self.queue, job)  # same seq: back at the head of the batch queue
                 job.conn.send({"event": "preempted"})

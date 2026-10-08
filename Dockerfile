@@ -14,9 +14,10 @@ WORKDIR /app
 
 # ffmpeg: audio decode/encode. g++: the turbo-roformer AVX512-BF16 kernels are compiled below for this machine;
 # the compiler stays in the image so a container on a different CPU can rebuild them on first use (or fall back
-# to the portable torch path when the CPU has no AVX512-BF16).
+# to the portable torch path when the CPU has no AVX512-BF16). git: uv fetches turbo-roformer from its git tag.
+# tini: PID 1 that forwards signals and reaps orphaned ffmpeg processes of a killed separation worker.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg g++ \
+    && apt-get install -y --no-install-recommends ffmpeg g++ git tini \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv
@@ -59,4 +60,5 @@ RUN ln -s /data/db/database.db src/database.db \
 EXPOSE 5000
 
 # The app starts the separation worker (src/services/separation_worker.py) as a child process on startup.
+ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["python", "main.py"]

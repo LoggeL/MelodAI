@@ -3,7 +3,9 @@
 Runs inside the image after the Python dependencies are installed (``python scripts/prepare_separation.py``).
 Weights go to ``$TURBO_ROFORMER_HOME/models`` (sha256-checked by turbo-roformer), kernels to
 ``$TURBO_ROFORMER_HOME/kernels``. A CPU without AVX512-BF16 is not an error: the worker then uses the portable
-torch path. A failing smoke test fails the build, so a broken separation stack is never deployed.
+torch path. A failing smoke test fails the build, so a broken separation stack is never deployed. On a CPU that
+supports the kernels, a kernel build failure also fails the build (the torch fallback is several times slower);
+set ``SEPARATION_ALLOW_TORCH_FALLBACK=1`` to accept it anyway.
 """
 
 import os
@@ -23,14 +25,22 @@ def main():
     path = registry.ensure_weights(registry.resolve_spec(model), None, progress=False)
     print(f"weights: {path} ({os.path.getsize(path) / 1e6:.0f} MB, {time.perf_counter() - t0:.1f} s)", flush=True)
 
+    allow_fallback = os.environ.get("SEPARATION_ALLOW_TORCH_FALLBACK", "").strip().lower() in ("1", "true", "yes")
     ok, reason = _kernels.support()
+    kernels_built = False
     if ok:
         t0 = time.perf_counter()
         try:
             _kernels.load()
+            kernels_built = True
             print(f"kernels: compiled for {_kernels.cpu_model_name()} ({time.perf_counter() - t0:.1f} s)", flush=True)
-        except _kernels.KernelUnavailable as e:
-            print(f"WARNING: kernel build failed, the worker will use the torch path: {e}", flush=True)
+        except Exception as e:  # KernelUnavailable, compiler or ninja errors
+            print(f"kernel build failed on a CPU that supports them: {e}", flush=True)
+            if not allow_fallback:
+                print("ERROR: refusing to ship the slow torch path (set SEPARATION_ALLOW_TORCH_FALLBACK=1 to allow)",
+                      flush=True)
+                return 1
+            print("WARNING: SEPARATION_ALLOW_TORCH_FALLBACK=1, the worker will use the torch path", flush=True)
     else:
         print(f"kernels: not used on this machine ({reason}); the worker will use the torch path", flush=True)
 
@@ -44,6 +54,9 @@ def main():
         return 1
     print(f"smoke test: backend={separator.backend} precision={separator.precision} "
           f"({time.perf_counter() - t0:.1f} s incl. load)", flush=True)
+    if kernels_built and separator.backend != "kernels":
+        print(f"ERROR: kernels were built but the separator chose backend={separator.backend}", flush=True)
+        return 1
     return 0
 
 

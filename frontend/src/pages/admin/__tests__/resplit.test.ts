@@ -22,7 +22,8 @@ describe('re-split panel helpers', () => {
 
   it('offers start, resume or stop', () => {
     expect(resplitAction(status({}))).toBe('start')
-    expect(resplitAction(status({ status: 'running', total: 3, counts: { pending: 3 } }))).toBe('stop')
+    expect(resplitAction(status({ status: 'running', running: true, total: 3, counts: { pending: 3 } }))).toBe('stop')
+    expect(resplitAction(status({ status: 'running', running: false, total: 3, counts: { pending: 3 } }))).toBe('resume')
     expect(resplitAction(status({ status: 'stopped', total: 3, counts: { pending: 2, done: 1 } }))).toBe('resume')
     expect(resplitAction(status({ status: 'error', total: 3, counts: { done: 3 } }))).toBe('start')
     expect(resplitAction(status({}, { split_backend: 'replicate' }))).toBeNull()
