@@ -88,10 +88,13 @@ Vite dev server (port 3000) proxies `/api/*` and `/songs/*` to Flask (port 5000)
 Copy `example.env` to `.env` and fill in the required values.
 
 ## Design System
-- Primary gradient: `#d90429` → `#8b0000` (red/crimson)
-- Fonts: Barlow Condensed (headings), Poppins (body)
-- Dark mode default via `[data-theme='dark']` CSS variables
-- Glassmorphism containers, brutalist tags, pill buttons
+- Concept „Bühne“: dark stage with a warm spotlight (default), paper-white light theme via `[data-theme='light']`
+- Tokens in `frontend/src/styles/tokens.css` (colours only there); utilities (`.btn`, `.seg`, `.chip`, `.table`, `.stats`, …) in `frontend/src/styles/globals.css`; components use CSS Modules
+- Red `--vocal` = voice, blue `--inst` = instrumental, `--spot` = spotlight accent
+- Fonts: Archivo Variable (UI, condensed lyrics, wide headlines) and JetBrains Mono (numbers, kickers), self-hosted
+- Icons: `<Icon name=… />` from `frontend/src/components/common/icons.ts`, no icon font
+- UI copy is German with real umlauts; backend messages are mapped through `de()` in `frontend/src/utils/messages.ts`
+- Keep e2e selector classes (`controls`, `resultItem`, `navTab`, `actionBtn`, …) and `data-testid`s stable; details in `docs/frontend.md`
 
 ## Important Constraints
 - **Do NOT modify `src/services/deezer.py`** — Complex decryption logic, 707 lines
