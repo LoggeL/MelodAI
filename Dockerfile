@@ -27,11 +27,15 @@ ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     PATH="/app/.venv/bin:$PATH" \
     TURBO_ROFORMER_HOME=/opt/turbo-roformer \
+    HF_HOME=/opt/huggingface \
+    HF_HUB_DISABLE_TELEMETRY=1 \
+    TRANSFORMERS_VERBOSITY=error \
     PYTHONUNBUFFERED=1
 
-# Install Python dependencies, including local separation (CPU-only torch wheel from the PyTorch CPU index)
+# Install Python dependencies, including local separation and transcription (CPU-only torch wheel from the PyTorch
+# CPU index)
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project --extra separation
+RUN uv sync --frozen --no-dev --no-install-project --extra separation --extra transcription
 
 # Separation model: download the checkpoint (sha256-verified, ~204 MB) and compile the kernels at build time.
 # Dokploy builds this image on the production host, so -march=native targets the CPU it will run on. Weights and
@@ -39,6 +43,12 @@ RUN uv sync --frozen --no-dev --no-install-project --extra separation
 # start, without network access. This layer is cached until the Python dependencies change.
 COPY scripts/prepare_separation.py scripts/prepare_separation.py
 RUN python scripts/prepare_separation.py
+
+# Transcription models: Whisper large-v3-turbo (int8 at load time) and the wav2vec2 aligners for English and German
+# (~3 GB in $HF_HOME). Aligners for other languages are downloaded on first use. A smoke test fails the build when
+# the transcription stack is broken.
+COPY scripts/prepare_transcription.py scripts/prepare_transcription.py
+RUN python scripts/prepare_transcription.py
 
 # Copy backend source
 COPY main.py .
@@ -59,6 +69,7 @@ RUN ln -s /data/db/database.db src/database.db \
 
 EXPOSE 5000
 
-# The app starts the separation worker (src/services/separation_worker.py) as a child process on startup.
+# The app starts the separation and transcription workers (src/services/separation_worker.py,
+# src/services/transcription_worker.py) as child processes on startup.
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["python", "main.py"]

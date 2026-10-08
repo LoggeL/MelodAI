@@ -234,6 +234,7 @@ def storage():
 def list_songs():
     from src.utils.file_handling import get_all_track_ids, load_metadata, load_lyrics, is_track_complete, get_track_file_sizes
     from src.services.separation import load_record
+    from src.services.transcription import load_record as load_transcription_record
 
     track_ids = get_all_track_ids()
     songs = []
@@ -257,6 +258,7 @@ def list_songs():
                 "avg_confidence": lyrics.get("avg_confidence") if lyrics else None,
                 "has_lyrics": has_lyrics,
                 "separation_backend": (load_record(tid) or {}).get("backend"),
+                "transcription_backend": (load_transcription_record(tid) or {}).get("backend"),
             })
     return jsonify(songs)
 
@@ -334,6 +336,7 @@ def song_details(track_id):
     )["c"]
 
     from src.services.separation import load_record
+    from src.services.transcription import load_record as load_transcription_record
 
     return jsonify({
         "id": track_id,
@@ -341,6 +344,7 @@ def song_details(track_id):
         "complete": is_track_complete(track_id),
         "files": files,
         "separation": load_record(track_id),
+        "transcription": load_transcription_record(track_id),
         "lyrics": lyrics,
         "lyrics_raw": lyrics_raw,
         "reference_lyrics": ref_lyrics,
@@ -523,9 +527,10 @@ def reprocess_song(track_id):
             from src.services.separation import remove_record
             remove_record(track_id)
         if from_stage in ("all", "splitting", "lyrics"):
-            reference_path = os.path.join(song_dir, "reference_lyrics.json")
-            if os.path.exists(reference_path):
-                os.remove(reference_path)
+            for name in ("reference_lyrics.json", "transcription.json", "lyrics_raw_reference.json"):
+                path = os.path.join(song_dir, name)
+                if os.path.exists(path):
+                    os.remove(path)
         threading.Thread(target=process_track, args=(track_id, app), daemon=True).start()
     except (OSError, RuntimeError, sqlite3.Error):
         remove_from_queue(track_id)
@@ -841,6 +846,23 @@ def separation_status():
         "package_version": installed_version(),
         "worker": worker,
         "batch": get_batch(app).status(),
+    })
+
+
+@admin_bp.route("/transcription")
+@admin_required
+def transcription_status():
+    """Local transcription worker state."""
+    from src.services.transcription import get_manager, installed_version, settings, transcribe_backend
+
+    app = current_app._get_current_object()
+    backend = transcribe_backend(app)
+    worker = get_manager(app).status() if backend == "local" else {"available": False, "state": "disabled"}
+    return jsonify({
+        "transcribe_backend": backend,
+        "reference_mode": settings(app)["TRANSCRIBE_REFERENCE_MODE"],
+        "package_version": installed_version(),
+        "worker": worker,
     })
 
 

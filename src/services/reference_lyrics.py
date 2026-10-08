@@ -31,6 +31,24 @@ def lyric_lines(text):
     return lines if any(normalize(line) for line in lines) and sum(len(line.split()) for line in lines) <= 3000 else []
 
 
+def synced_times(synced, lines):
+    """Start time (seconds) of each of ``lines`` from LRC ``synced`` text, or None when they do not correspond."""
+    if not isinstance(synced, str) or not lines:
+        return None
+    times = []
+    for raw in synced.splitlines():
+        match = re.match(r"^\[(\d+):(\d+(?:[.:]\d+)?)\]", raw.strip())
+        text = lyric_lines(raw)
+        if not text:
+            continue
+        if match is None:
+            return None
+        times.append((int(match.group(1)) * 60 + float(match.group(2).replace(":", ".")), text[0]))
+    if [text for _, text in times] != list(lines):
+        return None
+    return [round(t, 2) for t, _ in times]
+
+
 def _json(url, **kwargs):
     response = requests.get(url, headers=HEADERS, timeout=(3, 8), **kwargs)
     if response.status_code == 404:
@@ -65,7 +83,11 @@ def _fetch_lrclib(title, artist, duration=None, album=None):
     for result in candidates:
         lines = lyric_lines(result.get("plainLyrics") or result.get("syncedLyrics"))
         if lines:
-            return {"source": "lrclib", "lines": lines, "record_id": result.get("id"), "identity_verified": True}
+            candidate = {"source": "lrclib", "lines": lines, "record_id": result.get("id"), "identity_verified": True}
+            times = synced_times(result.get("syncedLyrics"), lines)
+            if times:  # line start times guide local forced alignment
+                candidate["times"] = times
+            return candidate
     return None
 
 

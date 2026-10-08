@@ -353,7 +353,8 @@ class StageSplitTest(SeparationTestBase):
             statuses.append((progress, detail))
             real(track_id, status, progress, detail)
 
-        with self.app.app_context(), patch("src.routes.track.set_processing_status", side_effect=record):
+        with self.app.app_context(), patch("src.routes.track.set_processing_status", side_effect=record), \
+                patch("src.routes.track._prefetch_references"):
             _stage_split("123")
         return statuses
 
@@ -478,7 +479,8 @@ class InstallTest(SeparationTestBase):
         self.assertFalse(sep.is_current({**record, "backend": "replicate"}, cfg, "0.1.0"))
         self.assertFalse(sep.is_current({**record, "overlap": 3.0}, cfg, "0.1.0"))
         self.assertFalse(sep.is_current(None, cfg, "0.1.0"))
-        self.assertFalse(sep.is_current(record, cfg, None))
+        with patch("src.services.separation.installed_version", return_value=None):  # turbo-roformer not installed
+            self.assertFalse(sep.is_current(record, cfg, None))
 
 
 class ResplitTest(SeparationTestBase):

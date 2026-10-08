@@ -131,6 +131,29 @@ def run_health_checks():
     except Exception as e:
         results["separation"] = {"status": "error", "message": str(e)}
 
+    # Local transcription worker check
+    try:
+        from src.services.transcription import get_manager as get_transcription_manager, transcribe_backend
+        if transcribe_backend() != "local":
+            results["transcription"] = {"status": "ok", "message": "Local transcription disabled; using Replicate WhisperX"}
+        else:
+            worker = get_transcription_manager().status()
+            info = worker.get("info") or {}
+            if worker.get("available"):
+                detail = ", ".join(str(v) for v in (info.get("model"), info.get("compute_type"), info.get("align_precision")) if v)
+                queue = len(worker.get("queue") or [])
+                results["transcription"] = {
+                    "status": "ok",
+                    "message": f"Worker {worker.get('state')}" + (f" ({detail})" if detail else "") + f", {queue} queued",
+                }
+            else:
+                results["transcription"] = {
+                    "status": "error",
+                    "message": f"Worker unavailable ({worker.get('error') or worker.get('state')}); falling back to Replicate",
+                }
+    except Exception as e:
+        results["transcription"] = {"status": "error", "message": str(e)}
+
     # Processing queue check
     with _queue_lock:
         active = [k for k, v in _queue().items() if v["status"] not in ("complete", "error")]

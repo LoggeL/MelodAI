@@ -19,7 +19,7 @@ Search for a song, and MelodAI separates vocals from instrumentals, extracts wor
 1. **Search** for a song via Deezer's catalog
 2. **Download** and decrypt the audio
 3. **Split** vocals and instrumentals locally on the CPU with [turbo-roformer](https://github.com/LoggeL/turbo-roformer) (BS-RoFormer, about 0.7× real time on an 8-core Zen 4), falling back to [Demucs](https://github.com/adefossez/demucs) on Replicate when the local worker is unavailable
-4. **Transcribe** lyrics with word-level timestamps using [WhisperX](https://github.com/m-bain/whisperX) (via Replicate)
+4. **Transcribe** lyrics with word-level timestamps locally on the CPU with [turbo-lyrics](https://github.com/LoggeL/turbo-lyrics) (Whisper large-v3-turbo + wav2vec2 alignment, or forced alignment of known lyrics), falling back to [WhisperX](https://github.com/m-bain/whisperX) on Replicate
 5. **Process** lyrics into karaoke lines using an LLM (via OpenRouter)
 6. **Play** with real-time word-highlighting, independent vocal/instrumental volume, and speaker colorization
 
@@ -49,7 +49,8 @@ Screenshots use a demo song store with self-written lyrics.
 - **Frontend:** React, TypeScript, Vite, CSS Modules with design tokens, self-hosted Archivo and JetBrains Mono
 - **Audio:** Web Audio API with dual GainNodes (vocals + instrumental)
 - **Vocal separation:** local BS-RoFormer via turbo-roformer (CPU, PyTorch), Replicate Demucs as fallback
-- **AI Services:** Replicate (WhisperX, Demucs fallback), OpenRouter (LLM lyrics processing)
+- **Transcription:** local Whisper + wav2vec2 alignment via turbo-lyrics (CPU), Replicate WhisperX as fallback
+- **AI Services:** Replicate (WhisperX and Demucs fallbacks), OpenRouter (LLM lyrics processing)
 - **Song Source:** Deezer
 
 ## Setup
@@ -70,13 +71,14 @@ uv sync
 cd frontend && npm ci
 ```
 
-Local separation is an optional extra (CPU-only PyTorch, about 1 GB). Without it, splitting uses Replicate:
+Local separation and transcription are optional extras (CPU-only PyTorch, about 1 GB, plus about 3 GB of models for
+transcription). Without them, splitting and transcription use Replicate:
 
 ```bash
-uv sync --extra separation   # installs turbo-roformer + torch (CPU wheel)
+uv sync --extra separation --extra transcription   # turbo-roformer, turbo-lyrics + torch (CPU wheel)
 ```
 
-The Docker image always includes it, downloads the model checkpoint and compiles the AVX512-BF16 kernels at build time.
+The Docker image always includes both, downloads the models and compiles the AVX512-BF16 kernels at build time.
 
 ### Configuration
 
@@ -139,6 +141,9 @@ MelodAI/
       lyrics.py            # LLM-based lyrics line splitting
       separation.py        # Local separation client, worker supervision, stem install
       separation_worker.py # Long-lived separation process (turbo-roformer)
+      transcription.py     # Local transcription client and record
+      transcription_worker.py # Long-lived transcription process (turbo-lyrics)
+      compute_gate.py      # CPU gate shared by both workers
     tools/
       resplit.py           # Resumable batch: re-split all songs locally
     utils/
