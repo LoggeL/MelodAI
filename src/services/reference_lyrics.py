@@ -1,177 +1,121 @@
-import base64
-import os
-from pathlib import Path
+"""External lyric references with identity checks and source provenance."""
+import re
+import unicodedata
+from concurrent.futures import ThreadPoolExecutor
+from difflib import SequenceMatcher
+from urllib.parse import quote
 
 import requests
 
+MAX_LYRICS_CHARS = 50000
+HEADERS = {"User-Agent": "MelodAI/1.0 (https://melodai.logge.top)"}
 
-def _validate_file_path(file_path):
-    """Validate that *file_path* is within the songs directory."""
-    if not file_path:
+
+def normalize(text):
+    text = unicodedata.normalize("NFKD", text.casefold())
+    return " ".join(re.findall(r"[^\W_]+", "".join(c for c in text if not unicodedata.combining(c))))
+
+
+def lyric_lines(text):
+    if not isinstance(text, str) or len(text) > MAX_LYRICS_CHARS:
+        return []
+    lines = []
+    for line in text.splitlines():
+        line = re.sub(r"^(?:\[\d+:\d+(?:[.:]\d+)?\])+\s*", "", line).strip()
+        if not line or re.fullmatch(r"\[.*\]", line):
+            continue
+        # lyrics.ovh sometimes prepends a French page heading.
+        if line.startswith("Paroles de la chanson "):
+            continue
+        lines.append(line)
+    return lines if any(normalize(line) for line in lines) and sum(len(line.split()) for line in lines) <= 3000 else []
+
+
+def _json(url, **kwargs):
+    response = requests.get(url, headers=HEADERS, timeout=(3, 8), **kwargs)
+    if response.status_code == 404:
         return None
-    from src.utils.file_handling import get_songs_path
-    try:
-        resolved = Path(file_path).resolve()
-        resolved.relative_to(Path(get_songs_path()).resolve())
-        return str(resolved)
-    except (ValueError, TypeError):
-        return None
+    response.raise_for_status()
+    return response.json()
 
 
-def _fetch_lrclib(title, artist, track_id=None):
-    """Fetch lyrics from lrclib.net (free, no API key, no Cloudflare)."""
-    from src.utils.error_logging import log_event
-    try:
-        resp = requests.get(
-            "https://lrclib.net/api/search",
-            params={"q": f"{title} {artist}"},
-            timeout=10,
-        )
-        resp.raise_for_status()
-        results = resp.json()
-    except Exception as e:
-        log_event("WARNING", "lrclib", f"lrclib search failed for '{title}' by '{artist}': {e}", track_id=track_id)
-        return None
+def _identity_matches(result, title, artist, duration):
+    for key, wanted, threshold in (("trackName", title, 0.9), ("artistName", artist, 0.85)):
+        actual = result.get(key)
+        if not isinstance(actual, str) or SequenceMatcher(None, normalize(actual), normalize(wanted)).ratio() < threshold:
+            return False
+    actual_duration = result.get("duration")
+    if duration and isinstance(actual_duration, (int, float)) and abs(actual_duration - duration) > max(8, duration * 0.05):
+        return False
+    return True
 
-    if not results:
-        return None
 
-    # Use the first result with plain lyrics
-    for result in results:
-        plain = result.get("plainLyrics", "")
-        if plain:
-            lines = [l.strip() for l in plain.split("\n") if l.strip()]
-            if lines:
-                return lines
-
+def _fetch_lrclib(title, artist, duration=None, album=None):
+    params = {"track_name": title, "artist_name": artist}
+    if album:
+        params["album_name"] = album
+    if duration:
+        params["duration"] = duration
+    result = _json("https://lrclib.net/api/get", params=params)
+    candidates = [result] if isinstance(result, dict) and _identity_matches(result, title, artist, duration) and lyric_lines(result.get("plainLyrics") or result.get("syncedLyrics")) else []
+    if not candidates:
+        results = _json("https://lrclib.net/api/search", params={"track_name": title, "artist_name": artist})
+        candidates = [r for r in results if isinstance(r, dict) and _identity_matches(r, title, artist, duration)] if isinstance(results, list) else []
+    candidates.sort(key=lambda r: abs((r.get("duration") or 0) - (duration or 0)))
+    for result in candidates:
+        lines = lyric_lines(result.get("plainLyrics") or result.get("syncedLyrics"))
+        if lines:
+            return {"source": "lrclib", "lines": lines, "record_id": result.get("id"), "identity_verified": True}
     return None
 
 
-def _fetch_openrouter(raw_text=None, vocals_path=None, track_id=None):
-    """Use Gemini Flash via OpenRouter to produce formatted lyric lines.
+def _fetch_lyrics_ovh(title, artist, **_kwargs):
+    result = _json(f"https://api.lyrics.ovh/v1/{quote(artist, safe='')}/{quote(title, safe='')}")
+    lines = lyric_lines(result.get("lyrics")) if isinstance(result, dict) else []
+    # This endpoint does not return song identity metadata. Keep that limitation
+    # explicit; content is checked against the transcript before correction.
+    return {"source": "lyrics.ovh", "lines": lines, "identity_verified": False} if lines else None
 
-    Sends the WhisperX plain-text transcript and, optionally, the isolated
-    vocals audio (base64-encoded) so Gemini can correct transcription errors
-    and group words into proper lyric lines.
 
-    Falls back to text-only if the audio payload is rejected by the API.
+def text_similarity(left, right):
+    a, b = normalize(" ".join(left)).split(), normalize(" ".join(right)).split()
+    return SequenceMatcher(None, a, b, autojunk=False).ratio()
 
-    Returns a list of lyric line strings, or None on failure.
-    """
+
+def select_reference(candidates, raw_text=None):
+    """Prefer transcript agreement, then agreement across external sources."""
+    if not candidates:
+        return None
+    def score(candidate):
+        others = [other for other in candidates if other is not candidate]
+        agreement = max((text_similarity(candidate["lines"], other["lines"]) for other in others), default=0)
+        transcript = text_similarity(candidate["lines"], [raw_text]) if raw_text else 0
+        return (transcript if raw_text else agreement, candidate.get("identity_verified", False))
+    return max(candidates, key=score)
+
+
+def fetch_references(title, artist, track_id=None, duration=None, album=None):
     from src.utils.error_logging import log_event
-    api_key = os.getenv("OPENROUTER_API_KEY", "")
-    if not api_key:
-        log_event("WARNING", "openrouter", "OPENROUTER_API_KEY not set — Gemini lyrics fallback skipped", track_id=track_id)
-        return None
-
-    if not raw_text and not vocals_path:
-        return None
-
-    model = os.getenv("LYRICS_GEMINI_MODEL", "google/gemini-3-flash-preview")
-
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "HTTP-Referer": "https://melodai.logge.top",
-        "X-Title": "MelodAI",
-        "Content-Type": "application/json",
-    }
-
-    # Build the text prompt once — shared across both attempts
-    prompt_parts = ["You are a lyrics transcription assistant."]
-    if raw_text:
-        prompt_parts.append(
-            "Below is a rough automatic speech recognition (ASR) transcript of the "
-            "song's vocals. It may contain errors, wrong words, or broken punctuation.\n\n"
-            f"ASR transcript:\n{raw_text}"
-        )
-    if vocals_path and os.path.exists(vocals_path):
-        prompt_parts.append(
-            "I have also attached the isolated vocals audio track. "
-            "Use it to verify and correct the transcript."
-        )
-    prompt_parts.append(
-        "Output the correct, cleaned-up song lyrics formatted as one lyric line per "
-        "text line. Do NOT include timestamps, line numbers, or section labels like "
-        "[Chorus] — just the lyric lines themselves. "
-        "If a line repeats (e.g. a chorus), include it each time it is sung."
-    )
-    prompt = "\n\n".join(prompt_parts)
-
-    # Try hybrid (audio + text) first, then fall back to text-only
-    attempts = []
-    if vocals_path and os.path.exists(vocals_path):
-        safe_vocals = _validate_file_path(vocals_path)
-        if safe_vocals:
-            vocals_path = safe_vocals
-            attempts.append("hybrid")
-    attempts.append("text_only")
-
-    for attempt in attempts:
-        if attempt == "hybrid":
+    candidates = []
+    # Fetch both even when LRCLIB succeeds so disagreement remains inspectable.
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [(name, pool.submit(fetch, title, artist, duration=duration, album=album))
+                   for name, fetch in (("lrclib", _fetch_lrclib), ("lyrics.ovh", _fetch_lyrics_ovh))]
+        for name, future in futures:
             try:
-                with open(vocals_path, "rb") as f:
-                    audio_b64 = base64.b64encode(f.read()).decode()
-                content = [
-                    {"type": "text", "text": prompt},
-                    {"type": "input_audio", "input_audio": {"data": audio_b64, "format": "mp3"}},
-                ]
-            except Exception as e:
-                log_event("WARNING", "openrouter", f"Audio encoding for OpenRouter failed: {e}", track_id=track_id)
-                continue
-        else:
-            content = prompt  # plain string — OpenRouter accepts both forms
-
-        payload = {
-            "model": model,
-            "messages": [{"role": "user", "content": content}],
-            "max_tokens": 2048,
-        }
-
-        try:
-            resp = requests.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers=headers,
-                json=payload,
-                timeout=120,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            if "error" in data:
-                raise RuntimeError(data["error"])
-            text = data["choices"][0]["message"]["content"].strip()
-            lines = [l.strip() for l in text.split("\n") if l.strip()]
-            log_event("INFO", "openrouter", f"Gemini fallback produced {len(lines)} lines (attempt={attempt})", track_id=track_id)
-            return lines if lines else None
-        except Exception as e:
-            if attempt == "hybrid":
-                log_event("WARNING", "openrouter", f"OpenRouter hybrid attempt failed, retrying text-only: {e}", track_id=track_id)
-                continue
-            log_event("ERROR", "openrouter", f"OpenRouter Gemini lyrics fallback failed: {e}", track_id=track_id)
-            return None
-
-    return None
+                candidate = future.result()
+                if candidate:
+                    candidates.append(candidate)
+            except Exception as error:
+                # Avoid logging URLs or provider response bodies.
+                log_event("WARNING", name, f"Lyrics lookup failed ({type(error).__name__})", track_id=track_id)
+    selected = select_reference(candidates)
+    return {"version": 2, "lines": selected["lines"] if selected else [],
+            "source": selected["source"] if selected else None, "candidates": candidates}
 
 
 def fetch_lyrics(title, artist, vocals_path=None, raw_text=None, track_id=None):
-    """Fetch lyrics from lrclib.net, with an OpenRouter Gemini Flash fallback.
-
-    Returns a list of lyric line strings, or None if all sources fail.
-
-    Args:
-        title:       Song title.
-        artist:      Artist name.
-        vocals_path: Path to the vocals .mp3 (used in Gemini fallback).
-        raw_text:    WhisperX plain-text transcript (used in Gemini fallback).
-        track_id:    Track ID for log correlation.
-    """
-    from src.utils.error_logging import log_event
-    result = _fetch_lrclib(title, artist, track_id=track_id)
-    if result:
-        return result
-
-    # lrclib returned nothing — fall back to OpenRouter/Gemini
-    if vocals_path or raw_text:
-        log_event("INFO", "lrclib", f"lrclib found no lyrics for '{title}' by '{artist}', trying Gemini fallback", track_id=track_id)
-        return _fetch_openrouter(raw_text=raw_text, vocals_path=vocals_path, track_id=track_id)
-
-    return None
+    """Compatibility wrapper; generated text is never an external reference."""
+    references = fetch_references(title, artist, track_id=track_id)
+    selected = select_reference(references["candidates"], raw_text)
+    return selected["lines"] if selected else None

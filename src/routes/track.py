@@ -827,12 +827,16 @@ def _stage_lyrics(track_id):
         artist = meta.get("artist", "")
         if title and artist:
             try:
-                from src.services.reference_lyrics import fetch_lyrics
-                reference_lines = fetch_lyrics(title, artist, track_id=track_id)
-                if reference_lines:
-                    ref_lyrics_path = os.path.join(get_song_dir(track_id), "reference_lyrics.json")
-                    with open(ref_lyrics_path, "w") as gf:
-                        json.dump({"lines": reference_lines}, gf, indent=2)
+                from src.services.reference_lyrics import fetch_references
+                references = fetch_references(title, artist, track_id=track_id,
+                                              duration=meta.get("duration"), album=meta.get("album"))
+                # An endpoint without identity metadata must not trigger paid
+                # transcription retries based on an unrelated lyric response.
+                verified = next((candidate for candidate in references["candidates"] if candidate.get("identity_verified")), None)
+                reference_lines = verified["lines"] if verified else None
+                ref_lyrics_path = os.path.join(get_song_dir(track_id), "reference_lyrics.json")
+                with open(ref_lyrics_path, "w") as gf:
+                    json.dump(references, gf, indent=2, ensure_ascii=False)
             except Exception as e:
                 print(f"WARNING: Reference lyrics fetch failed for {track_id}: {e}")
 
@@ -878,7 +882,9 @@ def _stage_process_lyrics(track_id):
 
     set_processing_status(track_id, STATUS_PROCESSING, 86, "Fetching reference lyrics...")
 
-    from src.utils.helpers import postprocess_lyrics_heuristic, correct_lyrics_with_reference
+    from src.utils.helpers import postprocess_lyrics_heuristic
+    from src.services.lyric_correction import correct_lyrics_with_luna
+    from src.services.reference_lyrics import fetch_references, select_reference
 
     # Load raw lyrics
     raw_path = get_track_file_path(track_id, "lyrics_raw")
@@ -893,37 +899,32 @@ def _stage_process_lyrics(track_id):
     ref_stats = None
     ref_lines = None
 
-    # Load cached reference lyrics (saved in stage 4) or fetch fresh
+    # Old caches can contain generated Gemini text. Only version 2 records
+    # represent external sources; refresh legacy caches before validation.
+    references = None
     ref_lyrics_path = os.path.join(get_song_dir(track_id), "reference_lyrics.json")
     if os.path.exists(ref_lyrics_path):
         try:
             with open(ref_lyrics_path, "r") as gf:
-                ref_lines = json.load(gf).get("lines", [])
-        except Exception:
+                cached = json.load(gf)
+            if isinstance(cached, dict) and cached.get("version") == 2 and isinstance(cached.get("candidates"), list):
+                references = cached
+        except (OSError, ValueError):
             pass
 
-    if not ref_lines:
-        meta = load_metadata(track_id)
-        if meta:
-            title = meta.get("title", "")
-            artist = meta.get("artist", "")
-            if title and artist:
-                try:
-                    from src.services.reference_lyrics import fetch_lyrics
-                    vocals_path = get_track_file_path(track_id, "vocals")
-                    raw_text = _extract_whisperx_text(raw_data)
-                    set_processing_status(track_id, STATUS_PROCESSING, 87, "Fetching reference lyrics (Gemini fallback)...")
-                    ref_lines = fetch_lyrics(
-                        title, artist,
-                        vocals_path=vocals_path,
-                        raw_text=raw_text or None,
-                        track_id=track_id,
-                    )
-                    if ref_lines:
-                        with open(ref_lyrics_path, "w") as gf:
-                            json.dump({"lines": ref_lines}, gf, indent=2)
-                except Exception as e:
-                    print(f"WARNING: Reference lyrics fetch failed for {track_id}: {e}")
+    if references is None:
+        meta = load_metadata(track_id) or {}
+        if meta.get("title") and meta.get("artist"):
+            references = fetch_references(meta["title"], meta["artist"], track_id=track_id,
+                                          duration=meta.get("duration"), album=meta.get("album"))
+            with open(ref_lyrics_path, "w") as gf:
+                json.dump(references, gf, indent=2, ensure_ascii=False)
+    candidates = (references or {}).get("candidates", [])
+    selected = select_reference(candidates, _extract_whisperx_text(raw_data))
+    if selected:
+        ref_lines = selected["lines"]
+    provenance = {"selected": selected["source"] if selected else None,
+                  "sources": [candidate["source"] for candidate in candidates]}
 
     # Check if WhisperX returned empty segments
     raw_segments = raw_data if isinstance(raw_data, list) else raw_data.get("segments", [])
@@ -942,20 +943,16 @@ def _stage_process_lyrics(track_id):
             "untimed": True,
             "plain_lyrics": ref_lines,
             "lyrics_source": "reference",
+            "reference_sources": provenance,
         }
         save_lyrics(track_id, processed)
         set_processing_status(track_id, STATUS_PROCESSING, PROGRESS[STATUS_PROCESSING], "Lyrics synced (untimed)")
         return
 
     if ref_lines:
-        try:
-            segments = raw_data if isinstance(raw_data, list) else raw_data.get("segments", [])
-            corrected, ref_line_breaks, ref_stats = correct_lyrics_with_reference(segments, ref_lines)
-            raw_data["segments"] = corrected
-            # Save corrected raw data back
-            save_lyrics_raw(track_id, raw_data)
-        except Exception as e:
-            print(f"WARNING: Reference lyrics correction failed for {track_id}: {e}")
+        set_processing_status(track_id, STATUS_PROCESSING, 88, "Validating and correcting lyrics...")
+        raw_data, ref_line_breaks, ref_stats = correct_lyrics_with_luna(raw_data, ref_lines, track_id=track_id)
+        # Keep lyrics_raw.json untouched for retries and comparison with ASR.
 
     set_processing_status(track_id, STATUS_PROCESSING, 89, "Processing lyrics...")
 
@@ -964,6 +961,11 @@ def _stage_process_lyrics(track_id):
         raw_data, ref_line_breaks=ref_line_breaks, ref_stats=ref_stats
     )
 
+    processed["reference_sources"] = provenance
+    if ref_stats:
+        processed["correction_stats"] = ref_stats
+        if ref_stats.get("applied"):
+            processed["lyrics_source"] = "reference"
     save_lyrics(track_id, processed)
     set_processing_status(track_id, STATUS_PROCESSING, PROGRESS[STATUS_PROCESSING], "Lyrics synced")
 
