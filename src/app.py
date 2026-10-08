@@ -52,7 +52,9 @@ def create_app(config=None):
         RESPLIT_STATE_PATH=os.getenv("MELODAI_RESPLIT_STATE_PATH") or None,
     )
     from src.services.separation import config_from_env
+    from src.services.transcription import config_from_env as transcription_config_from_env
     app.config.update(config_from_env())
+    app.config.update(transcription_config_from_env())
     app.config.update(config or {})
     if type(app.config["MAX_PROCESSING_WORKERS"]) is not int or app.config["MAX_PROCESSING_WORKERS"] < 1:
         raise ValueError("MAX_PROCESSING_WORKERS must be a positive integer")
@@ -160,6 +162,19 @@ def _startup_hooks(app):
                 print(f"WARNING: Could not resume the re-split batch: {e}")
 
         threading.Thread(target=start_separation, daemon=True).start()
+
+    # Local transcription: load Whisper and the aligners before the first song reaches the lyrics stage.
+    from src.services.transcription import transcribe_backend
+    if transcribe_backend(app) == "local":
+        def start_transcription():
+            from src.services.transcription import get_manager
+            try:
+                if not get_manager(app).ensure_running():
+                    print("WARNING: Local transcription worker unavailable; lyrics fall back to Replicate WhisperX")
+            except Exception as e:
+                print(f"WARNING: Could not start the transcription worker: {e}")
+
+        threading.Thread(target=start_transcription, daemon=True).start()
 
 
 def _ensure_admin_account():

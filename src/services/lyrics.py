@@ -116,8 +116,22 @@ def _is_bad_output(output, reference_lines=None):
     return False
 
 
-def _run_whisperx(audio_url, diarization=True):
-    """Single WhisperX call with optional diarization."""
+def reference_language(reference_lines):
+    """ISO code of the reference lyrics' language (stopword count via turbo-lyrics), or None."""
+    if not reference_lines:
+        return None
+    try:
+        from turbo_lyrics.language import detect_text_language
+    except ImportError:
+        return None
+    try:
+        return detect_text_language(list(reference_lines))
+    except Exception:
+        return None
+
+
+def _run_whisperx(audio_url, diarization=True, language=None):
+    """Single WhisperX call with optional diarization. ``language`` skips WhisperX's detection on the intro."""
     hf_token = os.getenv("HF_READ_TOKEN", "").strip()
     diarization = diarization and bool(hf_token)
     params = {
@@ -126,6 +140,8 @@ def _run_whisperx(audio_url, diarization=True):
         "align_output": True,
         "diarization": diarization,
     }
+    if language:
+        params["language"] = language
     if diarization:
         params["huggingface_access_token"] = hf_token
         params["min_speakers"] = 1
@@ -203,7 +219,7 @@ def _run_voxtral(file_path):
 
 
 def extract_lyrics_whisperx(audio_url, max_retries=2, reference_lines=None,
-                            vocals_path=None):
+                            vocals_path=None, language=None):
     """Run WhisperX on Replicate to get word-level timed lyrics.
 
     Falls back to Voxtral (Mistral) if WhisperX output is broken after retries.
@@ -211,18 +227,19 @@ def extract_lyrics_whisperx(audio_url, max_retries=2, reference_lines=None,
     # Speaker detection needs access to gated Hugging Face models. Starting
     # it without a token wastes a provider run before transcription can retry.
     diarization = bool(os.getenv("HF_READ_TOKEN", "").strip())
+    language = language or reference_language(reference_lines)
 
     def transcribe():
         nonlocal diarization
         try:
-            return _run_whisperx(audio_url, diarization=diarization)
+            return _run_whisperx(audio_url, diarization=diarization, language=language)
         except ModelError:
             if not diarization:
                 raise
             logger.warning("WhisperX failed with diarization; retrying without speaker detection")
             # Keep speaker detection disabled for later quality retries too.
             diarization = False
-            return _run_whisperx(audio_url, diarization=False)
+            return _run_whisperx(audio_url, diarization=False, language=language)
 
     output = transcribe()
 

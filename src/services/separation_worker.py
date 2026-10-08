@@ -295,8 +295,17 @@ def validate_spec(spec):
 
 
 class Worker:
-    def __init__(self, engine_factory, socket_path, *, preempt=True, heartbeat=5.0, parent_pid=None):
+    """Socket server, priority queue and job runner. Engine-agnostic: the transcription worker reuses it with its
+    own ``name``, job ``op`` and spec validation. With a ``gate`` (``src/services/compute_gate.py``) jobs only
+    compute while holding the CPU gate shared with the other local workers."""
+
+    def __init__(self, engine_factory, socket_path, *, preempt=True, heartbeat=5.0, parent_pid=None,
+                 name="separation", op="separate", validate=None, gate=None):
         self.engine_factory = engine_factory
+        self.name = name
+        self.op = op
+        self.validate = validate or validate_spec
+        self.gate = gate
         self.socket_path = socket_path
         self.preempt_enabled = preempt
         self.heartbeat_s = heartbeat
@@ -361,12 +370,12 @@ class Worker:
                     break
                 if op in ("ping", "status"):
                     conn.send(self.status())
-                elif op == "separate":
+                elif op in (self.op, "submit"):
                     if job is not None:
                         conn.send({"event": "error", "message": "one job per connection", "retryable": False})
                         break
                     try:
-                        spec = validate_spec(message.get("job"))
+                        spec = self.validate(message.get("job"))
                     except ValueError as e:
                         conn.send({"event": "error", "message": str(e), "retryable": False})
                         break
@@ -387,7 +396,7 @@ class Worker:
         while not self.stopping:
             time.sleep(self.heartbeat_s)
             if self.parent_pid and os.getppid() != self.parent_pid:
-                log.warning("parent process exited; stopping the separation worker")
+                log.warning("parent process exited; stopping the %s worker", self.name)
                 self.stop()
                 return
             with self.cond:
@@ -414,7 +423,7 @@ class Worker:
     def submit(self, spec, conn):
         with self.cond:
             if self.stopping or self.state == "failed":
-                conn.send({"event": "error", "message": "separation worker is shutting down", "retryable": True})
+                conn.send({"event": "error", "message": f"{self.name} worker is shutting down", "retryable": True})
                 return None
             priority = PRIORITIES[spec.get("priority", "interactive")]
             job = Job(spec, conn, priority, next(self.seq))
@@ -472,13 +481,13 @@ class Worker:
         try:
             engine = self.engine_factory()
         except Exception as e:  # import errors, missing weights, kernel trouble that has no fallback
-            log.exception("separation model failed to load")
+            log.exception("%s model failed to load", self.name)
             with self.cond:
                 self.state = "failed"
                 jobs = self._queued_jobs()
                 self.queue = []
             for job in jobs:
-                job.conn.send({"event": "error", "message": f"separation model failed to load: {e}"[:500],
+                job.conn.send({"event": "error", "message": f"{self.name} model failed to load: {e}"[:500],
                                "retryable": True})
                 job.conn.close()
             return False
@@ -487,7 +496,7 @@ class Worker:
             self.info = dict(engine.info)
             self.state = "ready"
             self.cond.notify_all()
-        log.info("separation worker ready: %s", self.info)
+        log.info("%s worker ready: %s", self.name, self.info)
         return True
 
     def serve_forever(self):
@@ -497,9 +506,16 @@ class Worker:
                     self.cond.wait(1.0)
                 if self.stopping:
                     break
-                job = heapq.heappop(self.queue)
-                if job.cancelled:
+            if self.gate is not None and not self._acquire_gate():
+                continue  # stopping, or the head of the queue changed while waiting: look again
+            with self.cond:
+                queued = self._queued_jobs()
+                if self.stopping or not queued:
+                    self._release_gate()
                     continue
+                job = queued[0]
+                self.queue = [j for j in self.queue if j is not job]
+                heapq.heapify(self.queue)
                 job.state = "running"
                 job.position = None
                 job.last_progress_at = time.monotonic()
@@ -511,14 +527,43 @@ class Worker:
                 with self.cond:
                     self.current = None
                     self._broadcast_positions()
+                self._release_gate()
         self._shutdown_jobs()
+
+    def _acquire_gate(self, poll=0.2):
+        """Wait for the CPU gate on behalf of the job at the head of the queue. False when that job changed
+        (cancelled, overtaken by a higher-priority job) or the worker is stopping, so the caller re-evaluates."""
+        with self.cond:
+            queued = self._queued_jobs()
+            head = queued[0] if queued else None
+        if head is None:
+            return False
+        interactive = head.priority < PRIORITIES["batch"]
+        try:
+            while True:
+                if interactive:
+                    self.gate.mark_waiting()
+                # batch work yields to an interactive job that another worker is waiting to run
+                if (interactive or not self.gate.interactive_waiting()) and self.gate.try_acquire():
+                    return True
+                with self.cond:
+                    self.cond.wait(poll)
+                    queued = self._queued_jobs()
+                    if self.stopping or not queued or queued[0] is not head:
+                        return False
+        finally:
+            self.gate.unmark_waiting()
+
+    def _release_gate(self):
+        if self.gate is not None:
+            self.gate.release()
 
     def _shutdown_jobs(self):
         with self.cond:
             jobs = self._queued_jobs()
             self.queue = []
         for job in jobs:
-            job.conn.send({"event": "error", "message": "separation worker is shutting down", "retryable": True})
+            job.conn.send({"event": "error", "message": f"{self.name} worker is shutting down", "retryable": True})
             job.conn.close()
 
     def _check(self, job, allow_preempt=True):
@@ -528,6 +573,9 @@ class Worker:
             raise JobAborted("cancelled")
         if allow_preempt and job.preempt:
             raise JobAborted("preempted")
+        if (allow_preempt and self.preempt_enabled and self.gate is not None
+                and job.priority >= PRIORITIES["batch"] and self.gate.interactive_waiting()):
+            raise JobAborted("preempted")  # another worker waits to run an interactive job
 
     def _run(self, job):
         job.conn.send({"event": "started"})
@@ -555,11 +603,11 @@ class Worker:
                 return
             job.state = "finished"
             if e.reason == "shutdown":
-                job.conn.send({"event": "error", "message": "separation worker is shutting down", "retryable": True})
+                job.conn.send({"event": "error", "message": f"{self.name} worker is shutting down", "retryable": True})
             job.conn.close()
             return
         except Exception as e:
-            log.exception("separation job %s failed", job.id)
+            log.exception("%s job %s failed", self.name, job.id)
             job.state = "finished"
             self.stats["failed"] += 1
             job.conn.send({"event": "error", "message": f"{type(e).__name__}: {e}"[:500], "retryable": False})
@@ -569,7 +617,7 @@ class Worker:
         self.stats["completed"] += 1
         result = dict(result)
         result.update({k: v for k, v in self.info.items() if k not in result})
-        log.info("separation job %s (%s) done: %s", job.id, job.spec.get("label", ""), result)
+        log.info("%s job %s (%s) done: %s", self.name, job.id, job.spec.get("label", ""), result)
         job.conn.send({"event": "done", "result": result})
         job.conn.close()
 
@@ -599,6 +647,7 @@ def main(argv=None):
     parser.add_argument("--no-preempt", action="store_true")
     parser.add_argument("--heartbeat", type=float, default=5.0)
     parser.add_argument("--parent-pid", type=int, default=None)
+    parser.add_argument("--compute-lock", default=None, help="CPU gate shared with the other local workers")
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s separation-worker %(levelname)s %(message)s")
@@ -618,8 +667,12 @@ def main(argv=None):
         cls = ENGINES[args.engine]
         return cls(model=args.model, precision=args.precision, threads=args.threads, model_dir=args.model_dir)
 
+    gate = None
+    if args.compute_lock:
+        from src.services.compute_gate import ComputeGate
+        gate = ComputeGate(args.compute_lock)
     worker = Worker(factory, args.socket, preempt=not args.no_preempt, heartbeat=args.heartbeat,
-                    parent_pid=args.parent_pid)
+                    parent_pid=args.parent_pid, gate=gate)
 
     def on_signal(signum, _frame):
         log.info("signal %s: stopping", signum)

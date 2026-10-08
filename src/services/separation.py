@@ -31,6 +31,7 @@ RECORD_FILE = "separation.json"
 BACKUP_FILES = {"vocals": "vocals.demucs.mp3", "no_vocals": "no_vocals.demucs.mp3"}
 STEM_FILES = {"vocals": "vocals.mp3", "no_vocals": "no_vocals.mp3"}
 TEMP_PREFIX = ".separation-"
+TEMP_PREFIXES = (TEMP_PREFIX, ".transcription-")  # removed by clean_temp_dirs at startup
 STALE_TEMP_SECONDS = 6 * 3600
 # At startup only folders older than this are removed: during a start-first deploy the previous container's worker
 # may still be writing into its temp folder on the shared volume for a few more seconds.
@@ -59,6 +60,8 @@ DEFAULTS = {
     "SEPARATION_QUEUE_TIMEOUT": 900.0,
     "SEPARATION_MAX_DURATION": 1200.0,
     "SEPARATION_INTERACTIVE_REQUIRE_KERNELS": True,
+    # CPU gate shared with the transcription worker; default: melodai-compute.lock next to the socket
+    "COMPUTE_LOCK": None,
 }
 
 
@@ -82,11 +85,11 @@ def _env_bool(value):
     return str(value).strip().lower() not in ("0", "false", "no", "off", "")
 
 
-def config_from_env(environ=None):
+def config_from_env(environ=None, defaults=None):
     """Settings for ``app.config`` from environment variables (same names as the config keys)."""
     environ = os.environ if environ is None else environ
     config = {}
-    for key, default in DEFAULTS.items():
+    for key, default in (DEFAULTS if defaults is None else defaults).items():
         raw = environ.get(key)
         if raw is None or raw == "":
             config[key] = default
@@ -98,18 +101,20 @@ def config_from_env(environ=None):
             config[key] = float(raw)
         else:
             config[key] = raw
-    config["SPLIT_BACKEND"] = str(config["SPLIT_BACKEND"]).strip().lower()
+    if "SPLIT_BACKEND" in config:
+        config["SPLIT_BACKEND"] = str(config["SPLIT_BACKEND"]).strip().lower()
     return config
 
 
-def settings(app=None):
+def settings(app=None, defaults=None):
     """Effective separation settings for ``app`` (or the current app, or the environment)."""
+    defaults = DEFAULTS if defaults is None else defaults
     if app is None:
         from flask import current_app, has_app_context
         app = current_app._get_current_object() if has_app_context() else None
-    base = config_from_env()
+    base = config_from_env(defaults=defaults)
     if app is not None:
-        for key in DEFAULTS:
+        for key in defaults:
             if key in app.config:
                 base[key] = app.config[key]
     return base
@@ -134,11 +139,20 @@ def installed_version():
 # ---------------------------------------------------------------------------------------------- worker process
 
 class WorkerManager:
-    """Starts and supervises the worker process; one per app (``app.extensions['separation_worker']``)."""
+    """Starts and supervises a local worker process; one per app and kind (``app.extensions[...]``).
+
+    Settings are read with the subclass' ``prefix`` (``SEPARATION_SOCKET``, ``TRANSCRIBE_SOCKET``, ...); ``command``
+    and ``engine_installed`` are per kind.
+    """
+
+    prefix = "SEPARATION"
+    label = "separation"
+    module = "src.services.separation_worker"
+    package = "turbo-roformer"
 
     def __init__(self, cfg):
         self.cfg = dict(cfg)
-        self.socket_path = self.cfg["SEPARATION_SOCKET"]
+        self.socket_path = self._c("SOCKET")
         self._lock = threading.Lock()
         self._proc = None
         self._crashes = []
@@ -146,6 +160,13 @@ class WorkerManager:
         self._atexit_registered = False
         self._unavailable_until = 0.0
         self.last_error = ""
+
+    def _c(self, key):
+        return self.cfg[f"{self.prefix}_{key}"]
+
+    def compute_lock(self):
+        from src.services.compute_gate import default_path
+        return self.cfg.get("COMPUTE_LOCK") or default_path(self.socket_path)
 
     # -------------------------------------------------------------- low level
     def connect(self, timeout=5.0):
@@ -175,7 +196,7 @@ class WorkerManager:
 
     def command(self):
         c = self.cfg
-        cmd = [sys.executable, "-m", "src.services.separation_worker",
+        cmd = [sys.executable, "-m", self.module,
                "--socket", self.socket_path,
                "--engine", str(c["SEPARATION_ENGINE"]),
                "--model", str(c["SEPARATION_MODEL"]),
@@ -183,7 +204,8 @@ class WorkerManager:
                "--threads", str(int(c["SEPARATION_THREADS"])),
                "--nice", str(int(c["SEPARATION_NICE"])),
                "--heartbeat", str(float(c["SEPARATION_HEARTBEAT"])),
-               "--parent-pid", str(os.getpid())]
+               "--parent-pid", str(os.getpid()),
+               "--compute-lock", self.compute_lock()]
         if c.get("SEPARATION_MODEL_DIR"):
             cmd += ["--model-dir", str(c["SEPARATION_MODEL_DIR"])]
         if not c["SEPARATION_PREEMPT"]:
@@ -205,21 +227,21 @@ class WorkerManager:
             status = self.ping()
             if status and status.get("state") != "failed":
                 return True
-            if not self.cfg["SEPARATION_WORKER_AUTOSTART"]:
+            if not self._c("WORKER_AUTOSTART"):
                 self.last_error = "worker is not running and autostart is disabled"
                 return False
             if time.monotonic() < self._unavailable_until:
                 return False
             if not self.engine_installed():
-                self.last_error = "turbo-roformer is not installed"
-                self._unavailable_until = time.monotonic() + float(self.cfg["SEPARATION_FAILURE_BACKOFF"])
-                log.warning("Local separation unavailable: turbo-roformer is not installed")
+                self.last_error = f"{self.package} is not installed"
+                self._unavailable_until = time.monotonic() + float(self._c("FAILURE_BACKOFF"))
+                log.warning("Local %s unavailable: %s is not installed", self.label, self.package)
                 return False
             if self._proc is None or self._proc.poll() is not None:
                 if self._proc is not None:
-                    log.warning("Separation worker exited with code %s; restarting", self._proc.returncode)
+                    log.warning("%s worker exited with code %s; restarting", self.label, self._proc.returncode)
                 self._spawn()
-            deadline = time.monotonic() + float(self.cfg["SEPARATION_START_TIMEOUT"])
+            deadline = time.monotonic() + float(self._c("START_TIMEOUT"))
             while time.monotonic() < deadline:
                 status = self.ping(timeout=1.0)
                 if status and status.get("state") != "failed":
@@ -230,15 +252,15 @@ class WorkerManager:
             code = self._proc.poll()
             self.last_error = (f"worker exited during startup (code {code})" if code is not None
                                else "worker did not answer in time")
-            log.warning("Local separation unavailable: %s", self.last_error)
-            self._unavailable_until = time.monotonic() + float(self.cfg["SEPARATION_FAILURE_BACKOFF"])
+            log.warning("Local %s unavailable: %s", self.label, self.last_error)
+            self._unavailable_until = time.monotonic() + float(self._c("FAILURE_BACKOFF"))
             return False
 
     def _spawn(self):
         env = dict(os.environ)
         env["PYTHONUNBUFFERED"] = "1"
-        env.setdefault("OMP_NUM_THREADS", str(int(self.cfg["SEPARATION_THREADS"])))
-        log.info("Starting separation worker: %s", " ".join(self.command()))
+        env.setdefault("OMP_NUM_THREADS", str(int(self._c("THREADS"))))
+        log.info("Starting %s worker: %s", self.label, " ".join(self.command()))
         self._proc = subprocess.Popen(self.command(), cwd=PROJECT_ROOT, env=env, stdin=subprocess.DEVNULL)
         if not self._atexit_registered:
             atexit.register(self.stop, 3.0)
@@ -265,10 +287,10 @@ class WorkerManager:
                     return
                 self._crashed_pids.add(pid)
             now = time.monotonic()
-            backoff = float(self.cfg["SEPARATION_FAILURE_BACKOFF"])
+            backoff = float(self._c("FAILURE_BACKOFF"))
             self._crashes = [t for t in self._crashes if now - t < backoff] + [now]
             if len(self._crashes) >= 2:
-                self.last_error = "separation worker crashed repeatedly"
+                self.last_error = f"{self.label} worker crashed repeatedly"
                 self._unavailable_until = now + backoff
 
     def kill_worker(self, pid, reason):
@@ -282,7 +304,7 @@ class WorkerManager:
             if pid in self._crashed_pids:
                 return
             proc = self._proc if self._proc is not None and self._proc.pid == pid else None
-        log.error("Killing separation worker %s: %s", pid, reason)
+        log.error("Killing %s worker %s: %s", self.label, pid, reason)
         self.last_error = reason
         try:
             os.kill(int(pid), signal.SIGKILL)
@@ -316,7 +338,7 @@ def get_manager(app=None):
 # ---------------------------------------------------------------------------------------------- job client
 
 def run_job(manager, spec, on_event=None, *, should_abort=None, idle_timeout=60.0, stall_timeout=600.0,
-            total_timeout=None, queue_timeout=None):
+            total_timeout=None, queue_timeout=None, op="separate"):
     """Submit ``spec`` and block until the worker finishes it. Returns the worker's result dict.
 
     ``on_event(message)`` sees every queued/started/progress/preempted/heartbeat message. Raises
@@ -328,17 +350,17 @@ def run_job(manager, spec, on_event=None, *, should_abort=None, idle_timeout=60.
     call, ``queue_timeout`` the time spent waiting in the queue (the caller then falls back to another backend).
     """
     if not manager.ensure_running():
-        raise SeparationUnavailable(manager.last_error or "separation worker is not available")
+        raise SeparationUnavailable(manager.last_error or f"{manager.label} worker is not available")
     try:
         sock = manager.connect(timeout=5.0)
     except OSError as e:
-        raise SeparationUnavailable(f"cannot connect to the separation worker: {e}") from e
+        raise SeparationUnavailable(f"cannot connect to the {manager.label} worker: {e}") from e
     started = time.monotonic()
     last_activity = None
     queued_since = started
     worker_pid = None
     try:
-        sock.sendall((json.dumps({"op": "separate", "job": spec}) + "\n").encode())
+        sock.sendall((json.dumps({"op": op, "job": spec}) + "\n").encode())
         sock.settimeout(idle_timeout)
         reader = sock.makefile("rb")
         while True:
@@ -346,24 +368,24 @@ def run_job(manager, spec, on_event=None, *, should_abort=None, idle_timeout=60.
                 line = reader.readline(256 * 1024)
             except TimeoutError as e:
                 manager.kill_worker(worker_pid, f"no message from the worker for {int(idle_timeout)} s")
-                raise WorkerLost("the separation worker stopped responding") from e
+                raise WorkerLost(f"the {manager.label} worker stopped responding") from e
             except OSError as e:
                 manager.mark_crashed(worker_pid)
-                raise WorkerLost(f"lost the separation worker: {e}") from e
+                raise WorkerLost(f"lost the {manager.label} worker: {e}") from e
             if not line:
                 manager.mark_crashed(worker_pid)
-                raise WorkerLost("the separation worker closed the connection")
+                raise WorkerLost(f"the {manager.label} worker closed the connection")
             try:
                 message = json.loads(line)
             except ValueError as e:
-                raise WorkerLost("invalid message from the separation worker") from e
+                raise WorkerLost(f"invalid message from the {manager.label} worker") from e
             event = message.get("event")
             if event == "accepted":
                 worker_pid = message.get("pid")
             if event == "done":
                 return message.get("result") or {}
             if event == "error":
-                text = str(message.get("message") or "separation failed")
+                text = str(message.get("message") or f"{manager.label} failed")
                 if message.get("retryable"):
                     raise SeparationUnavailable(text)
                 raise SeparationFailed(text)
@@ -381,18 +403,18 @@ def run_job(manager, spec, on_event=None, *, should_abort=None, idle_timeout=60.
             if last_activity is not None and now - last_activity > stall_timeout:
                 manager.kill_worker(worker_pid, f"job {spec.get('label', '')} made no progress for "
                                                 f"{int(stall_timeout)} s")
-                raise WorkerLost(f"no separation progress for {int(stall_timeout)} s")
+                raise WorkerLost(f"no {manager.label} progress for {int(stall_timeout)} s")
             running_idle = message.get("running_idle_s") if event == "heartbeat" else None
             if last_activity is None and running_idle is not None and float(running_idle) > stall_timeout:
                 manager.kill_worker(worker_pid, f"the running job made no progress for {int(float(running_idle))} s")
-                raise WorkerLost("the separation worker is stuck on another job")
+                raise WorkerLost(f"the {manager.label} worker is stuck on another job")
             if total_timeout and now - started > total_timeout:
                 if last_activity is not None:  # this job is the one running: free the worker for the next
                     manager.kill_worker(worker_pid, f"job {spec.get('label', '')} exceeded {int(total_timeout)} s")
-                    raise WorkerLost(f"separation took longer than {int(total_timeout)} s")
-                raise SeparationUnavailable(f"separation took longer than {int(total_timeout)} s")
+                    raise WorkerLost(f"{manager.label} took longer than {int(total_timeout)} s")
+                raise SeparationUnavailable(f"{manager.label} took longer than {int(total_timeout)} s")
             if queue_timeout and queued_since is not None and now - queued_since > queue_timeout:
-                raise SeparationUnavailable(f"waited more than {int(queue_timeout)} s in the separation queue")
+                raise SeparationUnavailable(f"waited more than {int(queue_timeout)} s in the {manager.label} queue")
     finally:
         _close(sock)
 
@@ -533,7 +555,8 @@ def _clean_stale_temp_dirs(song_dir):
 
 
 def clean_temp_dirs(app=None, min_age=STARTUP_TEMP_MIN_AGE):
-    """Remove leftover ``.separation-*`` directories older than ``min_age`` seconds (call at startup)."""
+    """Remove leftover ``.separation-*``/``.transcription-*`` directories older than ``min_age`` seconds (call at
+    startup)."""
     from flask import has_app_context
     from src.utils.file_handling import get_all_track_ids, get_song_dir
 
@@ -548,7 +571,7 @@ def clean_temp_dirs(app=None, min_age=STARTUP_TEMP_MIN_AGE):
             now = time.time()
             for name in names:
                 path = os.path.join(song_dir, name)
-                if name.startswith(TEMP_PREFIX) and os.path.isdir(path):
+                if name.startswith(TEMP_PREFIXES) and os.path.isdir(path):
                     try:
                         if now - os.path.getmtime(path) < min_age:
                             continue
