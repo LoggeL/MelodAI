@@ -7,6 +7,7 @@ import { admin } from '../../services/api'
 import { PageState } from '../../components/common/PageState'
 import type { AdminSong } from '../../types'
 import { ConfirmAction, type Confirmation } from './AdminAction'
+import { ResplitPanel } from './ResplitPanel'
 import styles from '../AdminPage.module.css'
 
 export function SongsTab() {
@@ -34,6 +35,7 @@ export function SongsTab() {
   if (error) return <PageState title="Could not load songs" description={error} action={<button className={styles.primaryBtn} onClick={load}>Try again</button>} />
   return <section className={styles.section}>
     <h2>Songs</h2>
+    <ResplitPanel onFinished={load} />
     <div className={styles.filters}><label className={styles.fieldLabel}>Search songs<input className={styles.filterInput} placeholder="Song or artist" value={filter} onChange={e => { setFilter(e.target.value); setPage(1) }} /></label><span className={styles.pageInfo} role="status">{filtered.length} {filtered.length === 1 ? 'song' : 'songs'}</span></div>
     {filtered.length === 0 && <PageState title={query ? 'No matching songs' : 'No processed songs yet'} description={query ? 'Try another title or artist.' : 'Songs will appear here after processing starts.'} />}
     {filtered.slice((currentPage - 1) * 20, currentPage * 20).map(song => <div key={song.id} className={styles.songItem}>
@@ -41,6 +43,7 @@ export function SongsTab() {
       <div className={styles.songBadges}><span className={`${styles.tag} ${song.complete ? styles.tagSuccess : styles.tagWarning}`}>{song.complete ? 'Complete' : 'Incomplete'}</span>
         {song.avg_confidence != null && <span className={styles.subtle} title="Average lyric transcription confidence">{(song.avg_confidence * 100).toFixed(0)}% confidence</span>}
         {song.complete && !song.has_lyrics && <span className={`${styles.tag} ${styles.tagDanger}`}>No lyrics</span>}
+        {song.separation_backend && <span className={styles.subtle} title="Which model produced the vocal and instrumental stems">{song.separation_backend === 'local' ? 'RoFormer stems' : 'Demucs stems'}</span>}
         <span className={styles.subtle}>{(Object.values(song.file_sizes).reduce((a, b) => a + b, 0) / 1048576).toFixed(1)} MB</span>
       </div>
       <div className={styles.rowActions}>

@@ -3,7 +3,7 @@ import type {
   User, InviteKey, UsageLog, AdminStats, HealthCheck, StorageStats,
   AdminSong, UnfinishedTrack, ProcessingStatus, LyricsEditPayload, Playlist,
   ErrorLogResponse, AppLogResponse, SongDetail, ActivityResponse, DeezerConfigStatus,
-  LyricTranslation, TranslationLanguage,
+  LyricTranslation, TranslationLanguage, SeparationStatus, ResplitBatchStatus,
 } from '../types'
 import { normalizeTrackId, trackPathSegment } from '../utils/trackId'
 
@@ -112,6 +112,13 @@ export const admin = {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ from_stage: fromStage || 'all' }),
   }),
+  separation: () => request<SeparationStatus>('/api/admin/separation'),
+  startResplit: (force = false) => request<{ success: boolean; batch: ResplitBatchStatus }>('/api/admin/separation/resplit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ force }),
+  }),
+  stopResplit: () => request<{ success: boolean; batch: ResplitBatchStatus }>('/api/admin/separation/resplit/stop', { method: 'POST' }),
   songDetails: (id: string) => request<SongDetail>('/api/admin/songs/' + trackPathSegment(id) + '/details'),
   fetchReferenceLyrics: (id: string) => request<{ lines: string[] }>('/api/admin/songs/' + trackPathSegment(id) + '/reference-lyrics', { method: 'POST' }),
   fetchReferenceLyricsAI: (id: string) => request<{ lines: string[] }>('/api/admin/songs/' + trackPathSegment(id) + '/reference-lyrics/ai', { method: 'POST' }),
