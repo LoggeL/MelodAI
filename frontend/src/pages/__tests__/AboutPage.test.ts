@@ -17,18 +17,20 @@ afterEach(async () => {
   vi.unstubAllGlobals()
 })
 
-it('describes local separation with BS-RoFormer and Demucs only as fallback', async () => {
+it('describes local separation with BS-RoFormer and stopping on failure', async () => {
   await act(async () => root.render(createElement(MemoryRouter, null, createElement(AboutPage))))
   const text = host.textContent ?? ''
   expect(text).toContain('BS-RoFormer trennt Gesang und Instrumental direkt auf dem Server-Prozessor')
-  expect(text).toContain('Fällt der lokale Dienst aus, springt Demucs auf Replicate ein.')
+  expect(text).toContain('Fällt der lokale Dienst aus, wird die Verarbeitung angehalten.')
+  expect(text).not.toContain('Replicate')
   const link = host.querySelector<HTMLAnchorElement>('a[href="https://github.com/LoggeL/turbo-roformer"]')
   expect(link?.textContent).toBe('turbo-roformer')
   expect(link?.rel).toContain('noreferrer')
 })
 
-it('describes local transcription with WhisperX only as fallback', async () => {
+it('describes local transcription with audio remaining on the server', async () => {
   await act(async () => root.render(createElement(MemoryRouter, null, createElement(AboutPage))))
-  expect(host.textContent).toContain('Ersatz ist WhisperX auf Replicate.')
+  expect(host.textContent).toContain('Die Audiodateien bleiben auf dem Server.')
+  expect(host.textContent).not.toContain('Replicate')
   expect(host.querySelector('a[href="https://github.com/LoggeL/turbo-lyrics"]')?.textContent).toBe('turbo-lyrics')
 })
