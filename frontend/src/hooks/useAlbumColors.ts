@@ -1,80 +1,41 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 
-interface AlbumColors {
-  primary: string
-  primaryDark: string
-  accent: string
-  /** raw r,g,b for use in rgba() expressions */
-  primaryRgb: string
-}
-
-const DEFAULT_COLORS: AlbumColors = {
-  primary: '',
-  primaryDark: '',
-  accent: '',
-  primaryRgb: '',
-}
+export type AlbumBackdropStyle = CSSProperties & { '--album-a'?: string; '--album-b'?: string }
 
 /**
- * Extract a dominant vibrant color from an album cover image.
- * Uses a hidden canvas to sample pixels — zero dependencies.
+ * Extract the most chromatic colour of an album cover (hidden canvas, no
+ * dependencies) and return it as the two gradient stops of the stage backdrop.
  *
- * Returns derived primary/dark/accent colors and applies them as
- * CSS custom properties on the document root so the entire UI
- * subtly shifts to match the album art.
+ * The result only ever feeds `--album-a` / `--album-b` on the player stage.
+ * It never touches brand, text, focus or button colours. Lightness is clamped
+ * to 20–80 % so the blurred backdrop cannot break lyric contrast.
  */
-export function useAlbumColors(thumbnailUrl: string | undefined) {
-  const [colors, setColors] = useState<AlbumColors>(DEFAULT_COLORS)
+export function useAlbumColors(thumbnailUrl: string | undefined): AlbumBackdropStyle | undefined {
+  const [result, setResult] = useState<{ url: string; style: AlbumBackdropStyle } | null>(null)
 
   useEffect(() => {
-    clearFromDocument()
-    if (!thumbnailUrl) { setColors(DEFAULT_COLORS); return }
+    if (!thumbnailUrl) return
     let cancelled = false
-
     const img = new Image()
     img.crossOrigin = 'anonymous'
-
     img.onload = () => {
       if (cancelled) return
       try {
         const palette = extractColors(img)
         if (!palette) return
-
-        const [r, g, b] = palette
-        const hsl = rgbToHsl(r, g, b)
-
-        // Boost saturation for the primary, keep lightness moderate
-        const primary = hslToHex(hsl[0], Math.min(hsl[1] * 1.3, 100), clamp(hsl[2], 35, 55))
-        const primaryDark = hslToHex(hsl[0], Math.min(hsl[1] * 1.1, 90), clamp(hsl[2] - 18, 15, 35))
-        const accent = hslToHex((hsl[0] + 10) % 360, Math.min(hsl[1] * 1.2, 95), clamp(hsl[2] + 12, 50, 70))
-
-        const pRgb = hexToRgbStr(primary)
-
-        const next: AlbumColors = { primary, primaryDark, accent, primaryRgb: pRgb }
-        setColors(next)
-        applyToDocument(next)
+        const [h, s, l] = rgbToHsl(...palette)
+        const a = hslToHex(h, Math.min(s * 1.15, 90), clamp(l, 20, 80))
+        const b = hslToHex((h + 28) % 360, Math.min(s, 80), clamp(l - 18, 20, 80))
+        setResult({ url: thumbnailUrl, style: { '--album-a': a, '--album-b': b } })
       } catch {
-        // CORS SecurityError on canvas — fall back to defaults
+        // Canvas reads can fail for cross-origin covers; the default stage stays.
       }
     }
-
-    img.onerror = () => {
-      if (cancelled) return
-      // On failure, clear overrides so defaults show
-      clearFromDocument()
-      setColors(DEFAULT_COLORS)
-    }
-
     img.src = thumbnailUrl
-    return () => { cancelled = true; img.onload = null; img.onerror = null; clearFromDocument() }
+    return () => { cancelled = true; img.onload = null }
   }, [thumbnailUrl])
 
-  // Clean up on unmount
-  useEffect(() => {
-    return () => clearFromDocument()
-  }, [])
-
-  return colors
+  return result && result.url === thumbnailUrl ? result.style : undefined
 }
 
 // ── Color extraction ──────────────────────────────────────────
@@ -128,34 +89,6 @@ function extractColors(img: HTMLImageElement): [number, number, number] | null {
   ]
 }
 
-// ── CSS property management ───────────────────────────────────
-
-const PROPS = [
-  '--primary', '--primary-dark', '--accent',
-  '--gradient', '--gradient-hover',
-  '--primary-glow', '--primary-glow-strong',
-  '--primary-rgb',
-] as const
-
-function applyToDocument(c: AlbumColors) {
-  const el = document.documentElement.style
-  el.setProperty('--primary', c.primary)
-  el.setProperty('--primary-dark', c.primaryDark)
-  el.setProperty('--accent', c.accent)
-  el.setProperty('--gradient', `linear-gradient(135deg, ${c.primary}, ${c.primaryDark})`)
-  el.setProperty('--gradient-hover', `linear-gradient(135deg, ${c.accent}, ${c.primary})`)
-  el.setProperty('--primary-glow', `rgba(${c.primaryRgb}, 0.15)`)
-  el.setProperty('--primary-glow-strong', `rgba(${c.primaryRgb}, 0.35)`)
-  el.setProperty('--primary-rgb', c.primaryRgb)
-}
-
-function clearFromDocument() {
-  const el = document.documentElement.style
-  for (const prop of PROPS) {
-    el.removeProperty(prop)
-  }
-}
-
 // ── Color math ────────────────────────────────────────────────
 
 function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
@@ -183,11 +116,6 @@ function hslToHex(h: number, s: number, l: number): string {
     return Math.round(255 * color).toString(16).padStart(2, '0')
   }
   return `#${f(0)}${f(8)}${f(4)}`
-}
-
-function hexToRgbStr(hex: string): string {
-  const n = parseInt(hex.slice(1), 16)
-  return `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}`
 }
 
 function clamp(v: number, min: number, max: number) {

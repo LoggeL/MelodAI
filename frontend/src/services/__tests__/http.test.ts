@@ -36,11 +36,11 @@ describe('HTTP request contract', () => {
   })
   it('rejects HTML error pages without JSON parser details', async () => {
     fetchMock.mockResolvedValue(new Response('<html>Oops</html>', { status: 500 }))
-    await expect(request('/api/test')).rejects.toMatchObject({ status: 500, message: 'Request failed (500). Please try again.' })
+    await expect(request('/api/test')).rejects.toMatchObject({ status: 500, message: 'Anfrage fehlgeschlagen (500). Bitte versuch es noch einmal.' })
   })
   it('rejects a successful HTML login fallback', async () => {
     fetchMock.mockResolvedValue(new Response('<html>Sign in</html>'))
-    await expect(request('/api/test')).rejects.toMatchObject({ message: 'The server returned an unexpected response. Please try again.' })
+    await expect(request('/api/test')).rejects.toMatchObject({ message: 'Der Server hat unerwartet geantwortet. Bitte versuch es noch einmal.' })
   })
   it('accepts empty successful responses', async () => {
     fetchMock.mockResolvedValue(new Response(null, { status: 204 }))
@@ -49,21 +49,21 @@ describe('HTTP request contract', () => {
   it('retains credit error details for callers', async () => {
     fetchMock.mockResolvedValue(new Response('{"error":"insufficient_credits","credits":2,"required":5}', { status: 402 }))
     await expect(request('/api/add', { method: 'POST' })).rejects.toMatchObject({
-      message: 'This action requires 5 credits. Your balance is 2.',
+      message: 'Dafür brauchst du 5 Credits. Dein Guthaben: 2.',
       data: { error: 'insufficient_credits', credits: 2, required: 5 },
     })
   })
   it('explains insufficient credits even when no required amount is supplied', async () => {
     fetchMock.mockResolvedValue(new Response('{"error":"insufficient_credits","credits":0}', { status: 403 }))
     await expect(request('/api/play/1/credit', { method: 'POST' })).rejects.toMatchObject({
-      message: 'You do not have enough credits for this action. Your balance is 0.',
+      message: 'Dafür reichen deine Credits nicht. Dein Guthaben: 0.',
     })
   })
   it('keeps an incorrect current password on the profile form', async () => {
     window.location.pathname = '/profile'
     fetchMock.mockResolvedValue(new Response('{"error":"Current password is incorrect"}', { status: 401 }))
     await expect(auth.changePassword('wrong-password', 'new-password')).rejects.toMatchObject({
-      message: 'Current password is incorrect', status: 401,
+      message: 'Das aktuelle Passwort ist falsch.', status: 401,
     })
     expect(window.location.assign).not.toHaveBeenCalled()
   })

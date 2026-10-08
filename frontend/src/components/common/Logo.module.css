@@ -1,0 +1,9 @@
+.brand { display: inline-flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; }
+.wordmark {
+  font-weight: 800; font-size: 1.25rem; line-height: 1; letter-spacing: -.01em;
+  font-variation-settings: 'wdth' var(--wdth-marquee); color: var(--ink); white-space: nowrap;
+}
+.wordmark b { font-weight: 800; color: var(--inst); }
+@media (max-width: 359px) { .tinyHide { display: none; } }
+.fallback { display: grid; place-items: center; width: 100%; height: 100%; aspect-ratio: 1; background: var(--stage-3); color: var(--muted); }
+.fallback svg { width: 40%; height: 40%; }

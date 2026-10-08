@@ -3,6 +3,7 @@ import { BrowserRouter, Link, Routes, Route } from 'react-router-dom'
 import { AuthProvider } from './hooks/AuthProvider'
 import { PageState } from './components/common/PageState'
 import { ErrorBoundary } from './components/common/ErrorBoundary'
+import './styles/tokens.css'
 import './styles/globals.css'
 import './hooks/useTheme'
 
