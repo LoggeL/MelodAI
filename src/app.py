@@ -49,7 +49,10 @@ def create_app(config=None):
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
         SESSION_COOKIE_SECURE=os.getenv("SESSION_COOKIE_SECURE", "1") != "0",
+        RESPLIT_STATE_PATH=os.getenv("MELODAI_RESPLIT_STATE_PATH") or None,
     )
+    from src.services.separation import config_from_env
+    app.config.update(config_from_env())
     app.config.update(config or {})
     if type(app.config["MAX_PROCESSING_WORKERS"]) is not int or app.config["MAX_PROCESSING_WORKERS"] < 1:
         raise ValueError("MAX_PROCESSING_WORKERS must be a positive integer")
@@ -130,6 +133,33 @@ def _startup_hooks(app):
 
     t = threading.Thread(target=delayed_reprocess, daemon=True)
     t.start()
+
+    # Local separation: start the worker early so the model is loaded before the first song arrives, then
+    # resume a re-split batch that was running when the container restarted (deploys restart it).
+    from src.services.separation import clean_temp_dirs, split_backend
+    try:
+        removed = clean_temp_dirs(app)
+        if removed:
+            print(f"Removed {removed} leftover separation temp folder(s)")
+    except Exception as e:
+        print(f"WARNING: Could not clean separation temp folders: {e}")
+    if split_backend(app) == "local":
+        def start_separation():
+            from src.services.separation import get_manager
+            try:
+                if not get_manager(app).ensure_running():
+                    print("WARNING: Local separation worker unavailable; splitting falls back to Replicate")
+            except Exception as e:
+                print(f"WARNING: Could not start the separation worker: {e}")
+            import time
+            time.sleep(10)
+            try:
+                from src.tools.resplit import get_batch
+                get_batch(app).resume_if_running()
+            except Exception as e:
+                print(f"WARNING: Could not resume the re-split batch: {e}")
+
+        threading.Thread(target=start_separation, daemon=True).start()
 
 
 def _ensure_admin_account():

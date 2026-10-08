@@ -108,6 +108,29 @@ def run_health_checks():
     except Exception as e:
         results["replicate"] = {"status": "error", "message": str(e)}
 
+    # Local separation worker check
+    try:
+        from src.services.separation import get_manager, split_backend
+        if split_backend() != "local":
+            results["separation"] = {"status": "ok", "message": "Local separation disabled; using Replicate Demucs"}
+        else:
+            worker = get_manager().status()
+            info = worker.get("info") or {}
+            if worker.get("available"):
+                detail = ", ".join(str(v) for v in (info.get("model"), info.get("compute_backend"), info.get("precision")) if v)
+                queue = len(worker.get("queue") or [])
+                results["separation"] = {
+                    "status": "ok",
+                    "message": f"Worker {worker.get('state')}" + (f" ({detail})" if detail else "") + f", {queue} queued",
+                }
+            else:
+                results["separation"] = {
+                    "status": "error",
+                    "message": f"Worker unavailable ({worker.get('error') or worker.get('state')}); falling back to Replicate",
+                }
+    except Exception as e:
+        results["separation"] = {"status": "error", "message": str(e)}
+
     # Processing queue check
     with _queue_lock:
         active = [k for k, v in _queue().items() if v["status"] not in ("complete", "error")]

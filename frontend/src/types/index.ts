@@ -179,6 +179,35 @@ export interface AdminSong {
   file_sizes: Record<string, number>
   avg_confidence: number | null
   has_lyrics: boolean
+  separation_backend?: 'local' | 'replicate' | null
+}
+
+export type ResplitBatchState = 'idle' | 'running' | 'stopped' | 'done' | 'error'
+
+export interface ResplitBatchStatus {
+  status: ResplitBatchState
+  running: boolean
+  total: number
+  counts: Partial<Record<'pending' | 'done' | 'skipped' | 'failed', number>>
+  current: { track_id: string; title: string; detail: string; progress: number } | null
+  failures: Array<{ track_id: string; title: string; error: string | null }>
+  error?: string | null
+  force?: boolean
+  updated_at?: string | null
+  finished_at?: string | null
+}
+
+export interface SeparationStatus {
+  split_backend: 'local' | 'replicate'
+  package_version: string | null
+  worker: {
+    available: boolean
+    state: string
+    error?: string
+    info?: { model?: string; compute_backend?: string; precision?: string; version?: string }
+    queue?: unknown[]
+  }
+  batch: ResplitBatchStatus
 }
 
 export interface UnfinishedTrack {

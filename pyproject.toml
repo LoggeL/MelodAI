@@ -16,6 +16,23 @@ dependencies = [
     "werkzeug>=3.0",
 ]
 
+[project.optional-dependencies]
+# Local vocal separation (BS-RoFormer on the CPU). Installed in the Docker image with `--extra separation`;
+# without it the app falls back to Demucs on Replicate. torch comes from the CPU-only wheel index.
+separation = [
+    "turbo-roformer",
+    "torch>=2.4",
+]
+
+[tool.uv.sources]
+turbo-roformer = { git = "https://github.com/LoggeL/turbo-roformer", tag = "v0.1.0" }
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
 [build-system]
 requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"

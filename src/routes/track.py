@@ -692,14 +692,53 @@ def _stage_download(track_id):
 
 
 def _stage_split(track_id):
-    """Stage 3: Split vocals/instrumental via Demucs on Replicate (20-50%)"""
+    """Stage 3: Split vocals/instrumental (20-50%).
+
+    SPLIT_BACKEND=local (default) runs BS-RoFormer in the local separation worker and falls back to Demucs on
+    Replicate when the worker is unavailable, crashes, times out or fails. SPLIT_BACKEND=replicate always uses
+    Replicate. The producing backend is recorded in songs/<id>/separation.json.
+    """
     if track_file_exists(track_id, "vocals") and track_file_exists(track_id, "no_vocals"):
         set_processing_status(track_id, STATUS_SPLITTING, PROGRESS[STATUS_SPLITTING], "Vocals separated")
         return
 
     set_processing_status(track_id, STATUS_SPLITTING, 25, "Preparing audio...")
 
+    from src.services import separation
+
+    if separation.split_backend() == "local":
+        try:
+            _split_local(track_id)
+            set_processing_status(track_id, STATUS_SPLITTING, PROGRESS[STATUS_SPLITTING], "Vocals separated")
+            return
+        except Exception as e:  # worker unavailable/crashed/timed out, job error, unexpected I/O problem
+            from src.utils.error_logging import log_event
+            print(f"WARNING: Local separation failed for track {track_id}, falling back to Replicate: {e}")
+            log_event("warning", "pipeline", f"Local separation failed, using Replicate Demucs: {e}",
+                      track_id=str(track_id))
+            set_processing_status(track_id, STATUS_SPLITTING, 25, "Switching to cloud separation...")
+
+    _split_replicate(track_id)
+    set_processing_status(track_id, STATUS_SPLITTING, PROGRESS[STATUS_SPLITTING], "Vocals separated")
+
+
+def _split_local(track_id):
+    """Separate with the local turbo-roformer worker (interactive priority) and report queue/chunk progress."""
+    from src.services.separation import separate_track_locally, status_for_event
+
+    def on_event(message):
+        update = status_for_event(message)
+        if update is not None:
+            set_processing_status(track_id, STATUS_SPLITTING, update[0], update[1])
+
+    record = separate_track_locally(track_id, priority="interactive", on_event=on_event)
+    print(f"Local separation for track {track_id}: rtf={record.get('rtf')} backend={record.get('compute_backend')}")
+
+
+def _split_replicate(track_id):
+    """Separate with Demucs on Replicate (cloud fallback)."""
     from src.services.lyrics import upload_audio_to_replicate, split_audio_demucs
+    from src.services.separation import remove_record, replicate_record, save_record
 
     song_path = get_track_file_path(track_id, "song")
     audio_url = upload_audio_to_replicate(song_path)
@@ -736,6 +775,8 @@ def _stage_split(track_id):
 
     print(f"Demucs stems: vocals={bool(vocals_url)}, instrumental={bool(no_vocals_url)}")
 
+    remove_record(track_id)
+
     if vocals_url:
         _download_file(vocals_url, get_track_file_path(track_id, "vocals"))
         print(f"Downloaded vocals to {get_track_file_path(track_id, 'vocals')}")
@@ -765,7 +806,7 @@ def _stage_split(track_id):
     if missing:
         raise RuntimeError(f"Demucs did not produce required split file(s): {', '.join(missing)}")
 
-    set_processing_status(track_id, STATUS_SPLITTING, PROGRESS[STATUS_SPLITTING], "Vocals separated")
+    save_record(track_id, replicate_record())
 
 
 def _stage_lyrics(track_id):

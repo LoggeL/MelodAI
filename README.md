@@ -18,7 +18,7 @@ Search for a song, and MelodAI separates vocals from instrumentals, extracts wor
 
 1. **Search** for a song via Deezer's catalog
 2. **Download** and decrypt the audio
-3. **Split** vocals and instrumentals using [Demucs](https://github.com/adefossez/demucs) (via Replicate)
+3. **Split** vocals and instrumentals locally on the CPU with [turbo-roformer](https://github.com/LoggeL/turbo-roformer) (BS-RoFormer, about 0.7× real time on an 8-core Zen 4), falling back to [Demucs](https://github.com/adefossez/demucs) on Replicate when the local worker is unavailable
 4. **Transcribe** lyrics with word-level timestamps using [WhisperX](https://github.com/m-bain/whisperX) (via Replicate)
 5. **Process** lyrics into karaoke lines using an LLM (via OpenRouter)
 6. **Play** with real-time word-highlighting, independent vocal/instrumental volume, and speaker colorization
@@ -42,7 +42,8 @@ Search for a song, and MelodAI separates vocals from instrumentals, extracts wor
 - **Backend:** Python 3.12, Flask, SQLite
 - **Frontend:** React, TypeScript, Vite, CSS Modules
 - **Audio:** Web Audio API with dual GainNodes (vocals + instrumental)
-- **AI Services:** Replicate (Demucs, WhisperX), OpenRouter (LLM lyrics processing)
+- **Vocal separation:** local BS-RoFormer via turbo-roformer (CPU, PyTorch), Replicate Demucs as fallback
+- **AI Services:** Replicate (WhisperX, Demucs fallback), OpenRouter (LLM lyrics processing)
 - **Song Source:** Deezer
 
 ## Setup
@@ -62,6 +63,14 @@ git clone <repo-url> && cd MelodAI
 uv sync
 cd frontend && npm ci
 ```
+
+Local separation is an optional extra (CPU-only PyTorch, about 1 GB). Without it, splitting uses Replicate:
+
+```bash
+uv sync --extra separation   # installs turbo-roformer + torch (CPU wheel)
+```
+
+The Docker image always includes it, downloads the model checkpoint and compiles the AVX512-BF16 kernels at build time.
 
 ### Configuration
 
@@ -122,6 +131,10 @@ MelodAI/
     services/
       deezer.py            # Deezer API client + decryption
       lyrics.py            # LLM-based lyrics line splitting
+      separation.py        # Local separation client, worker supervision, stem install
+      separation_worker.py # Long-lived separation process (turbo-roformer)
+    tools/
+      resplit.py           # Resumable batch: re-split all songs locally
     utils/
       helpers.py           # Lyrics post-processing pipeline
   frontend/
