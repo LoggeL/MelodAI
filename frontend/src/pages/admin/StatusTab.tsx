@@ -16,7 +16,7 @@ import styles from '../AdminPage.module.css'
 const PAGE_SIZE = 20
 
 const CHECK_NAMES: Record<string, string> = {
-  database: 'Datenbank', deezer: 'Deezer', filesystem: 'Speicher', replicate: 'Replicate', queue: 'Warteschlange', lrclib: 'lrclib', openrouter: 'OpenRouter', voxtral: 'Voxtral', separation: 'Stimmtrennung',
+  database: 'Datenbank', deezer: 'Deezer', filesystem: 'Speicher', replicate: 'Replicate', queue: 'Warteschlange', lrclib: 'lrclib', openrouter: 'OpenRouter', openai: 'OpenAI', voxtral: 'Voxtral', separation: 'Stimmtrennung', transcription: 'Transkription',
 }
 
 /** Health check texts come from the backend in English; translate the known shapes. */
@@ -25,11 +25,12 @@ function checkMessage(message: string) {
   if (processing) return `${processing[1]} ${processing[1] === '1' ? 'Song' : 'Songs'} in Arbeit.`
   const free = message.match(/^([\d.]+) GB free$/)
   if (free) return `${free[1].replace('.', ',')} GB frei.`
-  if (message === 'Local separation disabled; using Replicate Demucs') return 'Lokale Trennung aus, Replicate Demucs übernimmt.'
+  if (message === 'Local separation unavailable; processing stopped') return 'Lokale Stimmtrennung nicht verfügbar. Die Verarbeitung ist angehalten.'
+  if (message === 'Local transcription unavailable; processing stopped') return 'Lokale Transkription nicht verfügbar. Die Verarbeitung ist angehalten.'
   const worker = message.match(/^Worker (\w+)(?: \((.+)\))?, (\d+) queued$/)
   if (worker) return `Worker ${workerState(worker[1])}${worker[2] ? ` (${worker[2]})` : ''}, ${worker[3]} in der Warteschlange.`
-  const down = message.match(/^Worker unavailable \((.+)\); falling back to Replicate$/)
-  if (down) return `Worker nicht verfügbar (${down[1]}), Replicate übernimmt.`
+  const down = message.match(/^Worker unavailable \((.+)\); processing stopped$/)
+  if (down) return `Worker nicht verfügbar (${down[1]}). Die Verarbeitung ist angehalten.`
   return de(message)
 }
 
@@ -173,7 +174,7 @@ export function StatusTab() {
           </button>
         </SectionHead>
         {checkEntries.length === 0
-          ? <p className={styles.subtle}>Starte die Prüfung, um Datenbank, Speicher, Deezer, Replicate und lrclib zu testen.</p>
+          ? <p className={styles.subtle}>Starte die Prüfung, um Datenbank, Speicher, Deezer, die lokalen Audio-Worker und den Lyrics-Dienst zu testen.</p>
           : <div className={styles.healthGrid}>
             {checkEntries.map(([name, check]) => (
               <div key={name} className={styles.healthCard} data-check={name} data-status={check.status}>

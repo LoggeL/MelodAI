@@ -567,7 +567,6 @@ dependencies = [
     { name = "openai" },
     { name = "pycryptodome" },
     { name = "python-dotenv" },
-    { name = "replicate" },
     { name = "requests" },
     { name = "resend" },
     { name = "werkzeug" },
@@ -593,7 +592,6 @@ requires-dist = [
     { name = "openai", specifier = ">=1.12" },
     { name = "pycryptodome", specifier = ">=3.20" },
     { name = "python-dotenv", specifier = ">=1.0" },
-    { name = "replicate", specifier = ">=0.25" },
     { name = "requests", specifier = ">=2.31" },
     { name = "resend", specifier = ">=0.8" },
     { name = "torch", marker = "extra == 'separation'", specifier = ">=2.4", index = "https://download.pytorch.org/whl/cpu" },
@@ -1022,21 +1020,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/63/0b/83aab3b5b739947f744135a7a3a446e25433ebc92b05e01aae197ccbfdda/regex-2026.9.29-cp315-cp315t-win32.whl", hash = "sha256:c4e38dd8f39c43a91d2410ad2b85610701b0979342c3df1d69eaf8e838c757d8", size = 276964, upload-time = "2026-09-29T00:49:50.524Z" },
     { url = "https://files.pythonhosted.org/packages/72/f2/6314b5fc68789b5dcc38885bc6e3d6986b34fb3372b7231088ee5cecaa05/regex-2026.9.29-cp315-cp315t-win_amd64.whl", hash = "sha256:e2c89e9b762c57f59d5e99ee8b20202adb892e35f8d3485741340999ca55058e", size = 286487, upload-time = "2026-09-29T00:49:53.224Z" },
     { url = "https://files.pythonhosted.org/packages/56/bc/97b2245c8c7b2dd01f2db74f2bea003cd33c15009b4996a2447f46b5325c/regex-2026.9.29-cp315-cp315t-win_arm64.whl", hash = "sha256:e8c65ef3862a8ad6e86492b6ed9327805dd66904c012bd3649dc67d822ed6c34", size = 285955, upload-time = "2026-09-29T00:49:55.655Z" },
-]
-
-[[package]]
-name = "replicate"
-version = "1.0.3"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "httpx" },
-    { name = "packaging" },
-    { name = "pydantic" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/fa/7d/80acb25fb9025074111016a842f1c52b8605f900f87445006916ea21740a/replicate-1.0.3.tar.gz", hash = "sha256:0fd9ca5230fe67c42e4508dd96a5b1414b3fefa5342f8921dbb63c74266cb130", size = 57309, upload-time = "2024-10-28T11:07:24.148Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/f5/4f/f945ca8064f53a75041b838a8a427abb7f1ebfb15b6109bf99350faab437/replicate-1.0.3-py3-none-any.whl", hash = "sha256:8c49d63444b7ea9ac1d6af99eb23a01efb5b7f079cc8a020d6f52b38843db1da", size = 46705, upload-time = "2024-10-28T11:07:22.85Z" },
 ]
 
 [[package]]

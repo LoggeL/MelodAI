@@ -8,7 +8,6 @@ dependencies = [
     "flask-cors>=4.0",
     "pycryptodome>=3.20",
     "python-dotenv>=1.0",
-    "replicate>=0.25",
     "httpx>=0.27,<1",
     "requests>=2.31",
     "openai>=1.12",
@@ -18,13 +17,13 @@ dependencies = [
 
 [project.optional-dependencies]
 # Local vocal separation (BS-RoFormer on the CPU). Installed in the Docker image with `--extra separation`;
-# without it the app falls back to Demucs on Replicate. torch comes from the CPU-only wheel index.
+# without it local separation is unavailable. torch comes from the CPU-only wheel index.
 separation = [
     "turbo-roformer",
     "torch>=2.4",
 ]
 # Local lyrics transcription (faster-whisper + wav2vec2 alignment on the CPU). Installed in the Docker image with
-# `--extra transcription`; without it the app falls back to WhisperX on Replicate.
+# `--extra transcription`; without it local transcription is unavailable.
 transcription = [
     "turbo-lyrics",
     "torch>=2.4",

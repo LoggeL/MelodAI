@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-MelodAI is an AI-powered karaoke web app. Users search for songs (via Deezer), which are then processed through a pipeline: download → vocal/instrumental separation (local BS-RoFormer worker via turbo-roformer, Replicate Demucs fallback) → speech-to-text with word-level timestamps (local turbo-lyrics worker: Whisper + wav2vec2 alignment, Replicate WhisperX fallback) → LLM-based lyrics line splitting (OpenRouter) → playback with synchronized word-highlighting karaoke display.
+MelodAI is an AI-powered karaoke web app. Users search for songs (via Deezer), which are then processed through a pipeline: download → vocal/instrumental separation (local BS-RoFormer worker via turbo-roformer) → speech-to-text with word-level timestamps (local turbo-lyrics worker: Whisper + wav2vec2 alignment) → LLM-based lyrics line splitting (OpenRouter) → playback with synchronized word-highlighting karaoke display.
 
 ## Commands
 
@@ -59,8 +59,8 @@ cd frontend && npm install     # Frontend deps
 ### Processing Pipeline (6 threaded stages in `src/routes/track.py`)
 1. **Metadata** (5%) — Fetch from Deezer API
 2. **Downloading** (15%) — Download + decrypt via `src/services/deezer.py`
-3. **Splitting** (35%) — local separation worker (`src/services/separation_worker.py`, BS-RoFormer via turbo-roformer, CPU) with automatic fallback to Demucs on Replicate; `SPLIT_BACKEND=local|replicate` (default `local`)
-4. **Lyrics** (65%) — local transcription worker (`src/services/transcription_worker.py`, turbo-lyrics, CPU) with fallback to WhisperX on Replicate; `TRANSCRIBE_BACKEND=local|replicate`, `TRANSCRIBE_REFERENCE_MODE=shadow|prefer|off`
+3. **Splitting** (35%) — local separation worker (`src/services/separation_worker.py`, BS-RoFormer via turbo-roformer, CPU) without a cloud fallback; separation is always local
+4. **Lyrics** (65%) — local transcription worker (`src/services/transcription_worker.py`, turbo-lyrics, CPU) without a cloud fallback; `TRANSCRIBE_REFERENCE_MODE=shadow|prefer|off`
 5. **Processing** (87%) — LLM via OpenRouter (lyrics line splitting in `src/services/lyrics.py`)
 6. **Complete** (100%)
 
@@ -69,9 +69,9 @@ Each processed track produces 6 files at `src/songs/{track_id}/`: `metadata.json
 
 ### Local Separation
 - The Flask process starts `python -m src.services.separation_worker` as a child process (unix socket `SEPARATION_SOCKET`, newline-delimited JSON). The worker loads the model once, runs one separation at a time on its main thread (8 threads, nice 10), and orders jobs by priority: interactive pipeline jobs first, batch re-split jobs after (a running batch job is preempted at the next chunk).
-- `src/services/separation.py` supervises the worker, submits jobs, installs stems atomically (temp dir + `os.replace`) and writes `separation.json`. Worker unavailable/crash/timeout → `_stage_split` falls back to Replicate.
+- `src/services/separation.py` supervises the worker, submits jobs, installs stems atomically (temp dir + `os.replace`) and writes `separation.json`. Worker unavailable/crash/timeout → `_stage_split` fails without uploading audio.
 - Re-split all songs: `python -m src.tools.resplit --all` or the admin Songs tab (`/api/admin/separation*`). State in `resplit_state.json` next to the database (on `/data`), auto-resumed after restarts. Lyrics are not re-run.
-- The Docker image installs the `separation` extra (CPU torch), downloads the checkpoint and compiles the kernels at build time (`scripts/prepare_separation.py`). Locally, `uv sync --extra separation` is optional; without it the app uses Replicate.
+- The Docker image installs the `separation` extra (CPU torch), downloads the checkpoint and compiles the kernels at build time (`scripts/prepare_separation.py`). Locally, `uv sync --extra separation` is optional; without it local separation is unavailable.
 - Tests use the fake engine (`SEPARATION_ENGINE=fake`), no torch needed: `uv run python -m unittest tests.test_separation -v`.
 
 ### Local Transcription
@@ -86,7 +86,6 @@ Vite dev server (port 3000) proxies `/api/*` and `/songs/*` to Flask (port 5000)
 
 ## External Services
 - **Deezer** — Song search, download, metadata (requires `DEEZER_ARL` cookie)
-- **Replicate** — WhisperX + Demucs fallback (requires `REPLICATE_API_TOKEN`, `HF_READ_TOKEN`)
 - **turbo-roformer** — local vocal separation (optional `separation` extra; weights downloaded from the model author's Hugging Face upload)
 - **turbo-lyrics** — local transcription (optional `transcription` extra; Whisper large-v3-turbo + Apache-licensed wav2vec2 aligners from Hugging Face)
 - **OpenAI / OpenRouter** — GPT-6 Luna for lyrics correction and translations (`OPENAI_API_KEY` uses OpenAI directly; otherwise `OPENROUTER_API_KEY` is used; translations can override the model through `LYRICS_TRANSLATION_MODEL`)

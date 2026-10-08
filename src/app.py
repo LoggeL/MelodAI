@@ -153,7 +153,7 @@ def _startup_hooks(app):
             from src.services.separation import get_manager
             try:
                 if not get_manager(app).ensure_running():
-                    print("WARNING: Local separation worker unavailable; splitting falls back to Replicate")
+                    print("WARNING: Local separation worker unavailable; splitting will fail until it recovers")
             except Exception as e:
                 print(f"WARNING: Could not start the separation worker: {e}")
             import time
@@ -173,7 +173,7 @@ def _startup_hooks(app):
             from src.services.transcription import get_manager
             try:
                 if not get_manager(app).ensure_running():
-                    print("WARNING: Local transcription worker unavailable; lyrics fall back to Replicate WhisperX")
+                    print("WARNING: Local transcription worker unavailable; transcription will fail until it recovers")
             except Exception as e:
                 print(f"WARNING: Could not start the transcription worker: {e}")
 

@@ -1,4 +1,4 @@
-"""Local separation: worker protocol (real worker process with the fake engine), Replicate fallback, stem
+"""Local separation: worker protocol (real worker process with the fake engine), failure handling, stem
 installation, re-split batch and admin endpoints. Offline; no torch needed.
 
 Run: uv run python -m unittest tests.test_separation -v
@@ -336,7 +336,7 @@ class StatusMessageTest(unittest.TestCase):
     def test_config_from_env(self):
         cfg = sep.config_from_env({"SPLIT_BACKEND": "Replicate", "SEPARATION_THREADS": "6",
                                    "SEPARATION_PREEMPT": "0", "SEPARATION_OVERLAP": "3"})
-        self.assertEqual(cfg["SPLIT_BACKEND"], "replicate")
+        self.assertEqual(cfg["SPLIT_BACKEND"], "local")
         self.assertEqual(cfg["SEPARATION_THREADS"], 6)
         self.assertFalse(cfg["SEPARATION_PREEMPT"])
         self.assertEqual(cfg["SEPARATION_OVERLAP"], 3.0)
@@ -354,15 +354,14 @@ class StageSplitTest(SeparationTestBase):
             real(track_id, status, progress, detail)
 
         with self.app.app_context(), patch("src.routes.track.set_processing_status", side_effect=record), \
-                patch("src.routes.track._prefetch_references"):
+                patch("src.routes.track._prefetch_references"), \
+                patch("requests.sessions.Session.request", side_effect=AssertionError("Audio must stay local")):
             _stage_split("123")
         return statuses
 
     def test_local_split_installs_stems_records_backend_and_reports_progress(self):
         song_dir = self.make_song()
-        with patch("src.routes.track._split_replicate") as replicate:
-            statuses = self.run_stage()
-        replicate.assert_not_called()
+        statuses = self.run_stage()
         self.assertTrue((song_dir / "vocals.mp3").read_bytes().startswith(b"FAKE-VOCALS:MIX-123"))
         self.assertTrue((song_dir / "no_vocals.mp3").read_bytes().startswith(b"FAKE-NO_VOCALS:MIX-123"))
         record = json.loads((song_dir / "separation.json").read_text())
@@ -376,51 +375,27 @@ class StageSplitTest(SeparationTestBase):
         self.assertEqual([p for p, _ in statuses], sorted(p for p, _ in statuses))
         self.assertFalse([n for n in os.listdir(song_dir) if n.startswith(".separation-")])
 
-    def test_falls_back_to_replicate_when_the_worker_is_unavailable(self):
+    def test_worker_unavailable_stops_without_uploading_audio(self):
         self.app = self.make_app(SEPARATION_WORKER_AUTOSTART=False,
                                  SEPARATION_SOCKET=os.path.join(self.sock_dir, "none.sock"))
         self.make_song()
-        with patch("src.routes.track._split_replicate") as replicate:
-            statuses = self.run_stage()
-        replicate.assert_called_once_with("123")
-        self.assertIn("Switching to cloud separation...", [d for _, d in statuses])
+        with self.assertRaisesRegex(sep.SeparationUnavailable, "autostart"):
+            self.run_stage()
 
-    def test_falls_back_to_replicate_when_the_worker_crashes(self):
+    def test_worker_crash_stops_without_uploading_audio(self):
         song_dir = self.make_song(stems=None)
-        with patch.dict(os.environ, {"MELODAI_FAKE_SEP_MODE": "crash"}), \
-                patch("src.routes.track._split_replicate") as replicate:
-            statuses = self.run_stage()
-        replicate.assert_called_once_with("123")
-        self.assertIn("Switching to cloud separation...", [d for _, d in statuses])
+        with patch.dict(os.environ, {"MELODAI_FAKE_SEP_MODE": "crash"}), self.assertRaises(sep.WorkerLost):
+            self.run_stage()
         self.assertFalse((song_dir / "vocals.mp3").exists())
         self.assertFalse([n for n in os.listdir(song_dir) if n.startswith(".separation-")])
 
-    def test_replicate_backend_skips_the_worker(self):
+    def test_legacy_replicate_setting_still_uses_the_local_worker(self):
         self.app = self.make_app(SPLIT_BACKEND="replicate")
         self.make_song()
-        with patch("src.services.separation.separate_track_locally") as local, \
-                patch("src.routes.track._split_replicate") as replicate:
+        with patch("src.services.separation.separate_track_locally", return_value={}) as local:
             self.run_stage()
-        local.assert_not_called()
-        replicate.assert_called_once()
+        local.assert_called_once()
 
-    def test_replicate_path_records_the_backend(self):
-        song_dir = self.make_song()
-        from src.routes import track
-
-        def fake_download(url, path):
-            Path(path).write_bytes(b"ID3" + url.encode())
-
-        with self.app.app_context(), \
-                patch("src.services.lyrics.upload_audio_to_replicate", return_value="https://example.invalid/in"), \
-                patch("src.services.lyrics.split_audio_demucs",
-                      return_value={"vocals": "https://example.invalid/v", "other": "https://example.invalid/o"}), \
-                patch("src.routes.track._download_file", side_effect=fake_download), \
-                patch("src.routes.track.compress_audio_file"):
-            track._split_replicate("123")
-        record = json.loads((song_dir / "separation.json").read_text())
-        self.assertEqual(record["backend"], "replicate")
-        self.assertIn("demucs", record["model"])
 
     def test_existing_stems_skip_separation(self):
         self.make_song(stems=(b"old-v", b"old-i"))
@@ -692,10 +667,11 @@ class AdminSeparationApiTest(SeparationTestBase):
         self.assertEqual(details["separation"]["backend"], "local")
         self.assertEqual(self.client.post("/api/admin/separation/resplit/stop").status_code, 200)
 
-    def test_start_is_refused_when_backend_is_replicate(self):
+    def test_legacy_backend_setting_cannot_disable_local_resplit(self):
         self.app.config["SPLIT_BACKEND"] = "replicate"
         response = self.client.post("/api/admin/separation/resplit", json={})
-        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(sep.split_backend(self.app), "local")
 
     def test_start_reports_unavailable_worker(self):
         self.app.config["SEPARATION_WORKER_AUTOSTART"] = False

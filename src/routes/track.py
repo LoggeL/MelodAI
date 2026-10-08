@@ -723,9 +723,8 @@ def _stage_download(track_id):
 def _stage_split(track_id):
     """Stage 3: Split vocals/instrumental (20-50%).
 
-    SPLIT_BACKEND=local (default) runs BS-RoFormer in the local separation worker and falls back to Demucs on
-    Replicate when the worker is unavailable, crashes, times out or fails. SPLIT_BACKEND=replicate always uses
-    Replicate. The producing backend is recorded in songs/<id>/separation.json.
+    BS-RoFormer runs in the local separation worker. Worker failures stop the
+    pipeline; audio is never uploaded to a cloud separation provider.
     """
     if track_file_exists(track_id, "vocals") and track_file_exists(track_id, "no_vocals"):
         set_processing_status(track_id, STATUS_SPLITTING, PROGRESS[STATUS_SPLITTING], "Vocals separated")
@@ -735,21 +734,7 @@ def _stage_split(track_id):
     if not track_file_exists(track_id, "lyrics_raw"):
         _prefetch_references(track_id)
 
-    from src.services import separation
-
-    if separation.split_backend() == "local":
-        try:
-            _split_local(track_id)
-            set_processing_status(track_id, STATUS_SPLITTING, PROGRESS[STATUS_SPLITTING], "Vocals separated")
-            return
-        except Exception as e:  # worker unavailable/crashed/timed out, job error, unexpected I/O problem
-            from src.utils.error_logging import log_event
-            print(f"WARNING: Local separation failed for track {track_id}, falling back to Replicate: {e}")
-            log_event("warning", "pipeline", f"Local separation failed, using Replicate Demucs: {e}",
-                      track_id=str(track_id))
-            set_processing_status(track_id, STATUS_SPLITTING, 25, "Switching to cloud separation...")
-
-    _split_replicate(track_id)
+    _split_local(track_id)
     set_processing_status(track_id, STATUS_SPLITTING, PROGRESS[STATUS_SPLITTING], "Vocals separated")
 
 
@@ -764,80 +749,6 @@ def _split_local(track_id):
 
     record = separate_track_locally(track_id, priority="interactive", on_event=on_event)
     print(f"Local separation for track {track_id}: rtf={record.get('rtf')} backend={record.get('compute_backend')}")
-
-
-def _split_replicate(track_id):
-    """Separate with Demucs on Replicate (cloud fallback)."""
-    from src.services.lyrics import upload_audio_to_replicate, split_audio_demucs
-    from src.services.separation import remove_record, replicate_record, save_record
-
-    song_path = get_track_file_path(track_id, "song")
-    audio_url = upload_audio_to_replicate(song_path)
-
-    set_processing_status(track_id, STATUS_SPLITTING, 30, "Separating vocals...")
-
-    output = split_audio_demucs(audio_url)
-
-    set_processing_status(track_id, STATUS_SPLITTING, 45, "Saving vocal tracks...")
-
-    print(f"Demucs output type: {type(output).__name__}")
-
-    # Demucs with stem="vocals" returns a FileOutput or dict with vocals/other URLs
-    vocals_url = None
-    no_vocals_url = None
-
-    if isinstance(output, dict):
-        vocals_url = str(output.get("vocals", ""))
-        no_vocals_url = str(output.get("other", "") or output.get("no_vocals", "") or output.get("accompaniment", ""))
-    elif isinstance(output, (list, tuple)) and len(output) >= 1:
-        # Some Replicate models return a list of URLs
-        vocals_url = str(output[0])
-        if len(output) >= 2:
-            no_vocals_url = str(output[1])
-    elif hasattr(output, 'vocals'):
-        vocals_url = str(output.vocals)
-        no_vocals_url = str(getattr(output, 'other', '') or getattr(output, 'no_vocals', ''))
-    elif hasattr(output, 'url'):
-        # FileOutput with .url attribute
-        vocals_url = str(output.url)
-    else:
-        # Single output - it's the vocals
-        vocals_url = str(output)
-
-    print(f"Demucs stems: vocals={bool(vocals_url)}, instrumental={bool(no_vocals_url)}")
-
-    remove_record(track_id)
-
-    if vocals_url:
-        _download_file(vocals_url, get_track_file_path(track_id, "vocals"))
-        print(f"Downloaded vocals to {get_track_file_path(track_id, 'vocals')}")
-    else:
-        print(f"WARNING: No vocals URL extracted from Demucs output")
-
-    if no_vocals_url:
-        _download_file(no_vocals_url, get_track_file_path(track_id, "no_vocals"))
-        print(f"Downloaded no_vocals to {get_track_file_path(track_id, 'no_vocals')}")
-    else:
-        print(f"WARNING: No no_vocals URL from Demucs (stem=vocals mode). Generating from original...")
-        # If Demucs only returned vocals, we don't have the instrumental.
-        # This can happen with stem="vocals" on some Demucs versions.
-
-    # Compress split audio from 320kbps to 128kbps
-    set_processing_status(track_id, STATUS_SPLITTING, 48, "Compressing audio...")
-    for file_key in ("vocals", "no_vocals"):
-        path = get_track_file_path(track_id, file_key)
-        if os.path.exists(path):
-            try:
-                compress_audio_file(path)
-                print(f"Compressed {file_key} for track {track_id}")
-            except Exception as e:
-                print(f"WARNING: Failed to compress {file_key} for track {track_id}: {e}")
-
-    missing = [file_key for file_key in ("vocals", "no_vocals") if not track_file_exists(track_id, file_key)]
-    if missing:
-        raise RuntimeError(f"Demucs did not produce required split file(s): {', '.join(missing)}")
-
-    save_record(track_id, replicate_record())
 
 
 _prefetches = {}
@@ -907,9 +818,8 @@ def _references(track_id, wait=20.0):
 def _stage_lyrics(track_id):
     """Stage 4: Word-timed lyrics (35-65%).
 
-    TRANSCRIBE_BACKEND=local (default) runs turbo-lyrics in the local transcription worker and falls back to
-    WhisperX on Replicate when the worker is unavailable, fails or its output looks broken. The producer is
-    recorded in songs/<id>/transcription.json.
+    turbo-lyrics runs in the local transcription worker. Worker or quality-check
+    failures stop the pipeline. The producer is recorded in transcription.json.
     """
     if track_file_exists(track_id, "lyrics_raw"):
         set_processing_status(track_id, STATUS_LYRICS, PROGRESS[STATUS_LYRICS], "Lyrics extracted")
@@ -928,24 +838,7 @@ def _stage_lyrics(track_id):
         print(f"WARNING: Reference lyrics fetch failed for {track_id}: {e}")
     reference_lines = reference["lines"] if reference else None
 
-    from src.services import transcription
-
-    raw_data = None
-    local_error = None
-    if transcription.transcribe_backend() == "local":
-        try:
-            raw_data = _transcribe_local(track_id, reference_lines, reference.get("times") if reference else None)
-        except Exception as e:  # worker unavailable/crashed/timed out, job error, broken output
-            from src.utils.error_logging import log_event
-            local_error = e
-            print(f"WARNING: Local transcription failed for track {track_id}, falling back to Replicate: {e}")
-            log_event("warning", "pipeline", f"Local transcription failed, using Replicate WhisperX: {e}",
-                      track_id=str(track_id))
-            set_processing_status(track_id, STATUS_LYRICS, 40, "Switching to cloud transcription...")
-
-    if raw_data is None:
-        raw_data = _transcribe_replicate(track_id, reference_lines)
-        transcription.save_record(track_id, transcription.replicate_record(local_error))
+    raw_data = _transcribe_local(track_id, reference_lines, reference.get("times") if reference else None)
 
     set_processing_status(track_id, STATUS_LYRICS, 64, "Saving lyrics...")
     save_lyrics_raw(track_id, raw_data)
@@ -971,21 +864,6 @@ def _transcribe_local(track_id, reference_lines, reference_times):
     print(f"Local transcription for track {track_id}: rtf={record.get('rtf')} chosen={record.get('chosen')} "
           f"language={record.get('language')}")
     return raw_data
-
-
-def _transcribe_replicate(track_id, reference_lines):
-    """WhisperX on Replicate (cloud fallback, Voxtral as its own fallback)."""
-    from src.services.lyrics import upload_audio_to_replicate, extract_lyrics_whisperx
-
-    set_processing_status(track_id, STATUS_LYRICS, 40, "Analyzing vocals...")
-    vocals_path = get_track_file_path(track_id, "vocals")
-    audio_url = upload_audio_to_replicate(vocals_path)
-
-    set_processing_status(track_id, STATUS_LYRICS, 45, "Extracting lyrics...")
-    output = extract_lyrics_whisperx(audio_url, reference_lines=reference_lines, vocals_path=vocals_path)
-    if isinstance(output, dict):
-        return output
-    return json.loads(str(output)) if not isinstance(output, (list, dict)) else output
 
 
 def _extract_whisperx_text(raw_data):

@@ -39,9 +39,9 @@ export function workerState(state: string | undefined): string {
 }
 
 export function workerLabel(status: SeparationStatus): string {
-  if (status.split_backend !== 'local') return 'Lokale Trennung ist aus. Neue Songs nutzen Replicate Demucs.'
+  if (status.split_backend !== 'local') return 'Lokale Stimmtrennung ist nicht verfügbar. Die Verarbeitung ist angehalten.'
   const worker = status.worker
-  if (!worker.available) return `Lokaler Worker nicht verfügbar${worker.error ? ` (${worker.error})` : ''}. Neue Songs nutzen ersatzweise Replicate Demucs.`
+  if (!worker.available) return `Lokaler Worker nicht verfügbar${worker.error ? ` (${worker.error})` : ''}. Die Verarbeitung ist angehalten.`
   const info = worker.info ?? {}
   const detail = [info.model, info.compute_backend, info.precision].filter(Boolean).join(', ')
   return `Lokaler Worker ${workerState(worker.state)}${detail ? ` · ${detail}` : ''}`
