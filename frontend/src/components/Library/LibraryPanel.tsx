@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faHeart as faHeartSolid, faPlus, faRotateRight, faRecordVinyl, faArrowUpRightFromSquare, faMagnifyingGlass } from '@fortawesome/free-solid-svg-icons'
-import { faHeart as faHeartRegular } from '@fortawesome/free-regular-svg-icons'
 import { tracks } from '../../services/api'
 import type { LibraryTrack, ProcessingStatus } from '../../types'
 import { useToast } from '../../hooks/useToast'
 import { HeartButton } from '../HeartButton/HeartButton'
-import { PageState } from '../common/PageState'
+import { Icon } from '../common/Icon'
+import { Cover } from '../common/Cover'
+import { de } from '../../utils/messages'
+import { pipelineLabel } from '../../utils/pipeline'
 import styles from './LibraryPanel.module.css'
 
 const ACTIVE_STATUSES = new Set(['pending', 'queued', 'metadata', 'downloading', 'splitting', 'lyrics', 'processing'])
@@ -45,7 +45,7 @@ export function LibraryPanel({ onAddToQueue, favorites, onToggleFavorite, onSear
       setSongs(data)
       setLoaded(true)
     } catch (err) {
-      if (request === requestRef.current) setError(err instanceof Error ? err.message : 'Could not load the library.')
+      if (request === requestRef.current) setError(err instanceof Error ? de(err.message) : 'Die Bibliothek konnte nicht geladen werden.')
     } finally {
       if (request === requestRef.current) setLoading(false)
     }
@@ -115,66 +115,77 @@ export function LibraryPanel({ onAddToQueue, favorites, onToggleFavorite, onSear
     const ready = filtered.filter(s => s.complete).slice(0, 50)
     if (!ready.length) return
     ready.forEach(s => onAddToQueue(s.id, { title: s.title, artist: s.artist, img_url: s.img_url }))
-    toast.success(`Added ${ready.length} songs to queue`)
+    toast.success(`${ready.length} ${ready.length === 1 ? 'Song' : 'Songs'} zur Setlist hinzugefügt.`)
   }, [filtered, onAddToQueue, toast])
 
   return (
     <>
       <div className={styles.controls}>
-        <input
-          type="search"
-          aria-label="Filter library songs"
-          className={styles.filterInput}
-          placeholder="Filter library..."
-          value={filter}
-          onChange={e => setFilter(e.target.value)}
-        />
+        <label className={styles.filterWrap}>
+          <span className="sr-only">Bibliothek filtern</span>
+          <Icon name="filter" size={16} className={styles.filterIcon} />
+          <input
+            type="search"
+            className={styles.filterInput}
+            placeholder="Bibliothek filtern"
+            value={filter}
+            onChange={e => setFilter(e.target.value)}
+          />
+        </label>
         {favorites && (
           <button
-            className={`${styles.iconBtn} ${showFavsOnly ? styles.iconBtnActive : ''}`}
+            type="button"
+            className={`iconbtn iconbtn--sm ${showFavsOnly ? styles.iconBtnActive : ''}`}
             onClick={() => setShowFavsOnly(!showFavsOnly)}
-            title="Show favorites only"
-            aria-label="Show favorites only"
+            title="Nur Favoriten"
+            aria-label="Nur Favoriten zeigen"
             aria-pressed={showFavsOnly}
           >
-            <FontAwesomeIcon icon={showFavsOnly ? faHeartSolid : faHeartRegular} />
+            <Icon name={showFavsOnly ? 'heart-filled' : 'heart'} size={18} />
           </button>
         )}
-        <button type="button" className={styles.iconBtn} disabled={loading} onClick={load} title="Refresh" aria-label="Refresh library">
-          <FontAwesomeIcon icon={faRotateRight} />
+        <button type="button" className="iconbtn iconbtn--sm" disabled={loading} onClick={load} title="Aktualisieren" aria-label="Bibliothek aktualisieren">
+          <Icon name="redo" size={18} />
         </button>
-        <button type="button" className={styles.iconBtn} disabled={!filtered.some(song => song.complete)} onClick={handleAddAll} title="Add up to 50 ready songs to queue" aria-label="Add up to 50 ready songs to queue">
-          <FontAwesomeIcon icon={faPlus} />
+      </div>
+      <div className={styles.subControls}>
+        <button type="button" className="btn btn--sm" disabled={!filtered.some(song => song.complete)} onClick={handleAddAll}
+          title="Bis zu 50 fertige Songs zur Setlist hinzufügen">
+          <Icon name="plus" size={16} /> Alle hinzufügen
         </button>
-        <button className={styles.iconBtn} onClick={() => navigate('/library')} title="Open full library" aria-label="Open full library">
-          <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
+        <button type="button" className={`btn btn--sm btn--ghost ${styles.openLink}`} onClick={() => navigate('/library')}>
+          Bibliothek öffnen <Icon name="chevron-right" size={16} />
         </button>
       </div>
 
       <div className={styles.grid}>
-        {error && <PageState title="Library unavailable" description={error} action={<button type="button" className={styles.searchDeezerBtn} onClick={load} disabled={loading}>Try again</button>} />}
+        {error && (
+          <div className="error-panel" role="alert">
+            <Icon name="alert" size={24} />
+            <h3>Die Bibliothek ist gerade nicht erreichbar.</h3>
+            <p>{error}</p>
+            <button type="button" className="btn" onClick={load} disabled={loading}><Icon name="redo" /> Erneut versuchen</button>
+          </div>
+        )}
         {!loaded && loading && Array.from({ length: 6 }, (_, i) => (
-          <div key={i} className={styles.skeletonItem}>
-            <div className={styles.skeletonThumb} />
+          <div key={i} className={styles.skeletonItem} aria-hidden="true">
+            <div className={`skeleton ${styles.skeletonThumb}`} />
             <div className={styles.skeletonInfo}>
-              <div className={styles.skeletonTitle} />
-              <div className={styles.skeletonArtist} />
+              <div className={`skeleton ${styles.skeletonTitle}`} />
+              <div className={`skeleton ${styles.skeletonArtist}`} />
             </div>
-            <div className={styles.skeletonDot} />
           </div>
         ))}
         {filtered.length === 0 && loaded && (
-          <div className={styles.emptyState}>
-            <div className={styles.emptyIcon}><FontAwesomeIcon icon={faRecordVinyl} /></div>
-            <h3>{filter.trim() ? 'No matches' : showFavsOnly ? 'No favorites yet' : 'No songs yet'}</h3>
-            <p>{filter.trim() ? `No songs matching "${filter.trim()}"` : showFavsOnly ? 'Heart some songs to see them here' : 'Process songs to build your library'}</p>
-            {filter && onSearchDeezer && (
-              <button
-                className={styles.searchDeezerBtn}
-                onClick={() => onSearchDeezer(filter)}
-              >
-                <FontAwesomeIcon icon={faMagnifyingGlass} /> Search Deezer
-              </button>
+          <div className="emptyState">
+            <Icon name={showFavsOnly && !filter.trim() ? 'heart' : 'library'} size={48} />
+            <h3>{filter.trim() ? `Kein Song passt zu „${filter.trim()}“.` : showFavsOnly ? 'Noch keine Favoriten.' : 'Noch keine Songs.'}</h3>
+            <p>{filter.trim() ? 'Vielleicht ist er noch nicht geladen.' : showFavsOnly ? 'Tipp aufs Herz bei einem Song.' : 'Such einen Song, er landet danach hier.'}</p>
+            {filter.trim() && (
+              <div className="actions">
+                <button type="button" className="btn" onClick={() => setFilter('')}>Filter zurücksetzen</button>
+                {onSearchDeezer && <button type="button" className="btn btn--primary" onClick={() => onSearchDeezer(filter)}><Icon name="search" /> Im Katalog suchen</button>}
+              </div>
             )}
           </div>
         )}
@@ -184,23 +195,21 @@ export function LibraryPanel({ onAddToQueue, favorites, onToggleFavorite, onSear
           const failed = !song.complete && status?.status === 'error'
           const processing = !song.complete && statusCheck === 'ready' && ACTIVE_STATUSES.has(status?.status)
           const progress = Math.round(Math.min(100, Math.max(0, status?.progress || 0)))
-          const statusLabel = song.complete ? 'Ready' : failed ? 'Processing failed'
-            : processing ? `Processing · ${progress}%`
-            : statusCheck === 'pending' ? 'Checking status'
-            : statusCheck === 'unavailable' ? 'Status unavailable' : 'Not ready'
+          const statusLabel = song.complete ? 'Bereit' : failed ? 'Verarbeitung fehlgeschlagen'
+            : processing ? pipelineLabel(status?.status, progress)
+            : statusCheck === 'pending' ? 'Status wird geprüft'
+            : statusCheck === 'unavailable' ? 'Status nicht verfügbar' : 'Nicht bereit'
           return (
             <div key={song.id} className={styles.item}>
               <button type="button" className={styles.songButton} disabled={!song.complete}
                 onClick={() => onAddToQueue(song.id, { title: song.title, artist: song.artist, img_url: song.img_url })}
-                aria-label={song.complete ? `Add ${song.title} by ${song.artist} to queue` : `${song.title}: ${statusLabel}`}
-                title={song.complete ? 'Add to queue' : failed ? status?.detail || statusLabel : statusLabel}>
-                <span className={`${styles.thumbWrap} ${isFav ? styles.thumbFav : ''}`}>
-                  <img className={styles.thumb} src={song.img_url || '/logo.svg'} alt="" loading="lazy" />
-                </span>
+                aria-label={song.complete ? `${song.title} von ${song.artist} zur Setlist hinzufügen` : `${song.title}: ${statusLabel}`}
+                title={song.complete ? 'Zur Setlist hinzufügen' : failed ? de(status?.detail || '') || statusLabel : statusLabel}>
+                <Cover className={styles.thumb} src={song.img_url} />
                 <span className={styles.info}>
                   <span className={styles.title}>{song.title}</span>
                   <span className={styles.artist}>{song.artist}</span>
-                  {!song.complete && <span className={`${styles.statusText} ${failed ? styles.failedText : ''}`}>{statusLabel}</span>}
+                  {!song.complete && <span className={`${styles.statusText} ${failed ? styles.failedText : processing ? styles.workText : ''}`}>{statusLabel}</span>}
                 </span>
                 <span className={`${styles.status} ${song.complete ? styles.complete : failed ? styles.failed : processing ? styles.incomplete : styles.unknown}`} aria-hidden="true" />
               </button>
@@ -208,9 +217,8 @@ export function LibraryPanel({ onAddToQueue, favorites, onToggleFavorite, onSear
                 <HeartButton
                   active={!!isFav}
                   onClick={(e) => { e.stopPropagation(); onToggleFavorite(song.id) }}
-                  className={styles.addBtn}
-                  activeClassName={styles.favActive}
-                  title={isFav ? 'Remove from favorites' : 'Add to favorites'}
+                  className="iconbtn iconbtn--sm"
+                  size={16}
                 />
               )}
             </div>

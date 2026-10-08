@@ -1,428 +1,53 @@
-/* ─── Queue action bar (top) ─── */
-.queueActions {
-  padding: 10px 12px 6px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-shrink: 0;
-}
+/* Setlist (§5.5) */
+.head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); padding: var(--s-3) var(--s-2) var(--s-2) var(--s-4); }
+.headTitle { display: flex; align-items: baseline; gap: var(--s-2); min-width: 0; }
+.heading { font-size: var(--fs-lg); font-weight: 800; font-variation-settings: 'wdth' var(--wdth-marquee); letter-spacing: -.01em; }
+.count { font: 500 var(--fs-xs)/1 var(--mono); color: var(--muted); white-space: nowrap; }
+.actionBtns { display: flex; gap: 2px; }
+.actionBtn { width: 40px; height: 40px; }
+.actionBtn:disabled { opacity: .4; cursor: not-allowed; }
 
-.queueCount {
-  font-family: var(--font-heading);
-  font-size: 0.68rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
-}
-
-.actionBtns {
-  display: flex;
-  gap: 3px;
-}
-
-.actionBtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border: 1px solid transparent;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 0.68rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  padding: 0;
-}
-
-.actionBtn:hover {
-  background: var(--surface-hover);
-  border-color: var(--border);
-  color: var(--text);
-}
-
-.actionBtnDanger:hover {
-  color: var(--danger);
-  border-color: rgba(239, 68, 68, 0.2);
-  background: rgba(239, 68, 68, 0.06);
-}
-
-/* ─── Queue list ─── */
-.list {
-  padding: 4px 6px;
-}
-
-/* ─── Empty state ─── */
-.emptyState {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  color: var(--text-muted);
-  padding: 48px 20px;
-  text-align: center;
-}
-
-.emptyIcon {
-  font-size: 1.8rem;
-  opacity: 0.1;
-}
-
-.emptyState h3 {
-  font-family: var(--font-heading);
-  font-size: 0.88rem;
-  color: var(--text-secondary);
-  font-weight: 600;
-}
-
-.emptyState p {
-  font-size: 0.75rem;
-  opacity: 0.5;
-  line-height: 1.4;
-}
-
-/* ─── Queue item ─── */
+.list { list-style: none; margin: 0; padding: var(--s-1) var(--s-2); display: grid; gap: 2px; }
 .item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
   position: relative;
-  border: 1px solid transparent;
-  margin-bottom: 2px;
-}
-
-.item:hover {
-  background: var(--surface-hover);
-}
-
-/* ─── Active (now playing) ─── */
-.active {
-  background: var(--primary-glow);
-  border-color: var(--primary-glow-strong);
-}
-
-.active:hover {
-  background: var(--primary-glow-strong);
-}
-
-/* ─── Processing & error states ─── */
-.processing {
-  opacity: 0.55;
-}
-
-.error {
-  border-color: rgba(239, 68, 68, 0.2);
-  opacity: 0.65;
-}
-
-/* ─── Drag grip ─── */
-.grip {
-  cursor: grab;
-  color: var(--text-muted);
-  font-size: 0.55rem;
-  padding: 2px;
-  user-select: none;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-  flex-shrink: 0;
-}
-
-.item:hover .grip {
-  opacity: 0.35;
-}
-
-.grip:active {
-  cursor: grabbing;
-}
-
-/* ─── Thumbnail wrapper ─── */
-.thumbWrap {
-  position: relative;
-  width: 40px;
-  height: 40px;
-  border-radius: 6px;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-
-.thumb {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.active .thumbWrap {
-  box-shadow: 0 0 0 2px var(--primary-glow-strong), 0 2px 8px var(--primary-glow);
-}
-
-/* ─── Equalizer bars (on active item thumbnail) ─── */
-.eqBars {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  gap: 2px;
-  padding: 0 10px 6px;
-  background: rgba(0, 0, 0, 0.45);
-}
-
-.eqBars span {
-  display: block;
-  width: 3px;
-  border-radius: 1px;
-  background: var(--primary);
-  animation: eqBounce 0.8s ease-in-out infinite alternate;
-}
-
-.eqBars span:nth-child(1) {
-  height: 8px;
-  animation-delay: 0s;
-}
-
-.eqBars span:nth-child(2) {
-  height: 14px;
-  animation-delay: 0.2s;
-}
-
-.eqBars span:nth-child(3) {
-  height: 6px;
-  animation-delay: 0.4s;
-}
-
-@keyframes eqBounce {
-  0% { transform: scaleY(0.4); }
-  100% { transform: scaleY(1); }
-}
-
-/* ─── Play overlay (hover on non-active items) ─── */
-.playOverlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
+  display: grid;
+  grid-template-columns: 16px 24px 44px minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: center;
-  color: #fff;
-  font-size: 0.65rem;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-}
-
-.item:hover .playOverlay {
-  opacity: 1;
-}
-
-/* ─── Song info ─── */
-.info {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.titleRow {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.nowIcon {
-  font-size: 0.55rem;
-  color: var(--primary);
-  flex-shrink: 0;
-  animation: pulse 2s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 0.6; }
-  50% { opacity: 1; }
-}
-
-.title {
-  font-weight: 600;
-  font-size: 0.78rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  line-height: 1.3;
-}
-
-.active .title {
-  color: var(--text);
-}
-
-.artist {
-  font-size: 0.68rem;
-  color: var(--text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  line-height: 1.3;
-}
-
-.status {
-  font-size: 0.6rem;
-  color: var(--text-muted);
-  font-weight: 500;
-  margin-top: 1px;
-}
-
-/* ─── Progress bar ─── */
-.progressBar {
-  height: 2px;
-  background: var(--border);
-  border-radius: 1px;
-  margin-top: 3px;
-  overflow: hidden;
-}
-
-.progressFill {
-  height: 100%;
-  background: var(--gradient);
-  border-radius: 1px;
-  transition: width 0.5s ease;
-}
-
-/* ─── Action buttons (remove / retry) ─── */
-.actions {
-  display: flex;
-  gap: 2px;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-  flex-shrink: 0;
-}
-
-.item:hover .actions {
-  opacity: 1;
-}
-
-.removeBtn {
-  background: none;
-  border: none;
-  color: var(--text-muted);
+  gap: var(--s-2);
+  min-height: 64px;
+  padding: var(--s-2) var(--s-2) var(--s-2) var(--s-1);
+  border-radius: var(--r-md);
   cursor: pointer;
-  padding: 4px 5px;
-  font-size: 0.68rem;
-  border-radius: 5px;
-  transition: all 0.15s ease;
-  line-height: 1;
-  display: flex;
-  align-items: center;
+  transition: background var(--dur-1) var(--ease);
 }
+.item:hover { background: var(--stage-2); }
+.item:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+.grip { display: inline-flex; color: var(--muted); cursor: grab; }
+.pos { font: 500 var(--fs-xs)/1 var(--mono); color: var(--muted); text-align: center; font-feature-settings: 'tnum'; }
+.thumb { width: 44px; height: 44px; border-radius: var(--r-sm); object-fit: cover; overflow: hidden; }
+.info { display: grid; gap: 2px; min-width: 0; }
+.title { font-weight: 700; font-size: var(--fs-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.artist { color: var(--ink-2); font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bar { margin-top: 4px; }
+.errorLine { color: var(--vocal); font-size: var(--fs-xs); font-weight: 600; }
+.slot { display: inline-flex; align-items: center; gap: var(--s-1); justify-content: flex-end; }
+.remove { opacity: 0; transition: opacity var(--dur-1) var(--ease); }
+.item:hover .remove, .item:focus-within .remove, .remove:focus-visible { opacity: 1; }
+@media (hover: none) { .remove { opacity: 1; } }
 
-.removeBtn:hover {
-  color: var(--danger);
-  background: rgba(239, 68, 68, 0.08);
-}
+.active { background: var(--vocal-tint); box-shadow: inset 3px 0 0 var(--vocal); }
+.active:hover { background: var(--vocal-tint); }
+.active .title { color: var(--ink); }
+.error .thumb { opacity: .6; }
+.processing .title { color: var(--ink-2); }
+.dragging { opacity: .45; }
+.dragOver { box-shadow: inset 0 2px 0 var(--inst); }
 
-/* ─── Drag states ─── */
-.dragging {
-  opacity: 0.25;
-  transform: scale(0.97);
-}
+.eqBars { display: inline-flex; align-items: flex-end; justify-content: center; gap: 2px; height: 14px; }
+.eqBars i { width: 3px; height: 100%; border-radius: 1px; background: var(--vocal); transform-origin: bottom; animation: eq 1s var(--ease) infinite alternate; }
+.eqBars i:nth-child(2) { animation-delay: -.4s; }
+.eqBars i:nth-child(3) { animation-delay: -.7s; }
+@keyframes eq { from { transform: scaleY(.35); } to { transform: scaleY(1); } }
+@media (prefers-reduced-motion: reduce) { .eqBars i { animation: none; } .eqBars i:nth-child(2) { transform: scaleY(.6); } }
 
-.dragOver {
-  border-top: 2px solid var(--primary);
-}
-
-/* ─── Confirmation modal ─── */
-.modalBackdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(8px);
-  z-index: 9999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  animation: fadeIn 0.15s ease;
-}
-
-.modal {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-strong);
-  border-radius: 14px;
-  padding: 28px 32px;
-  max-width: 340px;
-  width: 90%;
-  text-align: center;
-  box-shadow: var(--shadow-lg), 0 0 60px rgba(0, 0, 0, 0.3);
-  animation: scaleIn 0.2s ease;
-}
-
-.modalIcon {
-  font-size: 1.4rem;
-  color: var(--danger);
-  margin-bottom: 14px;
-  opacity: 0.8;
-}
-
-.modalTitle {
-  font-family: var(--font-heading);
-  font-size: 1.05rem;
-  font-weight: 700;
-  margin-bottom: 8px;
-  color: var(--text);
-}
-
-.modalText {
-  font-size: 0.82rem;
-  color: var(--text-secondary);
-  margin-bottom: 22px;
-  line-height: 1.4;
-}
-
-.modalActions {
-  display: flex;
-  gap: 8px;
-  justify-content: center;
-}
-
-.modalBtn {
-  padding: 8px 22px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--text-secondary);
-  font-family: var(--font-body);
-  font-weight: 500;
-  font-size: 0.82rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.modalBtn:hover {
-  background: var(--surface-hover);
-  border-color: var(--text-muted);
-  color: var(--text);
-}
-
-.modalBtnDanger {
-  background: var(--gradient);
-  color: #fff;
-  border: none;
-  box-shadow: 0 2px 12px rgba(217, 4, 41, 0.3);
-}
-
-.modalBtnDanger:hover {
-  box-shadow: 0 4px 20px rgba(217, 4, 41, 0.45);
-  transform: translateY(-1px);
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes scaleIn {
-  from { opacity: 0; transform: scale(0.94); }
-  to { opacity: 1; transform: scale(1); }
-}
+.hint { padding: var(--s-2) var(--s-4) var(--s-4); font: 500 var(--fs-xs)/1.4 var(--mono); color: var(--muted); }

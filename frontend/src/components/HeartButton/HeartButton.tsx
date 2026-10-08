@@ -1,7 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faHeart as faHeartSolid } from '@fortawesome/free-solid-svg-icons'
-import { faHeart as faHeartRegular } from '@fortawesome/free-regular-svg-icons'
+import { Icon } from '../common/Icon'
 import styles from './HeartButton.module.css'
 
 interface Props {
@@ -11,9 +9,10 @@ interface Props {
   activeClassName?: string
   title?: string
   disabled?: boolean
+  size?: 16 | 20
 }
 
-export function HeartButton({ active, onClick, className = '', activeClassName = '', title, disabled = false }: Props) {
+export function HeartButton({ active, onClick, className = 'iconbtn', activeClassName = '', title, disabled = false, size = 20 }: Props) {
   const [burst, setBurst] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current) }, [])
@@ -26,12 +25,12 @@ export function HeartButton({ active, onClick, className = '', activeClassName =
     void onClick(e)
   }, [active, burst, onClick])
 
-  const label = title || (active ? 'Remove from favorites' : 'Add to favorites')
+  const label = title || (active ? 'Aus Favoriten entfernen' : 'Zu Favoriten hinzufügen')
   return (
-    <button type="button" className={`${className} ${active ? activeClassName : ''}`} onClick={handleClick}
+    <button type="button" className={`${className} ${styles.heart} ${active ? `${styles.active} ${activeClassName}` : ''}`} onClick={handleClick}
       title={label} aria-label={label} aria-pressed={active} disabled={disabled}>
       <span className={`${styles.wrap} ${burst ? styles.burst : ''}`}>
-        <FontAwesomeIcon icon={active ? faHeartSolid : faHeartRegular} />
+        <Icon name={active ? 'heart-filled' : 'heart'} size={size} />
       </span>
     </button>
   )

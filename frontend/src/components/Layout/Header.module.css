@@ -1,156 +1,83 @@
+/* Header (§4.1). Mobile first: logo · search icon · avatar · setlist/menu. */
 .header {
-  height: var(--header-height);
+  position: relative;
+  z-index: var(--z-header);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 var(--spacing-xl);
-  border-bottom: 1px solid var(--border);
-  gap: var(--spacing-md);
-  flex-shrink: 0;
-  background: var(--bg-secondary);
-  position: relative;
-  z-index: 10;
+  gap: var(--s-2);
+  height: var(--header-h);
+  padding: 0 var(--s-2) 0 var(--s-4);
+  border-bottom: 1px solid var(--line);
 }
-
-/* Hamburger menu — mobile only */
-.menuBtn {
+/* The blur lives on a pseudo-element: a backdrop-filter on the header itself would
+   become the containing block of the fixed search sheet and drawers inside it. */
+.header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: color-mix(in srgb, var(--stage-0) 88%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.brand { display: inline-flex; align-items: center; min-height: var(--tap); text-decoration: none; color: var(--ink); border-radius: var(--r-md); flex: none; }
+.search { display: flex; margin-left: auto; }
+.navWrap { display: none; }
+.end { display: flex; align-items: center; gap: var(--s-1); margin-left: auto; flex: none; }
+.search + .navWrap + .end { margin-left: 0; }
+.desktopOnly { display: none; }
+.credits {
   display: none;
   align-items: center;
-  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 var(--s-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  font: 600 var(--fs-xs)/1 var(--mono);
+  color: var(--ink);
+  font-feature-settings: 'tnum';
+}
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--spot); }
+.avatarCircle {
+  display: inline-grid;
+  place-items: center;
   width: 36px;
   height: 36px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--text);
-  font-size: 1rem;
-  cursor: pointer;
-  transition: all var(--transition);
-  padding: 0;
-  flex-shrink: 0;
-}
-
-.menuBtn:hover {
-  background: var(--surface-hover);
-  border-color: var(--primary);
-  color: var(--primary);
-}
-
-.actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-/* Nav icon buttons */
-.navBtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: all var(--transition);
-  text-decoration: none;
-  padding: 0;
-}
-
-.navBtn:hover {
-  background: var(--surface-hover);
-  border-color: var(--primary);
-  color: var(--primary);
-}
-
-.navBtnDanger:hover {
-  border-color: var(--danger);
-  color: var(--danger);
-  background: rgba(239, 68, 68, 0.08);
-}
-
-.separator {
-  width: 1px;
-  height: 20px;
-  background: var(--border);
-  margin: 0 4px;
-  flex-shrink: 0;
-}
-
-/* Credit chip */
-.creditChip {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 16px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  font-family: var(--font-heading);
-  font-weight: 600;
-  font-size: 0.82rem;
-  color: var(--text);
-  white-space: nowrap;
-  user-select: none;
-}
-
-.creditIcon {
-  color: #f59e0b;
-  font-size: 0.8rem;
-}
-
-.creditCount {
-  line-height: 1;
-}
-
-/* Profile avatar button */
-.avatarCircle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
+  margin: 4px;
   border-radius: 50%;
-  background: var(--gradient);
-  color: #fff;
-  font-family: var(--font-heading);
-  font-weight: 700;
-  font-size: 0.82rem;
-  line-height: 1;
-  user-select: none;
-  flex-shrink: 0;
+  background: var(--stage-3);
+  border: 1px solid var(--line-strong);
+  color: var(--ink);
+  font-weight: 800;
+  font-size: var(--fs-xs);
+  letter-spacing: .02em;
   text-decoration: none;
-  cursor: pointer;
-  border: 1px solid transparent;
-  transition: all var(--transition);
+}
+.avatarCircle:hover { border-color: var(--ink); }
+.menuBtn { position: relative; color: var(--ink); }
+.badge {
+  position: absolute;
+  top: 3px;
+  right: 1px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: var(--r-pill);
+  background: var(--vocal-strong);
+  color: var(--on-strong);
+  font: 600 11px/18px var(--mono);
+  text-align: center;
 }
 
-.avatarCircle:hover {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 2px var(--primary-glow);
+@media (min-width: 600px) {
+  .credits { display: inline-flex; }
 }
-
-@media (max-width: 768px) {
-  .header { padding: 0 var(--spacing-sm); gap: var(--spacing-sm); }
-  .menuBtn { display: inline-flex; order: -1; }
-  .creditChip { padding: 4px 8px; font-size: 0.75rem; }
+@media (min-width: 900px) {
+  .header { gap: var(--s-5); padding: 0 var(--s-5) 0 var(--s-6); }
+  .search { flex: 1; min-width: 200px; max-width: 460px; margin-left: 0; }
+  .navWrap { display: block; margin-left: auto; }
+  .end { margin-left: 0; gap: var(--s-2); }
+  .desktopOnly { display: inline-flex; }
+  .menuBtn { display: none; }
 }
-
-/* Large screens / projector / beamer */
-@media (min-width: 1440px) {
-  .header { height: 68px; padding: 0 var(--spacing-2xl); }
-  .navBtn { width: 42px; height: 42px; font-size: 1rem; }
-  .avatarCircle { width: 42px; height: 42px; font-size: 0.95rem; }
-  .separator { height: 26px; }
-  .creditChip { font-size: 0.95rem; padding: 5px 12px; }
-  .creditIcon { font-size: 0.9rem; }
-}
-
-.textLink { display: inline-flex; align-items: center; min-height: 40px; padding: 6px 10px; color: var(--text-secondary); border-radius: var(--radius-sm); font-size: .8rem; }
-.textLink[aria-current=page] { color: var(--primary); background: var(--primary-glow); }
-@media (max-width: 768px) { .textLink { display: none; } .navBtn, .avatarCircle, .menuBtn { width: 40px; height: 40px; } .actions { gap: 4px; } .separator { display: none; } }
-@media (max-width: 420px) { .header { flex-wrap: wrap; height: auto; min-height: var(--header-height); padding: 8px; gap: 8px; } .header > :nth-child(2) { order: 3; flex-basis: 100%; } .actions { margin-left: auto; } }

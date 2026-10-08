@@ -1,7 +1,7 @@
-import { useRef, useEffect, useMemo, useState, useCallback, useId } from 'react'
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faMicrophone, faGuitar, faTriangleExclamation, faLanguage, faChevronDown } from '@fortawesome/free-solid-svg-icons'
-import type { LyricsData, LyricTranslation, TranslationLanguage } from '../../types'
+import { useRef, useEffect, useLayoutEffect, useMemo, useState, useCallback, type CSSProperties } from 'react'
+import type { LyricsData, LyricsSegment, LyricTranslation } from '../../types'
+import { Icon } from '../common/Icon'
+import { formatSeconds } from '../../utils/format'
 import styles from './LyricsView.module.css'
 
 interface Props {
@@ -14,40 +14,66 @@ interface Props {
   onEditWord?: (segIdx: number, wordIdx: number, newWord: string) => void
   hasTrack: boolean
   translation?: LyricTranslation | null
-  translationLanguage: TranslationLanguage
   translationMode: 'original' | 'translation' | 'both'
-  translationLoading?: boolean
-  onTranslationLanguageChange: (language: TranslationLanguage) => void
-  onTranslationModeChange: (mode: 'original' | 'translation' | 'both') => void
-  onTranslate: () => void
+  /** Gesang fader at 0 → „Gesang aus · Jetzt du.“ cue above the active line. */
+  vocalsMuted?: boolean
+  /** Text language for hyphenation; defaults to German. */
+  lang?: string
+  /** Larger cue in Bühnenmodus. */
+  stageMode?: boolean
 }
 
-const SPEAKER_CLASSES = [
-  styles.speaker0, styles.speaker1, styles.speaker2,
-  styles.speaker3, styles.speaker4, styles.speaker5,
-]
+const BREAK_THRESHOLD = 3
+const DONE_HOLD = 1
 
-const VISIBLE_TRANSLATION_LANGUAGES: Array<{ code: TranslationLanguage; label: string }> = [
-  { code: 'de', label: 'Deutsch' },
-  { code: 'en', label: 'English' },
-]
+/** §6.3: long lines shrink so the active line never exceeds three lines. */
+function lyricFit(text: string): number {
+  return text.length > 64 ? 0.7 : text.length > 42 ? 0.82 : 1
+}
+
+function segmentText(seg: LyricsSegment): string {
+  return seg.words.map(word => word.word).join(' ')
+}
+
+interface Timeline {
+  /** Line shown in the active slot. */
+  active: number
+  /** Active line is already fully sung (gap hold). */
+  done: boolean
+  /** Active line has not started yet (it fills the active slot during a long break). */
+  preview: boolean
+  next: number
+  breakRemaining: number | null
+  breakTotal: number
+}
+
+function timeline(segments: LyricsSegment[], t: number): Timeline {
+  const none: Timeline = { active: -1, done: false, preview: false, next: -1, breakRemaining: null, breakTotal: 0 }
+  if (!segments.length) return none
+  const running = segments.findIndex(seg => t >= seg.start && t <= seg.end + 0.3)
+  if (running >= 0) return { ...none, active: running, next: running + 1 < segments.length ? running + 1 : -1 }
+  let last = -1
+  for (let i = 0; i < segments.length; i++) if (segments[i].start <= t) last = i
+  const upcoming = last + 1 < segments.length ? last + 1 : -1
+  const prevEnd = last >= 0 ? segments[last].end : 0
+  const gap = upcoming >= 0 ? segments[upcoming].start - prevEnd : 0
+  const remaining = upcoming >= 0 ? segments[upcoming].start - t : 0
+  const longBreak = upcoming >= 0 && gap > BREAK_THRESHOLD && remaining > 0.5
+  if (last >= 0 && (upcoming < 0 ? t <= prevEnd + DONE_HOLD : !longBreak || t <= prevEnd + DONE_HOLD)) {
+    return { ...none, active: last, done: true, next: upcoming }
+  }
+  if (upcoming >= 0) {
+    return {
+      active: upcoming, done: false, preview: true, next: upcoming + 1 < segments.length ? upcoming + 1 : -1,
+      breakRemaining: longBreak ? remaining : null, breakTotal: gap,
+    }
+  }
+  return { ...none, active: -1 }
+}
 
 export function LyricsView({
-  lyrics,
-  loading,
-  currentTime,
-  isPlaying = false,
-  duration,
-  onSeek,
-  onEditWord,
-  hasTrack,
-  translation,
-  translationLanguage,
-  translationMode,
-  translationLoading = false,
-  onTranslationLanguageChange,
-  onTranslationModeChange,
-  onTranslate,
+  lyrics, loading, currentTime, isPlaying = false, duration, onSeek, onEditWord, hasTrack,
+  translation, translationMode, vocalsMuted = false, lang = 'de', stageMode = false,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const manualScrollUntilRef = useRef(0)
@@ -59,10 +85,8 @@ export function LyricsView({
   const [editValue, setEditValue] = useState('')
   const editingRef = useRef(editing)
   editingRef.current = editing
-  const [warningDismissed, setWarningDismissed] = useState(false)
-  const [translationMenuOpen, setTranslationMenuOpen] = useState(false)
-  const translationMenuId = useId()
   const editRef = useRef<HTMLInputElement>(null)
+  const nextRectRef = useRef<{ index: number; top: number; fontSize: number } | null>(null)
   const translationByIndex = useMemo(() => {
     const map = new Map<number, string>()
     translation?.lines?.forEach(line => map.set(line.index, line.translation))
@@ -70,36 +94,73 @@ export function LyricsView({
   }, [translation])
   const showOriginal = translationMode !== 'translation' || !translation?.available
   const showTranslation = translationMode !== 'original' && !!translation?.available
+  const onlyTranslation = showTranslation && !showOriginal
 
-  const speakerMap = useMemo(() => {
-    const map: Record<string, string> = {}
-    let idx = 0
-    lyrics?.segments?.forEach(seg => {
-      if (seg.speaker && !(seg.speaker in map)) {
-        map[seg.speaker] = SPEAKER_CLASSES[idx % SPEAKER_CLASSES.length]
-        idx++
-      }
+  const segments = useMemo(() => lyrics?.segments || [], [lyrics])
+  const plainLyrics = useMemo(() => lyrics?.plain_lyrics || [], [lyrics])
+  const isUntimed = !!lyrics?.untimed && plainLyrics.length > 0
+
+  const speakerTags = useMemo(() => {
+    const tags = new Map<number, string>()
+    const order: string[] = []
+    segments.forEach(seg => { if (seg.speaker && !order.includes(seg.speaker)) order.push(seg.speaker) })
+    if (order.length < 2) return tags
+    let previous = ''
+    segments.forEach((seg, i) => {
+      if (seg.speaker && seg.speaker !== previous) tags.set(i, String.fromCharCode(65 + (order.indexOf(seg.speaker) % 26)))
+      previous = seg.speaker
     })
-    return map
-  }, [lyrics])
+    return tags
+  }, [segments])
+
+  const state = useMemo<Timeline>(() => {
+    if (isUntimed) {
+      const progress = duration > 0 ? currentTime / duration : 0
+      const active = Math.min(Math.floor(progress * plainLyrics.length), plainLyrics.length - 1)
+      return { active, done: false, preview: false, next: active + 1 < plainLyrics.length ? active + 1 : -1, breakRemaining: null, breakTotal: 0 }
+    }
+    return timeline(segments, currentTime)
+  }, [isUntimed, duration, currentTime, plainLyrics.length, segments])
 
   const centerActiveLine = useCallback((force = false) => {
     const container = containerRef.current
     if (!container || editingRef.current || (!force && Date.now() < manualScrollUntilRef.current)) return
     const lines = container.querySelectorAll<HTMLElement>(`.${styles.line}`)
-    const activeLine = container.querySelector<HTMLElement>(`.${styles.lineActive}, .${styles.lineNext}`)
+    const activeLine = container.querySelector<HTMLElement>(`.${styles.lineActive}`)
       ?? (currentTimeRef.current > 0 ? lines[lines.length - 1] : lines[0])
     if (!activeLine || (!force && activeLine === lastActiveLineRef.current)) return
     lastActiveLineRef.current = activeLine
-    const containerRect = container.getBoundingClientRect()
-    const lineRect = activeLine.getBoundingClientRect()
-    const controlsHeight = container.querySelector<HTMLElement>(`.${styles.translationControls}`)?.offsetHeight ?? 0
-    const readingPosition = controlsHeight + (containerRect.height - controlsHeight) * 0.4
-    const offset = lineRect.top - containerRect.top + lineRect.height / 2 - readingPosition
+    // Layout offsets, not client rects: a running FLIP transform must not skew the target.
+    let lineTop = 0
+    for (let el: HTMLElement | null = activeLine; el && el !== container; el = el.offsetParent as HTMLElement | null) lineTop += el.offsetTop
+    const readingPosition = container.clientHeight * (window.matchMedia('(min-width: 900px)').matches ? 0.42 : 0.4)
+    const offset = lineTop - container.scrollTop + activeLine.offsetHeight / 2 - readingPosition
     if (Math.abs(offset) < 4) return
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     container.scrollTo({ top: container.scrollTop + offset, behavior: force || reducedMotion ? 'instant' : 'smooth' })
   }, [])
+
+  // FLIP: the size change happens through the state class (one reflow per line);
+  // the new active line animates from its previous „Als Nächstes“ geometry.
+  useLayoutEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+    const active = container.querySelector<HTMLElement>(`.${styles.lineActive}`)
+    const previous = nextRectRef.current
+    if (active && previous && previous.index === state.active && !window.matchMedia('(prefers-reduced-motion: reduce)').matches && active.animate) {
+      const rect = active.getBoundingClientRect()
+      const fontSize = parseFloat(getComputedStyle(active).fontSize) || 1
+      const scale = previous.fontSize / fontSize
+      const dy = previous.top - rect.top
+      if (Math.abs(scale - 1) > 0.02) {
+        active.animate([{ transform: `translateY(${dy}px) scale(${scale})` }, { transform: 'none' }], { duration: 480, easing: 'cubic-bezier(.2,.8,.2,1)' })
+      }
+    }
+    const next = container.querySelector<HTMLElement>(`.${styles.lineNext}`)
+    nextRectRef.current = next
+      ? { index: Number(next.dataset.index), top: next.getBoundingClientRect().top, fontSize: parseFloat(getComputedStyle(next).fontSize) || 1 }
+      : null
+  }, [state.active])
 
   // Follow new lines while playing and jump directly after a paused seek.
   useEffect(() => {
@@ -142,7 +203,7 @@ export function LyricsView({
 
   useEffect(() => {
     centerActiveLine(true)
-  }, [translationMode, translationMenuOpen, translation, warningDismissed, editing, duration, centerActiveLine])
+  }, [translationMode, translation, editing, duration, stageMode, centerActiveLine])
 
   const handleDoubleClick = useCallback((segIdx: number, wordIdx: number, word: string) => {
     if (!onEditWord) return
@@ -157,242 +218,126 @@ export function LyricsView({
     setEditing(null)
   }, [editing, editValue, onEditWord])
 
-  const cancelEdit = useCallback(() => {
-    setEditing(null)
-  }, [])
+  const cancelEdit = useCallback(() => setEditing(null), [])
 
-  if (!hasTrack) {
-    return (
-      <div className={styles.container}>
-        <div className={styles.emptyState}>
-          <div className={styles.emptyIcon}><FontAwesomeIcon icon={faMicrophone} /></div>
-          <h3>No Song Selected</h3>
-          <p>Search for a song or pick one from the library to start singing</p>
-        </div>
-      </div>
-    )
-  }
+  if (!hasTrack) return null
 
   if (loading) {
     return (
-      <div className={styles.container}>
+      <div className={styles.container} aria-busy="true" aria-label="Text wird geladen">
         <div className={styles.skeleton}>
-          {Array.from({ length: 8 }, (_, i) => (
-            <div key={i} className={styles.skeletonLine} />
+          {['near', 'near', 'active', 'near', 'near'].map((size, i) => (
+            <div key={i} className={`skeleton ${size === 'active' ? styles.skeletonActive : styles.skeletonNear}`} style={{ width: `${[58, 72, 80, 64, 46][i]}%` }} />
           ))}
         </div>
       </div>
     )
   }
 
-  const segments = lyrics?.segments || []
-  const plainLyrics = lyrics?.plain_lyrics || []
-  const isUntimed = lyrics?.untimed && plainLyrics.length > 0
-
-  const translationToolbar = (
-    <div className={styles.translationControls}>
-      <div className={styles.translationDisclosure}>
-        <button
-          type="button"
-          className={styles.translationToggle}
-          aria-label="Translation settings"
-          aria-expanded={translationMenuOpen}
-          aria-controls={translationMenuId}
-          onClick={() => setTranslationMenuOpen(open => !open)}
-        >
-          <FontAwesomeIcon icon={faLanguage} />
-          Translation
-          <FontAwesomeIcon icon={faChevronDown} className={styles.translationChevron} />
-        </button>
-      </div>
-      <div id={translationMenuId} className={styles.translationToolbar} hidden={!translationMenuOpen}>
-        <div className={styles.translationGroup}>
-          <FontAwesomeIcon icon={faLanguage} />
-          <select
-            className={styles.translationSelect}
-            value={translationLanguage}
-            onChange={e => onTranslationLanguageChange(e.target.value as TranslationLanguage)}
-            aria-label="Translation language"
-          >
-            {VISIBLE_TRANSLATION_LANGUAGES.map(lang => (
-              <option key={lang.code} value={lang.code}>{lang.label}</option>
-            ))}
-          </select>
-          {!translation?.available && (
-            <button className={styles.translateButton} onClick={onTranslate} disabled={translationLoading}>
-              {translationLoading ? 'Translating…' : 'Translate'}
-            </button>
-          )}
-        </div>
-        <div className={styles.translationModeGroup}>
-          <button
-            className={translationMode === 'original' ? styles.translationModeActive : ''}
-            onClick={() => onTranslationModeChange('original')}
-          >Original</button>
-          <button
-            className={translationMode === 'translation' ? styles.translationModeActive : ''}
-            onClick={() => onTranslationModeChange('translation')}
-            disabled={!translation?.available && !translationLoading}
-          >Translation</button>
-          <button
-            className={translationMode === 'both' ? styles.translationModeActive : ''}
-            onClick={() => onTranslationModeChange('both')}
-            disabled={!translation?.available && !translationLoading}
-          >Both</button>
-        </div>
-      </div>
-    </div>
-  )
-
   if (segments.length === 0 && !isUntimed) {
     return (
       <div className={styles.container}>
-        <div className={styles.emptyState}>
-          <div className={styles.emptyIcon}><FontAwesomeIcon icon={faGuitar} /></div>
-          <h3>No Lyrics Available</h3>
-          <p>This song appears to be instrumental or has no detectable lyrics</p>
+        <div className={`emptyState ${styles.noLyrics}`}>
+          <span className={styles.noLyricsIcon}><Icon name="guitar" size={26} /></span>
+          <h3>Instrumental – kein Text gefunden.</h3>
+          <p>Du kannst trotzdem mitsummen.</p>
         </div>
       </div>
     )
   }
 
-  // Untimed lyrics mode: evenly scroll through plain text lines
-  if (isUntimed) {
-    const progress = duration > 0 ? currentTime / duration : 0
-    const activeLineIdx = Math.min(
-      Math.floor(progress * plainLyrics.length),
-      plainLyrics.length - 1
-    )
+  const lineClass = (i: number) => {
+    if (i === state.active) return state.done ? `${styles.lineActive} ${styles.lineDone}` : styles.lineActive
+    if (i === state.next) return styles.lineNext
+    if (state.active >= 0 ? i < state.active : (isUntimed ? false : (segments[i]?.end ?? 0) < currentTime)) return styles.linePast
+    return styles.lineFar
+  }
 
-    return (
-      <div className={styles.container} ref={containerRef}>
-        {translationToolbar}
-        <div className={styles.untimedBanner}>
-          <FontAwesomeIcon icon={faLanguage} />
-          <span>Lyrics from external source — word-level timing unavailable</span>
-        </div>
-        {plainLyrics.map((line, i) => {
-          const dist = Math.abs(i - activeLineIdx)
-          const lineClass = [
-            styles.line,
-            styles.untimedLine,
-            dist === 0 ? styles.lineActive : '',
-            dist <= 2 && dist > 0 ? styles.lineNear : '',
-          ].filter(Boolean).join(' ')
+  const cue = (
+    <div className={`${styles.cue} ${stageMode ? styles.cueStage : ''}`} aria-hidden="true">
+      <Icon name="mic-off" size={16} /> Gesang aus · Jetzt du.
+    </div>
+  )
 
+  const breakRow = state.breakRemaining !== null && (
+    <div className={styles.breakRow} aria-hidden="true">
+      <span>Instrumental · {formatSeconds(state.breakRemaining)}</span>
+      <span className={styles.breakDots}>
+        {[0, 1, 2].map(dot => {
+          const elapsed = 1 - state.breakRemaining! / Math.max(state.breakTotal, 0.1)
+          return <i key={dot} className={elapsed > (dot + 1) / 3 ? styles.dotOut : undefined} />
+        })}
+      </span>
+    </div>
+  )
+
+  const renderTranslation = (index: number) => showTranslation && (
+    <span className={onlyTranslation ? styles.translationOnly : styles.translationLine}>{translationByIndex.get(index) || ' '}</span>
+  )
+
+  return (
+    <div className={styles.container} ref={containerRef} lang={lang} aria-live="off" tabIndex={-1}>
+      <div className={styles.spacer} aria-hidden="true" />
+      {isUntimed
+        ? plainLyrics.map((line, i) => (
+          <div key={i} className={styles.lineWrap}>
+            {i === state.next && <div className={styles.nextKicker} aria-hidden="true">Als Nächstes</div>}
+            {i === state.active && vocalsMuted && cue}
+            <p data-index={i} className={`${styles.line} ${lineClass(i)}`} aria-current={i === state.active ? 'true' : undefined}
+              style={{ '--lyric-fit': lyricFit(line) } as CSSProperties}>
+              {showOriginal && <span>{line || ' '}</span>}
+              {renderTranslation(i)}
+            </p>
+          </div>
+        ))
+        : segments.map((seg, i) => {
+          const isActive = i === state.active
+          const sweeping = isActive && !state.done && !state.preview
+          const tag = speakerTags.get(i)
           return (
-            <div key={i} className={lineClass}>
-              {showOriginal && <span className={styles.word}>{line || '\u00A0'}</span>}
-              {showTranslation && <div className={styles.translationLine}>{translationByIndex.get(i) || '\u00A0'}</div>}
+            <div key={i} className={styles.lineWrap}>
+              {isActive && breakRow}
+              {i === state.next && <div className={styles.nextKicker} aria-hidden="true">Als Nächstes</div>}
+              {isActive && vocalsMuted && cue}
+              <p data-index={i} className={`${styles.line} ${lineClass(i)}`} aria-current={isActive ? 'true' : undefined}
+                style={{ '--lyric-fit': lyricFit(segmentText(seg)) } as CSSProperties}>
+                {tag && <span className={styles.speaker} aria-label={`Stimme ${tag}`}>{tag}</span>}
+                {showOriginal && seg.words.map((w, j) => {
+                  if (editing?.seg === i && editing?.word === j) {
+                    return (
+                      <input key={j} ref={editRef} className={styles.wordEdit} value={editValue} aria-label="Wort bearbeiten"
+                        onChange={e => setEditValue(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') cancelEdit() }}
+                        onBlur={commitEdit}
+                        style={{ width: `${Math.max(editValue.length + 1, 3)}ch` }} />
+                    )
+                  }
+                  let wordState = ''
+                  let style: CSSProperties | undefined
+                  if (isActive && state.done) wordState = styles.wordSung
+                  else if (sweeping) {
+                    if (currentTime > w.end) wordState = styles.wordSung
+                    else if (currentTime >= w.start) {
+                      const p = Math.min(1, Math.max(0, (currentTime - w.start) / Math.max(w.end - w.start, 0.01)))
+                      wordState = styles.wordNow
+                      style = { '--p': `${(p * 100).toFixed(1)}%`, '--p-num': p.toFixed(3) } as CSSProperties
+                    }
+                  }
+                  return (
+                    <span key={j}>
+                      <span className={`${styles.word} ${wordState}`} style={style} data-text={w.word}
+                        onClick={() => onSeek(w.start)} onDoubleClick={() => handleDoubleClick(i, j, w.word)}
+                        title="Klicken zum Springen, Doppelklick zum Bearbeiten">{w.word}</span>
+                      {j < seg.words.length - 1 ? ' ' : ''}
+                    </span>
+                  )
+                })}
+                {renderTranslation(i)}
+              </p>
             </div>
           )
         })}
-      </div>
-    )
-  }
-
-  // Compute the active and next segment indices
-  const activeIndex = segments.findIndex(
-    seg => currentTime >= seg.start && currentTime <= seg.end + 0.3
-  )
-  const nextIndex = activeIndex >= 0
-    ? segments.findIndex((seg, i) => i > activeIndex && seg.start > currentTime)
-    : segments.findIndex(seg => seg.start > currentTime)
-
-  // Calculate the gap between lines for break indicator
-  const activeEnd = activeIndex >= 0 ? segments[activeIndex].end : -1
-  const nextStart = nextIndex >= 0 ? segments[nextIndex].start : -1
-  // Original gap: stable value based on segment boundaries (not currentTime)
-  const prevEnd = activeIndex >= 0 ? activeEnd : (nextIndex > 0 ? segments[nextIndex - 1].end : -1)
-  const originalGap = nextIndex >= 0 && prevEnd >= 0 ? nextStart - prevEnd : 0
-
-  const showConfidenceWarning = !warningDismissed
-    && lyrics?.avg_confidence != null
-    && lyrics.avg_confidence < 0.55
-
-  return (
-    <div className={styles.container} ref={containerRef}>
-      {translationToolbar}
-      {showConfidenceWarning && (
-        <div className={styles.confidenceWarning}>
-          <FontAwesomeIcon icon={faTriangleExclamation} />
-          <span>Lyrics may be inaccurate — low transcription confidence</span>
-          <button onClick={() => setWarningDismissed(true)} aria-label="Dismiss warning">&times;</button>
-        </div>
-      )}
-      {segments.map((seg, i) => {
-        const isActive = i === activeIndex
-        const isNext = i === nextIndex
-        const dist = Math.abs(currentTime - (seg.start + seg.end) / 2)
-        const isNear = !isActive && !isNext && dist < 5
-        const spkClass = speakerMap[seg.speaker] || SPEAKER_CLASSES[0]
-
-        const lineClass = [
-          styles.line,
-          spkClass,
-          isActive ? styles.lineActive : '',
-          isNext ? styles.lineNext : '',
-          isNear ? styles.lineNear : '',
-        ].filter(Boolean).join(' ')
-
-        // Break indicator: rendered when gap > 3s, animated via CSS grid expand/collapse
-        const timeUntilNext = isNext ? nextStart - currentTime : 0
-        const hasBreak = isNext && originalGap > 3
-        const breakVisible = hasBreak && timeUntilNext > 0.5
-        const remainingSeconds = Math.max(timeUntilNext, 0).toFixed(1)
-
-        return (
-          <div key={i}>
-            {hasBreak && (
-              <div className={`${styles.breakWrapper} ${breakVisible ? styles.breakWrapperVisible : ''}`}>
-                <div className={styles.breakContent}>
-                  <div className={styles.breakIndicator}>
-                    {`\u00B7 \u00B7 \u00B7 ${remainingSeconds}s \u00B7 \u00B7 \u00B7`}
-                  </div>
-                </div>
-              </div>
-            )}
-            <div className={lineClass}>
-              {showOriginal && seg.words.map((w, j) => {
-                const wActive = isActive && currentTime >= w.start && currentTime <= w.end + 0.1
-                const isEditing = editing?.seg === i && editing?.word === j
-
-                if (isEditing) {
-                  return (
-                    <input
-                      key={j}
-                      ref={editRef}
-                      className={styles.wordEdit}
-                      value={editValue}
-                      onChange={e => setEditValue(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') commitEdit()
-                        if (e.key === 'Escape') cancelEdit()
-                      }}
-                      onBlur={commitEdit}
-                      style={{ width: `${Math.max(editValue.length + 1, 3)}ch` }}
-                    />
-                  )
-                }
-
-                return (
-                  <span
-                    key={j}
-                    className={`${styles.word} ${wActive ? styles.wordActive : ''}`}
-                    data-text={w.word}
-                    onClick={() => onSeek(w.start)}
-                    onDoubleClick={() => handleDoubleClick(i, j, w.word)}
-                    title="Click to seek, double-click to edit"
-                  >
-                    {w.word}
-                  </span>
-                )
-              })}
-              {showTranslation && <div className={styles.translationLine}>{translationByIndex.get(i) || '\u00A0'}</div>}
-            </div>
-          </div>
-        )
-      })}
+      <div className={styles.spacer} aria-hidden="true" />
     </div>
   )
 }

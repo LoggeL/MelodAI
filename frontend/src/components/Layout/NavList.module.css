@@ -1,0 +1,41 @@
+.bar { display: flex; align-items: center; gap: var(--s-1); }
+.bar .link {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--tap);
+  padding: 0 var(--s-3);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: var(--r-md);
+}
+.bar .link:hover { color: var(--ink); background: var(--stage-3); }
+.bar .link[aria-current='page'] { color: var(--ink); }
+.bar .link[aria-current='page']::after {
+  content: '';
+  position: absolute;
+  left: var(--s-3);
+  right: var(--s-3);
+  bottom: 4px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--ink);
+}
+.drawer { display: grid; gap: 2px; }
+.drawer .link {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-height: 48px;
+  padding: 0 var(--s-3);
+  border-radius: var(--r-md);
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+.drawer .link :global(.icon) { color: var(--ink-2); }
+.drawer .link:hover { background: var(--stage-2); }
+.drawer .link[aria-current='page'] { background: var(--stage-3); }

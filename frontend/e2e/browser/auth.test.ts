@@ -177,10 +177,10 @@ describe('Auth E2E - Login Page', () => {
       }
 
       // Click the logout button directly (standalone button in header)
-      const logoutBtn = await page.$('button[title="Logout"]')
+      const logoutBtn = await page.$('[data-testid="logout"]')
       expect(logoutBtn).not.toBeNull()
       await page.evaluate(() => {
-        const btn = document.querySelector('button[title="Logout"]') as HTMLElement
+        const btn = document.querySelector('[data-testid="logout"]') as HTMLElement
         if (btn) btn.click()
       })
       await waitForIdle(page, 2000)
