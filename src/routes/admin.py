@@ -233,6 +233,7 @@ def storage():
 @admin_required
 def list_songs():
     from src.utils.file_handling import get_all_track_ids, load_metadata, load_lyrics, is_track_complete, get_track_file_sizes
+    from src.services.separation import load_record
 
     track_ids = get_all_track_ids()
     songs = []
@@ -255,6 +256,7 @@ def list_songs():
                 "file_sizes": get_track_file_sizes(tid),
                 "avg_confidence": lyrics.get("avg_confidence") if lyrics else None,
                 "has_lyrics": has_lyrics,
+                "separation_backend": (load_record(tid) or {}).get("backend"),
             })
     return jsonify(songs)
 
@@ -331,11 +333,14 @@ def song_details(track_id):
         [track_id], one=True
     )["c"]
 
+    from src.services.separation import load_record
+
     return jsonify({
         "id": track_id,
         "metadata": meta,
         "complete": is_track_complete(track_id),
         "files": files,
+        "separation": load_record(track_id),
         "lyrics": lyrics,
         "lyrics_raw": lyrics_raw,
         "reference_lyrics": ref_lyrics,
@@ -514,6 +519,9 @@ def reprocess_song(track_id):
             path = get_track_file_path(track_id, file_key)
             if os.path.exists(path):
                 os.remove(path)
+        if "vocals" in stage_artifacts[from_stage]:
+            from src.services.separation import remove_record
+            remove_record(track_id)
         if from_stage in ("all", "splitting", "lyrics"):
             reference_path = os.path.join(song_dir, "reference_lyrics.json")
             if os.path.exists(reference_path):
@@ -816,3 +824,55 @@ def compress_songs():
     t.start()
 
     return jsonify({"success": True, "message": "Compression started in background"})
+
+
+@admin_bp.route("/separation")
+@admin_required
+def separation_status():
+    """Local separation worker state and the re-split batch progress."""
+    from src.services.separation import get_manager, installed_version, split_backend
+    from src.tools.resplit import get_batch
+
+    app = current_app._get_current_object()
+    backend = split_backend(app)
+    worker = get_manager(app).status() if backend == "local" else {"available": False, "state": "disabled"}
+    return jsonify({
+        "split_backend": backend,
+        "package_version": installed_version(),
+        "worker": worker,
+        "batch": get_batch(app).status(),
+    })
+
+
+@admin_bp.route("/separation/resplit", methods=["POST"])
+@admin_required
+def start_resplit():
+    """Start (or resume) re-splitting every song with the local model. Body: {"force": bool}."""
+    from src.utils.validation import boolean_field
+    from src.services.separation import get_manager, split_backend
+    from src.tools.resplit import BatchBusy, get_batch
+
+    app = current_app._get_current_object()
+    if split_backend(app) != "local":
+        return jsonify({"error": "Local separation is disabled (SPLIT_BACKEND=replicate)"}), 409
+    data = json_object(optional=True)
+    force = boolean_field(data, "force")
+    if not get_manager(app).ensure_running():
+        return jsonify({"error": "The local separation worker is not available"}), 503
+    try:
+        get_batch(app).start(force=force)
+    except BatchBusy as e:
+        return jsonify({"error": str(e)[:1].upper() + str(e)[1:]}), 409
+    from src.utils.error_logging import log_event
+    log_event("info", "admin", f"Re-split batch started (force={force})")
+    return jsonify({"success": True, "batch": get_batch(app).status()})
+
+
+@admin_bp.route("/separation/resplit/stop", methods=["POST"])
+@admin_required
+def stop_resplit():
+    from src.tools.resplit import get_batch
+
+    batch = get_batch(current_app._get_current_object())
+    batch.stop()
+    return jsonify({"success": True, "batch": batch.status()})
