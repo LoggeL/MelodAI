@@ -12,15 +12,32 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
+# ffmpeg: audio decode/encode. g++: the turbo-roformer AVX512-BF16 kernels are compiled below for this machine;
+# the compiler stays in the image so a container on a different CPU can rebuild them on first use (or fall back
+# to the portable torch path when the CPU has no AVX512-BF16).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg g++ \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# Install Python dependencies
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    PATH="/app/.venv/bin:$PATH" \
+    TURBO_ROFORMER_HOME=/opt/turbo-roformer \
+    PYTHONUNBUFFERED=1
+
+# Install Python dependencies, including local separation (CPU-only torch wheel from the PyTorch CPU index)
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+RUN uv sync --frozen --no-dev --no-install-project --extra separation
+
+# Separation model: download the checkpoint (sha256-verified, ~204 MB) and compile the kernels at build time.
+# Dokploy builds this image on the production host, so -march=native targets the CPU it will run on. Weights and
+# kernels live in the image (not on /data): a deploy is self-contained and the worker is ready seconds after
+# start, without network access. This layer is cached until the Python dependencies change.
+COPY scripts/prepare_separation.py scripts/prepare_separation.py
+RUN python scripts/prepare_separation.py
 
 # Copy backend source
 COPY main.py .
@@ -41,4 +58,5 @@ RUN ln -s /data/db/database.db src/database.db \
 
 EXPOSE 5000
 
-CMD ["uv", "run", "python", "main.py"]
+# The app starts the separation worker (src/services/separation_worker.py) as a child process on startup.
+CMD ["python", "main.py"]
