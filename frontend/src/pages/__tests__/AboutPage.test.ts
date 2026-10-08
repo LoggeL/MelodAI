@@ -26,3 +26,9 @@ it('describes local separation with BS-RoFormer and Demucs only as fallback', as
   expect(link?.textContent).toBe('turbo-roformer')
   expect(link?.rel).toContain('noreferrer')
 })
+
+it('describes local transcription with WhisperX only as fallback', async () => {
+  await act(async () => root.render(createElement(MemoryRouter, null, createElement(AboutPage))))
+  expect(host.textContent).toContain('Ersatz ist WhisperX auf Replicate.')
+  expect(host.querySelector('a[href="https://github.com/LoggeL/turbo-lyrics"]')?.textContent).toBe('turbo-lyrics')
+})

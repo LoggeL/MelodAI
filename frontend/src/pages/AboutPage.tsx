@@ -8,7 +8,7 @@ import styles from './AboutPage.module.css'
 
 const TECH: Array<[string, ReactNode]> = [
   ['Stimmtrennung', <>BS-RoFormer trennt Gesang und Instrumental direkt auf dem Server-Prozessor, über <a href="https://github.com/LoggeL/turbo-roformer" target="_blank" rel="noreferrer">turbo-roformer</a>. Fällt der lokale Dienst aus, springt Demucs auf Replicate ein.</>],
-  ['Transkription', 'WhisperX setzt Wort-Zeitstempel, ein Sprachmodell über OpenRouter baut daraus Zeilen.'],
+  ['Transkription', <>Whisper mit wav2vec2-Alignment setzt die Wort-Zeitstempel ebenfalls lokal, über <a href="https://github.com/LoggeL/turbo-lyrics" target="_blank" rel="noreferrer">turbo-lyrics</a>; Ersatz ist WhisperX auf Replicate. Ein Sprachmodell über OpenRouter baut daraus Zeilen.</>],
   ['Katalog', 'Suche und Originalaufnahmen kommen von Deezer, Referenztexte von lrclib.'],
   ['Server', 'Flask und SQLite, die Verarbeitung läuft in Hintergrund-Threads.'],
   ['Oberfläche', 'React mit TypeScript und der Web Audio API für die zwei Spuren.'],
