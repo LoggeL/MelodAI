@@ -22,10 +22,10 @@ export function SearchField({ label, placeholder, value, onChange }: { label: st
   </label>
 }
 
-export function SectionHead({ title, count, children, level = 2 }: { title: string; count?: number; children?: ReactNode; level?: 2 | 3 }) {
+export function SectionHead({ title, count, children, level = 2, id }: { title: string; count?: number; children?: ReactNode; level?: 2 | 3; id?: string }) {
   const Heading = level === 2 ? 'h2' : 'h3'
   return <div className={styles.sectionHeader}>
-    <Heading>{title}{count != null && <span className={styles.headCount}>{formatInt(count)}</span>}</Heading>
+    <Heading id={id}>{title}{count != null && <span className={styles.headCount}>{formatInt(count)}</span>}</Heading>
     {children && <div className={styles.rowActions}>{children}</div>}
   </div>
 }

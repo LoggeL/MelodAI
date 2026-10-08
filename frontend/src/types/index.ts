@@ -7,6 +7,17 @@ export interface SearchResult {
   album_id: number
   img_url: string | null
   preview_url: string | null
+  /** Seconds; 0 when unknown. */
+  duration?: number
+}
+
+/** What a list hands to the setlist when a song is picked. */
+export interface SongMeta {
+  title: string
+  artist: string
+  img_url: string | null
+  /** Seconds; 0 or missing when unknown. */
+  duration?: number
 }
 
 export interface QueueItem {
@@ -14,6 +25,8 @@ export interface QueueItem {
   title: string
   artist: string
   thumbnail: string
+  /** Seconds; 0 or missing when unknown. */
+  duration?: number
   vocalsUrl: string
   musicUrl: string
   lyricsUrl: string
@@ -113,6 +126,8 @@ export interface Playlist {
   name: string
   track_count: number
   created_at: string
+  /** Up to four cover URLs of the first songs, for the 2×2 mosaic. */
+  covers?: string[]
 }
 
 export interface InviteKey {
@@ -121,6 +136,15 @@ export interface InviteKey {
   created_at: string
   used_by: string | null
   used_at: string | null
+}
+
+export interface DailyUsage {
+  /** ISO date (UTC), e.g. 2026-10-08 */
+  day: string
+  plays: number
+  searches: number
+  downloads: number
+  credits: number
 }
 
 export interface UsageLog {
@@ -180,6 +204,8 @@ export interface AdminSong {
   avg_confidence: number | null
   has_lyrics: boolean
   separation_backend?: 'local' | 'replicate' | null
+  /** ISO timestamp (UTC) when the song entered the library. */
+  added_at?: string | null
 }
 
 export type ResplitBatchState = 'idle' | 'running' | 'stopped' | 'done' | 'error'
@@ -230,6 +256,8 @@ export interface LyricsEditPayload {
 export interface SongFileInfo {
   exists: boolean
   size: number
+  /** ISO timestamp (UTC) of the last change, null when the file is missing. */
+  modified?: string | null
 }
 
 export interface ProcessingFailure {
@@ -269,6 +297,14 @@ export interface SongDetail {
   usage: SongUsage
   favorites_count: number
   playlist_count: number
+}
+
+export interface FavoriteSong {
+  id: string
+  title: string
+  artist: string
+  img_url: string
+  plays: number
 }
 
 export interface ActivityItem {

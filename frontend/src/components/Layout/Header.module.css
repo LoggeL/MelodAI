@@ -20,7 +20,7 @@
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
-.brand { display: inline-flex; align-items: center; min-height: var(--tap); text-decoration: none; color: var(--ink); border-radius: var(--r-md); flex: none; }
+.brand { display: inline-flex; align-items: center; min-height: var(--tap); text-decoration: none; color: var(--ink); border-radius: var(--r-md); flex: 0 1 auto; min-width: 0; }
 .search { display: flex; margin-left: auto; }
 .navWrap { display: none; }
 .end { display: flex; align-items: center; gap: var(--s-1); margin-left: auto; flex: none; }

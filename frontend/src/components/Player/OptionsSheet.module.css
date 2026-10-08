@@ -1,0 +1,7 @@
+.sheet { display: grid; gap: var(--s-5); padding-bottom: var(--s-2); }
+.sheet section { display: grid; gap: var(--s-3); }
+.sheet :global(.seg) { width: 100%; }
+.sheet :global(.seg) > button { flex: 1; }
+.list { display: grid; gap: var(--s-2); }
+.list :global(.btn) { justify-content: flex-start; }
+.pending { color: var(--muted); font-size: var(--fs-sm); }

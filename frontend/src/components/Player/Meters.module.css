@@ -1,0 +1,8 @@
+.meters { display: inline-flex; gap: 4px; align-items: flex-end; }
+.meters i {
+  display: block;
+  width: 4px;
+  height: 20px;
+  border-radius: 2px;
+  background: linear-gradient(0deg, var(--c) var(--v), var(--stage-3) var(--v));
+}

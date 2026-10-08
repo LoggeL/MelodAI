@@ -43,6 +43,8 @@
 .tech > div { display: grid; gap: var(--s-1); padding: var(--s-4) 0; border-bottom: 1px solid var(--line); }
 .tech dt { font: 600 var(--fs-xs)/1.4 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 .tech dd { margin: 0; color: var(--ink); }
+.tech a { color: inherit; text-decoration: underline; text-decoration-color: var(--inst); text-decoration-thickness: 2px; text-underline-offset: .2em; }
+.tech a:hover { color: var(--inst); }
 .footer { max-width: 960px; margin: 0 auto; padding: var(--s-5) var(--s-4) var(--s-7); font: 500 var(--fs-xs)/1.4 var(--mono); color: var(--muted); border-top: 1px solid var(--line); }
 
 @media (min-width: 600px) {

@@ -182,3 +182,55 @@ describe('first synchronization and explicit playback', () => {
     expect(player.currentTrack?.id).toBe('3')
   })
 })
+
+describe('removing the selected song', () => {
+  const stored = (ids: string[], currentIndex = 0) => localStorage.setItem('melodai_queue:member', JSON.stringify({ items: ids.flatMap(queue), currentIndex }))
+
+  it('continues with the next song when the playing song leaves the setlist', async () => {
+    stored(['1', '2', '3'])
+    await mount()
+    await finishRestore()
+    await act(async () => { await player.playIndex(0) })
+    expect(player.isPlaying).toBe(true)
+    await act(async () => player.removeFromQueue(0))
+    expect(player.queue.map(item => item.id)).toEqual(['2', '3'])
+    expect(player.currentIndex).toBe(0)
+    expect(player.currentTrack?.id).toBe('2')
+    expect(player.isPlaying).toBe(true)
+    expect(player.lyrics).toEqual(lyrics('2'))
+  })
+
+  it('selects the next song without starting it when playback was paused', async () => {
+    stored(['1', '2'])
+    await mount()
+    await finishRestore()
+    expect(player.isPlaying).toBe(false)
+    await act(async () => player.removeFromQueue(0))
+    expect(player.queue.map(item => item.id)).toEqual(['2'])
+    expect(player.currentIndex).toBe(0)
+    expect(player.isPlaying).toBe(false)
+    expect(player.lyrics).toEqual(lyrics('2'))
+  })
+
+  it('stops when the last song is removed', async () => {
+    stored(['1', '2'], 1)
+    await mount()
+    await finishRestore()
+    await act(async () => { await player.playIndex(1) })
+    await act(async () => player.removeFromQueue(1))
+    expect(player.queue.map(item => item.id)).toEqual(['1'])
+    expect(player.currentIndex).toBe(-1)
+    expect(player.currentTrack).toBeNull()
+    expect(player.isPlaying).toBe(false)
+    expect(player.lyrics).toBeNull()
+  })
+
+  it('keeps the selection when another song is removed', async () => {
+    stored(['1', '2', '3'], 2)
+    await mount()
+    await finishRestore()
+    await act(async () => player.removeFromQueue(0))
+    expect(player.queue.map(item => item.id)).toEqual(['2', '3'])
+    expect(player.currentIndex).toBe(1)
+  })
+})

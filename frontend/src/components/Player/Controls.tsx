@@ -1,11 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
 import { Icon } from '../common/Icon'
-import { Modal } from '../common/Modal'
 import { Fader } from './Fader'
 import { LyricScale } from './LyricScale'
+import { Meters } from './Meters'
+import { loadSoundSheet, loadStageMode, preload } from './lazyParts'
+import type { Preset } from './SoundSheet'
 import { formatDuration } from '../../utils/format'
-import { faderShort, supportsVerticalRange } from '../../utils/fader'
 import styles from './Controls.module.css'
+
+const SoundSheet = lazy(() => loadSoundSheet().then(module => ({ default: module.SoundSheet })))
+const StageDeskRow = lazy(() => loadStageMode().then(module => ({ default: module.StageDeskRow })))
 
 interface Props {
   disabled?: boolean
@@ -30,21 +34,10 @@ interface Props {
   onStageMode?: (enter: boolean) => void
 }
 
-type Preset = 'karaoke' | 'withVocals' | 'custom'
-
 function presetOf(vocals: number, instrumental: number): Preset {
   if (vocals === 0 && instrumental > 0) return 'karaoke'
   if (vocals === instrumental && vocals > 0) return 'withVocals'
   return 'custom'
-}
-
-function Meters({ vocals, instrumental }: { vocals: number; instrumental: number }) {
-  return (
-    <span className={styles.meters} aria-hidden="true">
-      <i style={{ '--v': `${vocals}%`, '--c': 'var(--vocal)' } as CSSProperties} />
-      <i style={{ '--v': `${instrumental}%`, '--c': 'var(--inst)' } as CSSProperties} />
-    </span>
-  )
 }
 
 export function Controls({
@@ -54,7 +47,6 @@ export function Controls({
   lineStarts = [], pauses = [], lyricScale = 1, onLyricScale, stageMode = false, onStageMode,
 }: Props) {
   const [soundOpen, setSoundOpen] = useState(false)
-  const [vertical] = useState(() => typeof document !== 'undefined' && supportsVerticalRange())
   const [announcement, setAnnouncement] = useState('')
   const previousVocals = useRef(vocalsVolume)
   const preset = presetOf(vocalsVolume, instrumentalVolume)
@@ -72,7 +64,7 @@ export function Controls({
     onInstrumentalVolume(loudness)
   }, [loudness, onVocalsVolume, onInstrumentalVolume])
 
-  const toggleStage = useCallback(() => onStageMode?.(!stageMode), [onStageMode, stageMode])
+  const toggleStage = useCallback(() => { if (!stageMode) preload(loadStageMode); onStageMode?.(!stageMode) }, [onStageMode, stageMode])
 
   // Keyboard shortcuts: Space, ←/→, F (Bühnenmodus), N, P. Skipped inside inputs and dialogs.
   useEffect(() => {
@@ -143,22 +135,15 @@ export function Controls({
   const live = <span className="sr-only" role="status" aria-live="polite">{announcement}</span>
 
   if (stageMode) {
+    // The progress bar shows at once; the rest of the Bühnenmodus row arrives with its chunk.
     return (
       <div className={`${styles.controls} ${styles.tv}`} data-desk>
         {live}
         {progress}
-        <div className={styles.tvRow}>
-          <span className={styles.tvMeter}><Meters vocals={vocalsVolume} instrumental={instrumentalVolume} />
-            <span>Gesang {faderShort(vocalsVolume)} · Instrumental {faderShort(instrumentalVolume)}</span></span>
-          <div className={styles.tvTransport}>{transport}</div>
-          <div className={styles.tvEnd}>
-            {onLyricScale && <LyricScale value={lyricScale} onChange={onLyricScale} />}
-            <span className={styles.hints}>Esc verlassen · Leertaste Pause</span>
-            <button type="button" className="iconbtn iconbtn--outline" aria-label="Bühnenmodus verlassen (Esc)" title="Bühnenmodus verlassen (Esc)" onClick={() => onStageMode?.(false)}>
-              <Icon name="x" />
-            </button>
-          </div>
-        </div>
+        <Suspense fallback={<div className={styles.tvPending}>{transport}</div>}>
+          <StageDeskRow transport={transport} vocalsVolume={vocalsVolume} instrumentalVolume={instrumentalVolume}
+            lyricScale={lyricScale} onLyricScale={onLyricScale} onExit={() => onStageMode?.(false)} />
+        </Suspense>
       </div>
     )
   }
@@ -172,7 +157,9 @@ export function Controls({
   )
 
   const stageButton = (className: string) => (
-    <button type="button" className={`iconbtn iconbtn--outline ${className}`} aria-label="Bühnenmodus (F)" title="Bühnenmodus (F)" onClick={() => onStageMode?.(true)}>
+    <button type="button" className={`iconbtn iconbtn--outline ${className}`} aria-label="Bühnenmodus (F)" title="Bühnenmodus (F)"
+      onPointerEnter={() => preload(loadStageMode)} onFocus={() => preload(loadStageMode)}
+      onClick={() => { preload(loadStageMode); onStageMode?.(true) }}>
       <Icon name="tv" />
     </button>
   )
@@ -191,6 +178,7 @@ export function Controls({
           <Fader channel="inst" value={instrumentalVolume} onChange={onInstrumentalVolume} compact />
         </div>
         <button type="button" className={styles.soundButton} aria-haspopup="dialog"
+          onPointerDown={() => preload(loadSoundSheet)} onFocus={() => preload(loadSoundSheet)}
           aria-label={`Ton: ${vocalsVolume === 0 ? 'Gesang aus' : `Gesang ${vocalsVolume} %`}, ${instrumentalVolume === 0 ? 'Instrumental aus' : `Instrumental ${instrumentalVolume} %`}`}
           onClick={event => { event.currentTarget.focus(); setSoundOpen(true) }}>
           <Meters vocals={vocalsVolume} instrumental={instrumentalVolume} />
@@ -208,25 +196,11 @@ export function Controls({
       </div>
 
       {soundOpen && (
-        <Modal title="Ton" size="small" variant="sheet" onClose={() => setSoundOpen(false)}
-          footer={<button type="button" className="btn btn--primary btn--block" onClick={() => setSoundOpen(false)}>Fertig</button>}>
-          <div className={styles.sound}>
-            <div className={styles.presetTiles} role="group" aria-label="Voreinstellung">
-              <button type="button" aria-pressed={preset === 'karaoke'} onClick={() => applyPreset('karaoke')}>
-                <strong>Karaoke</strong><span>Gesang aus, du singst allein.</span>
-              </button>
-              <button type="button" aria-pressed={preset === 'withVocals'} onClick={() => applyPreset('withVocals')}>
-                <strong>Mit Gesang</strong><span>Originalstimme dabei, zum Reinfinden.</span>
-              </button>
-            </div>
-            <div className={vertical ? styles.strips : styles.stripsHorizontal}>
-              <Fader channel="vocal" value={vocalsVolume} onChange={onVocalsVolume} orientation={vertical ? 'vertical' : 'horizontal'} />
-              <Fader channel="inst" value={instrumentalVolume} onChange={onInstrumentalVolume} orientation={vertical ? 'vertical' : 'horizontal'} />
-              {!vertical && <span className={styles.endLabels} aria-hidden="true"><i>aus</i><i>voll</i></span>}
-            </div>
-            <p className={styles.tip}><Icon name={vocalsVolume === 0 ? 'mic-off' : 'mic'} />{vocalsVolume === 0 ? 'Gesang aus · Jetzt du.' : 'Gesang ganz runter, und du bist dran.'}</p>
-          </div>
-        </Modal>
+        <Suspense fallback={<span className="sr-only" role="status">Lädt …</span>}>
+          <SoundSheet preset={preset} vocalsVolume={vocalsVolume} instrumentalVolume={instrumentalVolume}
+            onPreset={applyPreset} onVocalsVolume={onVocalsVolume} onInstrumentalVolume={onInstrumentalVolume}
+            onClose={() => setSoundOpen(false)} />
+        </Suspense>
       )}
     </div>
   )

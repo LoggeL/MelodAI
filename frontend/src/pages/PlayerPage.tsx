@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo, type CSSProperties } from 'react'
+import { lazy, Suspense, useState, useEffect, useCallback, useRef, useMemo, type CSSProperties } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { usePlayer } from '../hooks/usePlayer'
 import { useSync } from '../hooks/useSync'
@@ -8,26 +8,32 @@ import { useTheme } from '../hooks/useTheme'
 import { useAlbumColors } from '../hooks/useAlbumColors'
 import { PageState } from '../components/common/PageState'
 import { showToast } from '../hooks/useToast'
-import { queueSnapshot } from '../utils/queue'
+import { queueSnapshot, totalDuration } from '../utils/queue'
 import { tracks as tracksApi } from '../services/api'
-import type { LyricTranslation, TranslationLanguage } from '../types'
+import type { LyricTranslation, SongMeta, TranslationLanguage } from '../types'
 import { isValidTrackId, normalizeTrackId } from '../utils/trackId'
 import { Sidebar } from '../components/Layout/Sidebar'
 import { Header } from '../components/Layout/Header'
 import { SearchBar, type SearchBarHandle } from '../components/Search/SearchBar'
 import { QueuePanel } from '../components/Queue/QueuePanel'
-import { LibraryPanel } from '../components/Library/LibraryPanel'
 import { NowPlaying } from '../components/Player/NowPlaying'
 import { LyricsView } from '../components/Player/LyricsView'
 import { Controls } from '../components/Player/Controls'
-import { SuggestedSongs } from '../components/Player/SuggestedSongs'
-import { StageError, StageProcessing } from '../components/Player/StageStatus'
 import { SetlistHead } from '../components/Queue/SetlistHead'
-import { Cover } from '../components/common/Cover'
+import { loadLibraryPanel, loadStageMode, loadStageStatus, loadSuggestedSongs, preload } from '../components/Player/lazyParts'
 import { de } from '../utils/messages'
 import { lineStarts, lyricPauses, lyricsNote } from '../utils/lyricsTimeline'
 import { readLyricScale, storeLyricScale } from '../utils/lyricScale'
 import styles from './PlayerPage.module.css'
+
+// Parts that are not on screen for a playing song load on demand (bundle budget, §3.3).
+const StageTop = lazy(() => loadStageMode().then(module => ({ default: module.StageTop })))
+const LibraryPanel = lazy(() => loadLibraryPanel().then(module => ({ default: module.LibraryPanel })))
+const SuggestedSongs = lazy(() => loadSuggestedSongs().then(module => ({ default: module.SuggestedSongs })))
+const StageProcessing = lazy(() => loadStageStatus().then(module => ({ default: module.StageProcessing })))
+const StageError = lazy(() => loadStageStatus().then(module => ({ default: module.StageError })))
+const stagePending = <p className="sr-only" role="status">Lädt …</p>
+const panelPending = <p className={styles.panelPending} role="status">Lädt …</p>
 
 const SETLIST_KEY = 'setlistCollapsed'
 function readCollapsed() {
@@ -210,15 +216,15 @@ function PlayerContent({ onLogout }: { onLogout: () => Promise<void> }) {
     }
   }, [player.currentTrack?.id, translationLanguage, translationMode])
 
-  const handleSearchSelect = useCallback((id: string, meta: { title: string; artist: string; img_url: string | null }) => {
+  const handleSearchSelect = useCallback((id: string, meta: SongMeta) => {
     player.addToQueue(id, meta, true)
   }, [player])
 
-  const handleAddToQueue = useCallback((id: string, meta: { title: string; artist: string; img_url: string | null }) => {
+  const handleAddToQueue = useCallback((id: string, meta: SongMeta) => {
     player.addToQueue(id, meta)
   }, [player])
 
-  const handlePlayNow = useCallback((id: string, meta: { title: string; artist: string; img_url: string | null }) => {
+  const handlePlayNow = useCallback((id: string, meta: SongMeta) => {
     void player.addToQueue(id, meta, true)
   }, [player])
 
@@ -231,6 +237,7 @@ function PlayerContent({ onLogout }: { onLogout: () => Promise<void> }) {
           title: data.metadata?.title,
           artist: data.metadata?.artist,
           img_url: data.metadata?.img_url,
+          duration: data.metadata?.duration,
         })
       }
     } catch (error) {
@@ -298,7 +305,7 @@ function PlayerContent({ onLogout }: { onLogout: () => Promise<void> }) {
 
   let stage
   if (currentTrack?.error) {
-    stage = <StageError track={currentTrack} onRetry={() => void player.retryTrack(player.currentIndex)} />
+    stage = <StageError track={currentTrack} onRetry={() => void player.retryTrack(player.currentIndex)} onRemove={() => player.removeFromQueue(player.currentIndex)} />
   } else if (currentTrack && !currentTrack.ready) {
     stage = <StageProcessing track={currentTrack} />
   } else if (currentTrack) {
@@ -373,24 +380,9 @@ function PlayerContent({ onLogout }: { onLogout: () => Promise<void> }) {
           <div className={styles.beam} aria-hidden="true" />
           {playable && <div className={styles.pool} aria-hidden="true" />}
           {stageMode && currentTrack && (
-            <div className={`${styles.tvTop} ${styles.chrome}`}>
-              <div className={styles.tvNow}>
-                <Cover className={styles.tvCover} src={currentTrack.thumbnail} />
-                <div className={styles.tvMeta}>
-                  <strong>{currentTrack.title}</strong>
-                  <span>{currentTrack.artist}</span>
-                </div>
-              </div>
-              {nextTrack && (
-                <div className={styles.tvNext}>
-                  <span className="kicker">Danach auf der Bühne</span>
-                  <strong>{nextTrack.title}</strong>
-                  <span>{nextTrack.artist}</span>
-                </div>
-              )}
-            </div>
+            <Suspense fallback={null}><StageTop track={currentTrack} next={nextTrack} className={styles.chrome} /></Suspense>
           )}
-          <div className={styles.stageContent}>{stage}</div>
+          <div className={styles.stageContent}><Suspense fallback={stagePending}>{stage}</Suspense></div>
         </section>
 
         <div className={`${styles.desk} ${stageMode ? styles.chrome : ''}`}>
@@ -427,7 +419,7 @@ function PlayerContent({ onLogout }: { onLogout: () => Promise<void> }) {
         theme={theme}
         onThemeToggle={toggleTheme}
         onLogout={onLogout}
-        head={<SetlistHead count={queue.length} onRandom={handleRandom} onShuffle={player.shuffle} onClear={player.clearQueue} />}
+        head={<SetlistHead count={queue.length} totalSeconds={totalDuration(queue)} onRandom={handleRandom} onShuffle={player.shuffle} onClear={player.clearQueue} />}
         queueContent={
           <QueuePanel
             queue={queue}
@@ -440,7 +432,8 @@ function PlayerContent({ onLogout }: { onLogout: () => Promise<void> }) {
             onSearch={() => { closeSidebar(); openSearch() }}
           />
         }
-        libraryContent={
+        onLibraryIntent={() => preload(loadLibraryPanel)}
+        libraryContent={<Suspense fallback={panelPending}>
           <LibraryPanel
             onAddToQueue={handleAddToQueue}
             onPlayNow={handlePlayNow}
@@ -448,7 +441,7 @@ function PlayerContent({ onLogout }: { onLogout: () => Promise<void> }) {
             onToggleFavorite={player.toggleFavorite}
             onSearchDeezer={(q) => { closeSidebar(); searchRef.current?.search(q) }}
           />
-        }
+        </Suspense>}
       />
     </div>
   )

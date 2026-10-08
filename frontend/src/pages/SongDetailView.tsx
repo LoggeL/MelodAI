@@ -226,13 +226,14 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
           <h2 className={styles.sectionTitle}>Dateien</h2>
           <div className="table-wrap">
             <table className="table table--cards">
-              <thead><tr><th scope="col">Datei</th><th scope="col">Typ</th><th scope="col" className="num">Größe</th><th scope="col">Status</th></tr></thead>
+              <thead><tr><th scope="col">Datei</th><th scope="col">Typ</th><th scope="col" className="num">Größe</th><th scope="col">Geändert</th><th scope="col">Status</th></tr></thead>
               <tbody>
                 {fileEntries.map(([key, info]) => (
                   <tr key={key}>
                     <td className={`cell-main ${styles.mono}`}>{FILE_LABELS[key]?.name ?? key}</td>
                     <td data-label="Typ" className="cell-inline">{FILE_LABELS[key]?.type ?? '–'}</td>
                     <td data-label="Größe" className="num cell-inline">{info.exists ? formatBytes(info.size) : '–'}</td>
+                    <td data-label="Geändert" className={`cell-inline ${styles.mono}`}>{info.modified ? <time dateTime={info.modified}>{formatDateTime(info.modified)}</time> : '–'}</td>
                     <td className="cell-acts">
                       <span className={info.exists ? styles.fileOk : styles.fileMissing}><span aria-hidden="true">{info.exists ? '●' : '○'}</span> {info.exists ? 'Vorhanden' : 'Fehlt'}</span>
                     </td>

@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { auth } from '../services/api'
 import { useToast } from '../hooks/useToast'
-import type { ActivityItem } from '../types'
+import type { ActivityItem, FavoriteSong } from '../types'
 import { PageState } from '../components/common/PageState'
 import { AppShell } from '../components/Layout/AppShell'
 import { Icon } from '../components/common/Icon'
@@ -24,6 +24,8 @@ interface ProfileStats {
   display_name: string
   username: string
   is_admin: boolean
+  plays_this_month?: number
+  favorite_song?: FavoriteSong | null
 }
 
 interface ActivityRow { item: ActivityItem; count: number; total: number }
@@ -156,12 +158,20 @@ export function ProfilePage() {
   const name = stats?.display_name || stats?.username || ''
   const rows = groupActivity(activity)
   const pages = Math.max(1, Math.ceil(activityTotal / 15))
-  const statCells = [
-    { label: 'Songs gesungen', value: stats?.total_plays },
-    { label: 'Songs verarbeitet', value: stats?.songs_processed },
-    { label: 'Favoriten', value: stats?.favorites_count },
-    { label: 'Playlists', value: stats?.playlists_count },
-    { label: 'Credits übrig', value: stats?.credits },
+  const favorite = stats?.favorite_song ?? null
+  const number = (value: number | undefined) => loaded ? formatInt(value ?? 0) : <span className={`skeleton ${styles.skelNum}`} />
+  const statCells: Array<{ label: string; value: ReactNode; note?: ReactNode; wide?: boolean }> = [
+    { label: 'Songs gesungen', value: number(stats?.total_plays) },
+    { label: 'Songs verarbeitet', value: number(stats?.songs_processed) },
+    {
+      label: 'Lieblingssong', wide: true,
+      value: !loaded ? <span className={`skeleton ${styles.skelNum}`} />
+        : favorite ? <Link className={styles.favorite} to={`/song/${favorite.id}`} title={`${favorite.title} – ${favorite.artist}`}>{favorite.title}</Link>
+        : '–',
+      note: favorite ? `${favorite.artist} · ${formatInt(favorite.plays)}× gesungen` : loaded ? 'Noch nichts gesungen' : undefined,
+    },
+    { label: 'Credits übrig', value: number(stats?.credits) },
+    { label: 'Diesen Monat', value: number(stats?.plays_this_month), note: loaded ? (stats?.plays_this_month === 1 ? 'Wiedergabe' : 'Wiedergaben') : undefined },
   ]
 
   return (
@@ -185,11 +195,12 @@ export function ProfilePage() {
         </div>
       </header>
 
-      <section className="stats" aria-label="Deine Zahlen">
+      <section className={`stats ${styles.statStrip}`} aria-label="Deine Zahlen">
         {statCells.map(cell => (
-          <div key={cell.label} className="stat">
-            <b>{loaded ? formatInt(cell.value ?? 0) : <span className={`skeleton ${styles.skelNum}`} />}</b>
+          <div key={cell.label} className={`stat ${cell.wide ? styles.statWide : ''}`}>
+            <b>{cell.value}</b>
             <span className="kicker">{cell.label}</span>
+            {cell.note && <small className={styles.statNote}>{cell.note}</small>}
           </div>
         ))}
       </section>

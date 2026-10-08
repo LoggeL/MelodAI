@@ -8,7 +8,10 @@ interface Props {
   /** Setlist header (title, count, actions). */
   head?: ReactNode
   queueContent: ReactNode
+  /** Mounted the first time the Bibliothek tab opens, then kept. */
   libraryContent: ReactNode
+  /** Called when the Bibliothek tab is about to be used (hover, focus), e.g. to preload its code. */
+  onLibraryIntent?: () => void
   queueCount?: number
   mobileOpen?: boolean
   onMobileClose?: () => void
@@ -22,7 +25,7 @@ interface Props {
 
 /** Setlist panel (≥ 900, collapsible) and the right-hand drawer below 900 (§4.0, §5.9). */
 export function Sidebar({
-  head, queueContent, libraryContent, queueCount = 0, mobileOpen = false, onMobileClose,
+  head, queueContent, libraryContent, onLibraryIntent, queueCount = 0, mobileOpen = false, onMobileClose,
   collapsed = false, onCollapsedChange, isAdmin = false, theme, onThemeToggle, onLogout,
 }: Props) {
   const sidebarRef = useRef<HTMLElement>(null)
@@ -44,6 +47,7 @@ export function Sidebar({
     return () => { document.removeEventListener('keydown', onKey); previous?.focus() }
   }, [mobileOpen, onMobileClose])
   const [activeTab, setActiveTab] = useState<'queue' | 'library'>('queue')
+  const [libraryUsed, setLibraryUsed] = useState(false)
   const contentId = useId()
   const isCollapsed = collapsed && !mobileOpen
 
@@ -83,12 +87,13 @@ export function Sidebar({
             <button type="button" className={styles.tab} aria-pressed={activeTab === 'queue'} data-testid="tab-queue" onClick={() => setActiveTab('queue')}>
               Warteschlange <span className="count">{queueCount}</span>
             </button>
-            <button type="button" className={styles.tab} aria-pressed={activeTab === 'library'} data-testid="tab-library" onClick={() => setActiveTab('library')}>
+            <button type="button" className={styles.tab} aria-pressed={activeTab === 'library'} data-testid="tab-library"
+              onPointerEnter={onLibraryIntent} onFocus={onLibraryIntent} onClick={() => { setActiveTab('library'); setLibraryUsed(true) }}>
               Bibliothek
             </button>
           </div>
           <div className={styles.panel} hidden={activeTab !== 'queue'}>{queueContent}</div>
-          <div className={styles.panel} hidden={activeTab !== 'library'}>{libraryContent}</div>
+          <div className={styles.panel} hidden={activeTab !== 'library'}>{(libraryUsed || activeTab === 'library') && libraryContent}</div>
         </div>
 
         <div className={styles.drawerFooter}>

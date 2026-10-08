@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
 import { tracks } from '../../services/api'
-import type { LibraryTrack } from '../../types'
+import type { LibraryTrack, SongMeta } from '../../types'
 import { Cover } from '../common/Cover'
 import { Icon } from '../common/Icon'
 import { de } from '../../utils/messages'
 import styles from './SuggestedSongs.module.css'
 
 interface Props {
-  onSelect: (id: string, meta: { title: string; artist: string; img_url: string | null }) => void
+  onSelect: (id: string, meta: SongMeta) => void
   /** Opens the search (popover on desktop, sheet on phones). */
   onSearch?: () => void
 }
@@ -63,7 +63,7 @@ export function SuggestedSongs({ onSelect, onSearch }: Props) {
             )) : songs.map(song => (
               <button type="button" key={song.id} className={styles.card}
                 aria-label={`${song.title} von ${song.artist} abspielen`}
-                onClick={() => onSelect(song.id, { title: song.title, artist: song.artist, img_url: song.img_url })}>
+                onClick={() => onSelect(song.id, { title: song.title, artist: song.artist, img_url: song.img_url, duration: song.duration })}>
                 <span className={styles.artWrap}>
                   <Cover className={styles.art} src={song.img_url} />
                   <span className={styles.playOverlay} aria-hidden="true"><Icon name="play" size={22} /></span>

@@ -1,0 +1,44 @@
+/* Bühnenmodus (§4.3). Loaded with the mode; the desk frame and progress stay in Controls. */
+.top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--s-5);
+  padding: var(--s-4);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--stage-0) 80%, transparent), transparent);
+}
+.now { display: flex; align-items: center; gap: var(--s-3); min-width: 0; }
+.cover { width: 56px; height: 56px; flex: none; border-radius: var(--r-md); object-fit: cover; overflow: hidden; box-shadow: var(--shadow-2); }
+.meta, .next { display: grid; gap: 2px; min-width: 0; }
+.meta strong, .next strong {
+  font-size: var(--fs-lg);
+  font-weight: 800;
+  font-variation-settings: 'wdth' var(--wdth-marquee);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.meta span, .next span { color: var(--ink-2); font-size: var(--fs-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.next { display: none; text-align: right; max-width: 40%; }
+.next :global(.kicker) { justify-self: end; color: var(--spot); }
+
+.row { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: var(--s-4); }
+.meter { display: none; align-items: center; gap: var(--s-2); font: 500 var(--fs-xs)/1.2 var(--mono); color: var(--ink-2); }
+.end { display: flex; align-items: center; justify-content: flex-end; gap: var(--s-3); }
+.hints { display: none; font: 500 var(--fs-xs)/1.2 var(--mono); color: var(--muted); }
+
+@media (min-width: 900px) {
+  .top { padding: var(--s-5) var(--s-6); }
+  .next { display: grid; }
+  .row { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
+  .meter { display: inline-flex; }
+}
+/* Key hints only where a keyboard is likely and there is room next to A−/A+. */
+@media (min-width: 1440px) and (pointer: fine) {
+  .hints { display: inline; white-space: nowrap; }
+}

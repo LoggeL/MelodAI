@@ -25,6 +25,7 @@
   margin: 0 auto;
   padding: .12em 0;
   font-size: calc(var(--fs-lyric-near) * var(--lyric-user) * var(--lyric-fit));
+  font-family: var(--font-lyric);
   font-weight: 700;
   line-height: var(--lh-lyric);
   letter-spacing: -.005em;
@@ -58,10 +59,11 @@
 
 /* Speaker tag in the line's left margin; first line of a change only */
 .speaker {
-  position: absolute;
+  position: static;
   right: 100%;
   top: .45em;
-  margin-right: .5em;
+  margin: 0 .35em 0 0;
+  vertical-align: .35em;
   display: inline-grid;
   place-items: center;
   min-width: 22px;
@@ -73,7 +75,7 @@
   color: var(--muted);
   letter-spacing: 0;
 }
-@media (max-width: 599px) { .speaker { position: static; vertical-align: .35em; margin: 0 .35em 0 0; } }
+@media (min-width: 600px) { .speaker { position: absolute; vertical-align: baseline; margin: 0 .5em 0 0; } }
 
 /* Words */
 .word { position: relative; display: inline; cursor: pointer; border-radius: 2px; }
@@ -118,6 +120,7 @@
 .translationLine {
   display: block;
   margin-top: .3em;
+  font-family: var(--font);
   font-size: .5em;
   font-weight: 500;
   line-height: 1.3;

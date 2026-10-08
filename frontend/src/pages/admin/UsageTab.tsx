@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { admin } from '../../services/api'
-import type { AdminStats, UsageLog } from '../../types'
+import type { AdminStats, DailyUsage, UsageLog } from '../../types'
 import { Icon } from '../../components/common/Icon'
 import { PageState } from '../../components/common/PageState'
-import { formatDateTime, formatInt } from '../../utils/format'
+import { formatDateTime, formatDay, formatInt } from '../../utils/format'
 import { errorMessage } from '../account/errors'
 import { LoadError, Pagination, SearchField, SectionHead, Updating } from './shared'
 import styles from '../AdminPage.module.css'
@@ -22,9 +22,40 @@ const COLUMNS: { key: LogSortKey; label: string }[] = [
   { key: 'username', label: 'Nutzer' }, { key: 'action', label: 'Aktion' }, { key: 'detail', label: 'Detail' }, { key: 'created_at', label: 'Zeit' },
 ]
 
+const DAYS = 14
+
+/** Per-day totals (§4.10 Nutzung): Tag, Wiedergaben, Suchen, Downloads, Credits. */
+export function DailyUsageTable({ days }: { days: DailyUsage[] }) {
+  const active = days.some(day => day.plays || day.searches || day.downloads)
+  return (
+    <section className={styles.section} aria-labelledby="usage-daily">
+      <SectionHead id="usage-daily" title={`Letzte ${days.length || DAYS} Tage`} />
+      {!active ? <PageState icon="chart" title="Keine Einträge." description="In diesem Zeitraum gab es keine Wiedergaben, Suchen oder Downloads." /> : <div className="table-wrap">
+        <table className="table table--cards">
+          <thead><tr>
+            <th scope="col">Tag</th><th scope="col" className="num">Wiedergaben</th><th scope="col" className="num">Suchen</th>
+            <th scope="col" className="num">Downloads</th><th scope="col" className="num">Credits</th>
+          </tr></thead>
+          <tbody>{days.map(day => (
+            <tr key={day.day} className={day.plays || day.searches || day.downloads ? undefined : styles.quietRow}>
+              <td className={`cell-main ${styles.mono} ${styles.nowrap}`}>{formatDay(day.day)}</td>
+              <td data-label="Wiedergaben" className="num cell-inline">{formatInt(day.plays)}</td>
+              <td data-label="Suchen" className="num cell-inline">{formatInt(day.searches)}</td>
+              <td data-label="Downloads" className="num cell-inline">{formatInt(day.downloads)}</td>
+              <td data-label="Credits" className="num cell-inline">{day.credits ? `−${formatInt(day.credits)}` : '0'}</td>
+            </tr>
+          ))}</tbody>
+        </table>
+      </div>}
+      <p className={styles.subtle}>Credits sind geschätzt: 5 pro verarbeitetem Song, 1 pro Wiedergabe, ohne Admins. Tage in UTC.</p>
+    </section>
+  )
+}
+
 // ─── Usage Tab ───
 export function UsageTab() {
   const [statsData, setStats] = useState<AdminStats | null>(null)
+  const [daily, setDaily] = useState<DailyUsage[]>([])
   const [loading, setLoading] = useState(true)
   const [logs, setLogs] = useState<UsageLog[]>([])
   const [total, setTotal] = useState(0)
@@ -42,13 +73,15 @@ export function UsageTab() {
     const current = ++requestId.current
     setRefreshing(true)
     try {
-      const [s, l] = await Promise.all([
+      const [s, l, d] = await Promise.all([
         admin.stats(),
-        admin.usageLogs(page, filterUser || undefined, filterAction || undefined)
+        admin.usageLogs(page, filterUser || undefined, filterAction || undefined),
+        admin.dailyUsage(DAYS),
       ])
       if (current !== requestId.current) return
       setError('')
       setStats(s)
+      setDaily(d)
       setLogs(l.logs)
       setTotal(l.total)
     } catch (e) {
@@ -92,6 +125,8 @@ export function UsageTab() {
           {statsData.most_active_user && <div className="stat"><b>{formatInt(statsData.most_active_count)}</b><span className="kicker">Aktivste Person</span><small className={styles.statName}>{statsData.most_active_user}</small></div>}
         </div>
       )}
+
+      <DailyUsageTable days={daily} />
 
       <section className={styles.section}>
         <SectionHead title="Aktivität" count={total}><Updating active={refreshing} /></SectionHead>

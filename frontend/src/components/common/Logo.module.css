@@ -4,6 +4,8 @@
   font-variation-settings: 'wdth' var(--wdth-marquee); color: var(--ink); white-space: nowrap;
 }
 .wordmark b { font-weight: 800; color: var(--inst); }
-@media (max-width: 359px) { .tinyHide { display: none; } }
+/* Header brand without a breakpoint: when the header runs out of room (narrower than ~360 px)
+   the wordmark wraps onto a second line, which the fixed height clips away. */
+.squeeze { flex-wrap: wrap; height: 28px; min-width: 28px; overflow: hidden; }
 .fallback { display: grid; place-items: center; width: 100%; height: 100%; aspect-ratio: 1; background: var(--stage-3); color: var(--muted); }
 .fallback svg { width: 40%; height: 40%; }

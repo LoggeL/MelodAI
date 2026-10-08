@@ -69,13 +69,7 @@
   text-align: left;
 }
 .menuItem:hover { background: var(--stage-3); }
-.translationPanel { display: grid; gap: var(--s-3); }
-.translationPanel :global(.seg) { width: 100%; }
-.translationPanel :global(.seg) > button { flex: 1; padding: 0 var(--s-2); }
-.sheet { display: grid; gap: var(--s-5); padding-bottom: var(--s-2); }
-.sheet section { display: grid; gap: var(--s-3); }
-.sheetList { display: grid; gap: var(--s-2); }
-.sheetList :global(.btn) { justify-content: flex-start; }
+.pending { margin: 0; color: var(--muted); font-size: var(--fs-sm); }
 .desktopOnly { display: none !important; }
 .mobileOnly { display: inline-grid; }
 
@@ -96,5 +90,4 @@
   svg.chipLabel { display: inline-block; }
 }
 @keyframes pop { from { opacity: 0; transform: translateY(4px); } }
-.sheet :global(.seg) { width: 100%; }
-.sheet :global(.seg) > button { flex: 1; }
+

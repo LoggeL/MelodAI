@@ -16,6 +16,13 @@ export function formatDuration(seconds: number | null | undefined): string {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
 }
 
+/** Total length of several songs: 24:16, or 1:24:16 from one hour on. */
+export function formatTotalDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 3600) return formatDuration(seconds)
+  const total = Math.floor(seconds)
+  return `${Math.floor(total / 3600)}:${String(Math.floor(total / 60) % 60).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
+}
+
 /** 4,2 s */
 export function formatSeconds(seconds: number): string {
   return `${formatNumber(Math.max(0, seconds), 1)} s`
@@ -44,6 +51,15 @@ export function formatDate(iso: string | null | undefined): string {
 export function formatShortDate(iso: string | null | undefined): string {
   const date = parse(iso)
   return date ? date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) + '.' : '–'
+}
+
+/** A UTC calendar day („2026-10-08“) as „Do., 08.10.“ */
+export function formatDay(day: string | null | undefined): string {
+  if (!day || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return '–'
+  const date = new Date(`${day}T00:00:00Z`)
+  if (Number.isNaN(date.getTime())) return '–'
+  const text = date.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', timeZone: 'UTC' })
+  return text.endsWith('.') ? text : `${text}.`
 }
 
 /** Oktober 2025 */

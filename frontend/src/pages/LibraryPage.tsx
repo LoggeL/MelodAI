@@ -8,8 +8,10 @@ import { PageState } from '../components/common/PageState'
 import { AppShell } from '../components/Layout/AppShell'
 import { Icon } from '../components/common/Icon'
 import { Cover } from '../components/common/Cover'
+import { PlaylistMosaic } from '../components/Library/PlaylistMosaic'
 import { CustomSelect } from '../components/common/CustomSelect'
 import { de } from '../utils/messages'
+import { formatDuration } from '../utils/format'
 import { TrackCollection } from './library/TrackCollection'
 import { useLibraryData } from './library/useLibraryData'
 import { useCatalogSearch } from './library/useCatalogSearch'
@@ -259,7 +261,7 @@ export function LibraryPage() {
             : <div className={styles.grid}>
               {playlists.map(playlist => <article key={playlist.id} className={styles.playlistCard}>
                 <button type="button" className={styles.playlistOpen} onClick={() => { setViewingPlaylistId(playlist.id); setFilter('') }} aria-label={`${playlist.name} öffnen, ${playlist.track_count} Songs`}>
-                  <span className={styles.mosaic} aria-hidden="true"><i /><i /><i /><i /><Icon name="list" size={28} /></span>
+                  <PlaylistMosaic covers={playlist.covers} className={styles.mosaic} />
                   <span className={styles.playlistName}>{playlist.name}</span>
                   <span className={styles.playlistCount}>{playlist.track_count} {playlist.track_count === 1 ? 'Song' : 'Songs'}</span>
                 </button>
@@ -279,7 +281,7 @@ export function LibraryPage() {
               <p className={styles.resultsHead} role="status">{search.results.length} Treffer</p>
               <div className="table-wrap">
                 <table className="table table--cards">
-                  <thead><tr><th scope="col"><span className="sr-only">Cover</span></th><th scope="col">Titel</th><th scope="col">Album</th><th scope="col"><span className="sr-only">Aktion</span></th></tr></thead>
+                  <thead><tr><th scope="col"><span className="sr-only">Cover</span></th><th scope="col">Titel</th><th scope="col">Album</th><th scope="col" className="num">Dauer</th><th scope="col"><span className="sr-only">Aktion</span></th></tr></thead>
                   <tbody>{search.results.map(song => {
                     const inLibrary = songs.some(track => track.id === song.id)
                     const busy = pending.has(`add:${song.id}`)
@@ -287,6 +289,7 @@ export function LibraryPage() {
                       <td className={styles.thumbCell} data-label=""><Cover className={styles.listThumb} src={song.img_url} /></td>
                       <td className="cell-main" data-label=""><div className={styles.listTitle}>{song.title}</div><div className={styles.listArtist}>{song.artist}</div></td>
                       <td data-label="Album" className={styles.albumCell}>{song.album}</td>
+                      <td data-label="Dauer" className={`num cell-inline ${styles.durationCell}`}>{song.duration ? formatDuration(song.duration) : '–:–'}</td>
                       <td className="cell-acts" data-label="">
                         {inLibrary ? <span className="chip chip--ok"><Icon name="check" size={14} /> In der Bibliothek</span>
                           : <button type="button" className="btn btn--sm btn--primary" disabled={busy} onClick={() => addSong(song)} aria-label={`${song.title} hinzufügen`}>

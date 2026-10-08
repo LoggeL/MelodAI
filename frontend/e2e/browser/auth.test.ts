@@ -16,6 +16,25 @@ afterAll(async () => {
   await browser?.close()
 })
 
+describe('Unknown URLs', () => {
+  it('serves the German 404 page with status 404 for unknown non-API paths', async () => {
+    const page = await newPage(browser)
+    const response = await page.goto(`${BASE}/gibt-es-nicht/wirklich`, { waitUntil: 'networkidle2' })
+    expect(response?.status()).toBe(404)
+    const heading = await page.$eval('h1', el => el.textContent || '')
+    expect(heading).toContain('Diese Seite steht nicht auf der Setlist.')
+    await page.close()
+  })
+
+  it('keeps JSON 404s for unknown API paths', async () => {
+    const page = await newPage(browser)
+    const response = await page.goto(`${BASE}/api/gibt-es-nicht`)
+    expect(response?.status()).toBe(404)
+    expect(response?.headers()['content-type']).toContain('application/json')
+    await page.close()
+  })
+})
+
 describe('Auth E2E - Login Page', () => {
   describe('Page rendering', () => {
     it('should render the login page at /login', async () => {

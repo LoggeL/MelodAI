@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import type { QueueItem, LyricsData, TrackMetadata } from '../types'
-import { adjacentReadyIndex, queueItem, queueSnapshot, restoreQueue, selectById, type QueueSelection } from '../utils/queue'
+import { adjacentReadyIndex, queueItem, queueSnapshot, removeFromSelection, restoreQueue, selectById, validDuration, type QueueSelection } from '../utils/queue'
 import { tracks, ApiError } from '../services/api'
 import { showToast } from './useToast'
 import type { SyncState, SyncCommand } from './useSync'
@@ -15,7 +15,7 @@ interface UsePlayerOptions {
 }
 
 function withMetadata(item: QueueItem, metadata?: Partial<TrackMetadata>): QueueItem {
-  return metadata ? { ...item, title: metadata.title || item.title, artist: metadata.artist || item.artist, thumbnail: metadata.img_url || item.thumbnail } : item
+  return metadata ? { ...item, title: metadata.title || item.title, artist: metadata.artist || item.artist, thumbnail: metadata.img_url || item.thumbnail, duration: validDuration(metadata.duration) ? metadata.duration : item.duration } : item
 }
 
 export function usePlayer(options: UsePlayerOptions = {}) {
@@ -315,7 +315,7 @@ export function usePlayer(options: UsePlayerOptions = {}) {
     } finally { trackRequestsRef.current.delete(item.id) }
   }, [updateItem, maybeAutoplay])
 
-  const addToQueue = useCallback(async (trackId: string, meta?: { title?: string; artist?: string; img_url?: string | null }, autoPlay?: boolean) => {
+  const addToQueue = useCallback(async (trackId: string, meta?: { title?: string; artist?: string; img_url?: string | null; duration?: number }, autoPlay?: boolean) => {
     if (!isValidTrackId(trackId)) { showToast('Ungültige Song-ID.', 'error'); return }
     // Mark before /add resolves, while the previous song can still be selected.
     if (autoPlay) syncPlaybackIntentRef.current?.()
@@ -329,7 +329,7 @@ export function usePlayer(options: UsePlayerOptions = {}) {
       } else showToast('Der Song ist schon in der Setlist.', 'warning')
       return
     }
-    const item = queueItem({ id, title: meta?.title || 'Lädt …', artist: meta?.artist || '', thumbnail: meta?.img_url || '' }, false)
+    const item = queueItem({ id, title: meta?.title || 'Lädt …', artist: meta?.artist || '', thumbnail: meta?.img_url || '', ...(validDuration(meta?.duration) ? { duration: meta.duration } : {}) }, false)
     if (autoPlay) pendingAutoplayRef.current = id
     replaceSelection({ ...current, queue: [...current.queue, item] })
     showToast(meta?.title ? `„${meta.title}“ zur Setlist hinzugefügt.` : 'Song zur Setlist hinzugefügt.', 'success')
@@ -338,11 +338,25 @@ export function usePlayer(options: UsePlayerOptions = {}) {
 
   const removeFromQueue = useCallback((index: number) => {
     const current = selectionRef.current
-    if (!Number.isInteger(index) || !current.queue[index] || index === current.currentIndex) return
+    const result = removeFromSelection(current, index)
+    if (!result) return
     const id = current.queue[index].id
     if (pendingAutoplayRef.current === id) pendingAutoplayRef.current = null
-    replaceSelection(selectById(current.queue.filter((_, i) => i !== index), current.queue[current.currentIndex]?.id))
-  }, [replaceSelection])
+    if (!result.removedCurrent) { replaceSelection(result.selection); return }
+    // The selected song leaves the setlist: continue with the next playable song, or stop.
+    const wasPlaying = !!(audioRef.current?.isPlaying || audioRef.current?.isLoading)
+    ++playbackVersionRef.current
+    audioRef.current?.stop()
+    clearLyrics()
+    const nextIndex = result.selection.currentIndex
+    if (nextIndex >= 0 && wasPlaying) {
+      replaceSelection(result.selection, true)
+      void playIndex(nextIndex)
+      return
+    }
+    replaceSelection(result.selection)
+    if (nextIndex >= 0) void loadLyrics(result.selection.queue[nextIndex].id)
+  }, [replaceSelection, clearLyrics, loadLyrics, playIndex])
 
   const seek = useCallback((time: number, remote = false) => {
     if (!Number.isFinite(time) || !audioRef.current?.hasBuffers) return

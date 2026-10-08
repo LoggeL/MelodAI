@@ -17,9 +17,9 @@ export function Wordmark({ className }: { className?: string }) {
 
 export function Logo({ className, hideWordmarkOnTiny = false }: { className?: string; hideWordmarkOnTiny?: boolean }) {
   return (
-    <span className={`${styles.brand} ${className ?? ''}`}>
+    <span className={`${styles.brand} ${hideWordmarkOnTiny ? styles.squeeze : ''} ${className ?? ''}`}>
       <LogoMark />
-      <Wordmark className={hideWordmarkOnTiny ? styles.tinyHide : undefined} />
+      <Wordmark />
     </span>
   )
 }

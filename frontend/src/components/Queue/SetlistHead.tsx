@@ -1,23 +1,26 @@
 import { useState } from 'react'
 import { Icon } from '../common/Icon'
 import { Modal } from '../common/Modal'
+import { formatTotalDuration } from '../../utils/format'
 import styles from './QueuePanel.module.css'
 
 interface Props {
   count: number
+  /** Sum of the known song lengths in seconds; hidden when 0. */
+  totalSeconds?: number
   onRandom: () => void
   onShuffle: () => void
   onClear: () => void
 }
 
 /** Setlist panel header (§5.5): title, count and the three `actionBtn` buttons. */
-export function SetlistHead({ count, onRandom, onShuffle, onClear }: Props) {
+export function SetlistHead({ count, totalSeconds = 0, onRandom, onShuffle, onClear }: Props) {
   const [confirm, setConfirm] = useState(false)
   return (
     <div className={styles.head}>
       <div className={styles.headTitle}>
         <h2 className={styles.heading}>Setlist</h2>
-        <span className={styles.count}>{count} {count === 1 ? 'Song' : 'Songs'}</span>
+        <span className={styles.count}>{count} {count === 1 ? 'Song' : 'Songs'}{totalSeconds > 0 && ` · ${formatTotalDuration(totalSeconds)}`}</span>
       </div>
       <div className={styles.actionBtns}>
         <button type="button" className={`iconbtn ${styles.actionBtn}`} onClick={onRandom} data-testid="random-song"
