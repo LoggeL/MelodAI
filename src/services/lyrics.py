@@ -108,7 +108,9 @@ def _is_bad_output(output, reference_lines=None):
     if reference_lines and total > 10:
         asr_text = _extract_text(output).lower()
         ref_text = " ".join(reference_lines).lower()
-        similarity = SequenceMatcher(None, asr_text, ref_text).ratio()
+        # Repeated words and spaces are normal in songs. The default heuristic
+        # discards frequent characters in long lyrics and can reject a near match.
+        similarity = SequenceMatcher(None, asr_text, ref_text, autojunk=False).ratio()
         if similarity < 0.3:
             logger.warning("Transcription doesn't match reference lyrics (similarity: %.2f)", similarity)
             return True

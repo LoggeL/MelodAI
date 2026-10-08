@@ -292,6 +292,21 @@ class StageLyricsTest(TranscriptionTestBase):
         self.assertIn("Transcribing vocals...", [d for _, d in statuses])
         self.assertEqual(statuses[-1][1], "Lyrics extracted")
 
+    def test_repeated_lyrics_keep_the_local_result_without_cloud_fallback(self):
+        song_dir = self.make_vocals()
+        self.write_references(song_dir, lines=["We sail home across the silver sea"] * 12)
+        words = " ".join(["We sale home across the silver sea"] * 12).split()
+        raw = {"segments": [{"words": [
+            {"word": word, "start": i, "end": i + 0.5} for i, word in enumerate(words)
+        ]}]}
+        record = {"backend": "local", "engine": "turbo-lyrics", "chosen": "asr"}
+        with patch("src.services.transcription.transcribe_track_locally", return_value=(raw, record)), \
+                patch("src.routes.track._transcribe_replicate", return_value={"segments": []}) as replicate:
+            self.run_stage()
+        replicate.assert_not_called()
+        self.assertEqual(json.loads((song_dir / "lyrics_raw.json").read_text()), raw)
+        self.assertEqual(json.loads((song_dir / tr.RECORD_FILE).read_text()), record)
+
     def test_falls_back_to_replicate_when_the_worker_is_unavailable(self):
         self.app = self.make_app(TRANSCRIBE_WORKER_AUTOSTART=False,
                                  TRANSCRIBE_SOCKET=os.path.join(self.sock_dir, "none.sock"))
