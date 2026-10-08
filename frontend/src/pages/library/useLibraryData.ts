@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { tracks } from '../../services/api'
+import { de } from '../../utils/messages'
 import type { LibraryTrack, Playlist, ProcessingStatus } from '../../types'
 
 export function useLibraryData(enabled: boolean, playlistId: number | null) {
@@ -38,7 +39,7 @@ export function useLibraryData(enabled: boolean, playlistId: number | null) {
       setCredits(balance.credits)
       setLoaded(true)
     } catch (err) {
-      if (seq === loadSeq.current) setError(err instanceof Error ? err.message : 'Could not load the library.')
+      if (seq === loadSeq.current) setError(err instanceof Error ? de(err.message) : 'Die Bibliothek konnte nicht geladen werden.')
     } finally {
       if (seq === loadSeq.current) setLoading(false)
     }
@@ -56,7 +57,7 @@ export function useLibraryData(enabled: boolean, playlistId: number | null) {
       const data = await tracks.playlistTracks(id)
       if (seq === playlistSeq.current) setPlaylistState({ id, songs: data, error: '', loading: false })
     } catch (err) {
-      if (seq === playlistSeq.current) setPlaylistState({ id, songs: [], error: err instanceof Error ? err.message : 'Could not load this playlist.', loading: false })
+      if (seq === playlistSeq.current) setPlaylistState({ id, songs: [], error: err instanceof Error ? de(err.message) : 'Die Playlist konnte nicht geladen werden.', loading: false })
     }
   }, [])
 

@@ -1,24 +1,5 @@
 /* Base, utilities and shared components (§5). Tokens live in tokens.css. */
 
-/* ── Temporary aliases for modules that still use the old variable names (removed in the cleanup PR) ── */
-:root, [data-theme] {
-  --primary: var(--vocal); --primary-dark: var(--vocal-strong); --accent: var(--vocal);
-  --gradient: var(--vocal-strong); --gradient-hover: var(--vocal);
-  --primary-glow: var(--vocal-tint); --primary-glow-strong: var(--vocal-tint);
-  --bg: var(--stage-0); --bg-secondary: var(--stage-1); --bg-elevated: var(--stage-2);
-  --surface: var(--stage-1); --surface-hover: var(--stage-3);
-  --text: var(--ink); --text-secondary: var(--ink-2); --text-muted: var(--muted);
-  --border: var(--line); --border-strong: var(--line-strong);
-  --shadow-sm: var(--shadow-1); --shadow: var(--shadow-1); --shadow-lg: var(--shadow-2);
-  --success: var(--ok); --warning: var(--warn); --danger: var(--vocal);
-  --spacing-xs: var(--s-2); --spacing-sm: var(--s-3); --spacing-md: var(--s-4); --spacing-lg: var(--s-5); --spacing-xl: var(--s-6); --spacing-2xl: var(--s-7);
-  --radius: var(--r-lg); --radius-md: var(--r-md); --radius-sm: var(--r-md); --radius-xs: var(--r-sm); --radius-pill: var(--r-pill);
-  --font-heading: var(--font); --font-body: var(--font); --font-mono: var(--mono);
-  --transition: var(--dur-2) var(--ease); --transition-fast: var(--dur-1) var(--ease); --transition-slow: var(--dur-3) var(--ease);
-  --ease-out: var(--ease); --ease-spring: var(--ease);
-  --sidebar-width: var(--setlist-w); --header-height: var(--header-h);
-}
-
 /* ── Base ── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { font-size: 16px; -webkit-text-size-adjust: 100%; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }

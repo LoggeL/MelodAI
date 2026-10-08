@@ -53,7 +53,7 @@ export function usePreview() {
     const failed = () => {
       if (audioRef.current !== audio) return
       stopPreview()
-      toast.error('Could not play this preview. Please try again.')
+      toast.error('Die Hörprobe lässt sich gerade nicht abspielen. Versuch es noch einmal.')
     }
     audio.onerror = failed
     setPreviewId(id)

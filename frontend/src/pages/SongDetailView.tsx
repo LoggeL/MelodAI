@@ -245,7 +245,7 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
 
         {/* Lyrics status: timing source and confidence, never the text itself */}
         <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Lyrics</h2>
+          <h2 className={styles.sectionTitle}>Lyrics-Status</h2>
           {data.lyrics ? <div className={`panel ${styles.lyricsCard}`}>
             <div className={styles.lyricsHead}>
               <span className={`chip ${data.lyrics.lyrics_source === 'reference' ? 'chip--ok' : 'chip--warn'}`}>
