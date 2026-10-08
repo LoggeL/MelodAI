@@ -25,9 +25,15 @@ Search for a song, and MelodAI separates vocals from instrumentals, extracts wor
 
 ## Screenshots
 
+Screenshots use a demo song store with self-written lyrics.
+
 | Login | Library |
 |-------|---------|
 | ![Login](docs/screenshots/01-login.png) | ![Library](docs/screenshots/03-library.png) |
+
+| Light theme | Phone |
+|-------------|-------|
+| ![Player in the light theme](docs/screenshots/08-player-light.png) | ![Player on a phone](docs/screenshots/09-phone-player.png) |
 
 | Admin - Songs | Admin - Users |
 |---------------|---------------|
@@ -40,7 +46,7 @@ Search for a song, and MelodAI separates vocals from instrumentals, extracts wor
 ## Tech Stack
 
 - **Backend:** Python 3.12, Flask, SQLite
-- **Frontend:** React, TypeScript, Vite, CSS Modules
+- **Frontend:** React, TypeScript, Vite, CSS Modules with design tokens, self-hosted Archivo and JetBrains Mono
 - **Audio:** Web Audio API with dual GainNodes (vocals + instrumental)
 - **Vocal separation:** local BS-RoFormer via turbo-roformer (CPU, PyTorch), Replicate Demucs as fallback
 - **AI Services:** Replicate (WhisperX, Demucs fallback), OpenRouter (LLM lyrics processing)

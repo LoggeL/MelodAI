@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { de } from '../../utils/messages'
 import { tracks } from '../../services/api'
 import type { SearchResult } from '../../types'
 
@@ -20,7 +21,7 @@ export function useCatalogSearch(query: string, enabled: boolean) {
         if (!cancelled) setState({ query: normalized, results, loading: false, error: '' })
       } catch (err) {
         if (!cancelled) setState({ query: normalized, results: [], loading: false,
-          error: err instanceof Error ? err.message : 'Search failed. Please try again.' })
+          error: err instanceof Error ? de(err.message) : 'Die Suche ist gerade nicht erreichbar.' })
       }
     }, 350)
     return () => { cancelled = true; clearTimeout(timer) }

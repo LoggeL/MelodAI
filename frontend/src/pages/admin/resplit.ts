@@ -1,16 +1,17 @@
 import type { ResplitBatchStatus, SeparationStatus } from '../../types'
+import { formatInt } from '../../utils/format'
 
-/** One-line progress summary of the stem re-split batch, e.g. "12 of 213 songs processed · 1 failed". */
+/** One-line progress summary of the stem re-split batch, e.g. „12 von 213 Songs verarbeitet · 1 fehlgeschlagen“. */
 export function resplitSummary(batch: ResplitBatchStatus): string {
-  if (batch.status === 'idle' || batch.total === 0) return 'No re-split has run yet.'
+  if (batch.status === 'idle' || batch.total === 0) return 'Bisher lief noch keine Neutrennung.'
   const done = batch.counts.done ?? 0
   const skipped = batch.counts.skipped ?? 0
   const failed = batch.counts.failed ?? 0
   const processed = done + skipped + failed
-  const parts = [`${processed} of ${batch.total} ${batch.total === 1 ? 'song' : 'songs'} processed`]
-  if (done) parts.push(`${done} re-split`)
-  if (skipped) parts.push(`${skipped} already current`)
-  if (failed) parts.push(`${failed} failed`)
+  const parts = [`${formatInt(processed)} von ${formatInt(batch.total)} ${batch.total === 1 ? 'Song' : 'Songs'} verarbeitet`]
+  if (done) parts.push(`${formatInt(done)} neu getrennt`)
+  if (skipped) parts.push(`${formatInt(skipped)} schon aktuell`)
+  if (failed) parts.push(`${formatInt(failed)} fehlgeschlagen`)
   return parts.join(' · ')
 }
 
@@ -27,11 +28,37 @@ export function resplitAction(status: SeparationStatus): ResplitAction {
   return 'start'
 }
 
+const WORKER_STATES: Record<string, string> = {
+  ready: 'bereit', idle: 'im Leerlauf', loading: 'lädt das Modell', starting: 'startet', running: 'arbeitet',
+  busy: 'arbeitet', stopped: 'gestoppt', failed: 'fehlgeschlagen',
+}
+
+/** German name of a worker state; unknown states pass through. */
+export function workerState(state: string | undefined): string {
+  return (state && WORKER_STATES[state]) || state || 'unbekannt'
+}
+
 export function workerLabel(status: SeparationStatus): string {
-  if (status.split_backend !== 'local') return 'Local separation is off; new songs use Replicate Demucs.'
+  if (status.split_backend !== 'local') return 'Lokale Trennung ist aus. Neue Songs nutzen Replicate Demucs.'
   const worker = status.worker
-  if (!worker.available) return `Local worker unavailable${worker.error ? ` (${worker.error})` : ''}; new songs fall back to Replicate Demucs.`
+  if (!worker.available) return `Lokaler Worker nicht verfügbar${worker.error ? ` (${worker.error})` : ''}. Neue Songs nutzen ersatzweise Replicate Demucs.`
   const info = worker.info ?? {}
   const detail = [info.model, info.compute_backend, info.precision].filter(Boolean).join(', ')
-  return `Local worker ${worker.state}${detail ? ` · ${detail}` : ''}`
+  return `Lokaler Worker ${workerState(worker.state)}${detail ? ` · ${detail}` : ''}`
+}
+
+/** The batch runner reports per-song progress in English; map the known shapes. */
+export function resplitDetail(detail: string): string {
+  const text = detail.trim()
+  const queued = text.match(/^Waiting in queue \(position (\d+)\)\.\.\.$/)
+  if (queued) return `Wartet in der Warteschlange (Platz ${queued[1]}) …`
+  const progress = text.match(/^Separating vocals \((\d+)\/(\d+)\)\.\.\.$/)
+  if (progress) return `Trennt Gesang (${progress[1]}/${progress[2]}) …`
+  const known: Record<string, string> = {
+    'Waiting for the worker...': 'Wartet auf den Worker …',
+    'Waiting in queue...': 'Wartet in der Warteschlange …',
+    'Loading separation model...': 'Lädt das Trennmodell …',
+    'Separating vocals...': 'Trennt Gesang …',
+  }
+  return known[text] ?? text
 }

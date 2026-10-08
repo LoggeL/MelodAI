@@ -1,207 +1,71 @@
 .container {
-  flex: 1;
-  overflow-y: auto;
-  padding: var(--spacing-2xl) var(--spacing-xl);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--spacing-xl);
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
-}
-
-.header, .emptyHeader {
-  text-align: center;
-  padding-top: var(--spacing-lg);
-}
-
-.emptyHeader {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--spacing-md);
-  padding-top: var(--spacing-2xl);
-}
-
-.emptyLogo {
-  height: 48px;
-  width: auto;
-  opacity: 0.2;
-}
-
-.title {
-  font-family: var(--font-heading);
-  font-size: 1.4rem;
-  font-weight: 700;
-  color: var(--text);
-  letter-spacing: 0.02em;
-}
-
-.subtitle {
-  font-size: 0.85rem;
-  color: var(--text-muted);
-  margin-top: 4px;
-}
-
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-  gap: var(--spacing-md);
-  width: 100%;
-  max-width: 720px;
-}
-
-.card {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  cursor: pointer;
-  padding: 8px;
-  border-radius: var(--radius);
-  transition: all 0.25s var(--ease-out);
-  border: 1px solid transparent;
-  animation: cardIn 0.4s var(--ease-out) both;
-}
-
-@keyframes cardIn {
-  from {
-    opacity: 0;
-    transform: translateY(12px) scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-.card:hover {
-  background: var(--surface-hover);
-  border-color: var(--border);
-  transform: translateY(-3px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-}
-
-.artWrap {
   position: relative;
-  width: 100%;
-  aspect-ratio: 1;
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-}
-
-.art {
-  width: 100%;
+  z-index: 2;
+  display: grid;
+  align-content: start;
+  gap: var(--s-6);
   height: 100%;
-  object-fit: cover;
-  display: block;
-  transition: transform 0.3s var(--ease-out);
+  overflow-y: auto;
+  padding: var(--s-6) var(--s-4) var(--s-7);
 }
-
-.card:hover .art {
-  transform: scale(1.05);
+.hero { display: grid; justify-items: center; gap: var(--s-3); text-align: center; padding-top: var(--s-5); }
+.title {
+  font-size: var(--fs-2xl);
+  font-weight: 800;
+  line-height: var(--lh-tight);
+  letter-spacing: -.015em;
+  font-variation-settings: 'wdth' var(--wdth-marquee);
+  text-wrap: balance;
 }
-
+.search {
+  min-height: 52px;
+  margin-top: var(--s-2);
+  padding: 0 var(--s-5);
+  font-size: var(--fs-md);
+  border: 1px solid var(--line-strong);
+  background: var(--stage-1);
+}
+.suggestions { display: grid; gap: var(--s-3); width: 100%; max-width: 960px; margin: 0 auto; }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-4) var(--s-3); }
+.card {
+  display: grid;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  min-width: 0;
+}
+.artWrap { position: relative; display: block; aspect-ratio: 1; margin-bottom: var(--s-2); border-radius: var(--r-md); overflow: hidden; box-shadow: var(--shadow-1); }
+.art { width: 100%; height: 100%; object-fit: cover; display: block; }
 .playOverlay {
   position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  right: var(--s-2);
+  bottom: var(--s-2);
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--on-ink);
+  box-shadow: var(--shadow-2);
   opacity: 0;
-  transition: opacity 0.25s var(--ease-out);
-  color: #fff;
-  font-size: 1.2rem;
+  transform: translateY(4px);
+  transition: opacity var(--dur-2) var(--ease), transform var(--dur-2) var(--ease);
 }
+.card:hover .playOverlay, .card:focus-visible .playOverlay { opacity: 1; transform: none; }
+.cardTitle { font-weight: 700; font-size: var(--fs-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cardArtist { color: var(--ink-2); font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.skeletonCard { display: grid; gap: var(--s-2); }
+.skeletonArt { aspect-ratio: 1; border-radius: var(--r-md); }
+.skeletonLine { height: 12px; width: 80%; }
+.short { width: 50%; }
 
-.card:hover .playOverlay {
-  opacity: 1;
+@media (hover: none) { .playOverlay { opacity: 1; transform: none; width: 36px; height: 36px; } }
+@media (min-width: 600px) { .container { padding: var(--s-7) var(--s-5); } }
+@media (min-width: 900px) {
+  .container { padding: var(--s-7) var(--s-6); }
+  .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s-5) var(--s-4); }
 }
-
-.cardTitle {
-  font-weight: 600;
-  font-size: 0.82rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.cardArtist {
-  font-size: 0.72rem;
-  color: var(--text-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.branding {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--spacing-md) 0;
-  opacity: 0.12;
-  transition: opacity 0.3s ease;
-}
-
-.branding:hover {
-  opacity: 0.3;
-}
-
-.brandingLogo {
-  height: 24px;
-  width: auto;
-}
-
-/* Skeletons */
-.skeletonCard {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 8px;
-}
-
-.skeletonArt {
-  width: 100%;
-  aspect-ratio: 1;
-  border-radius: var(--radius-sm);
-  background: linear-gradient(90deg, var(--surface) 25%, var(--surface-hover) 50%, var(--surface) 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.8s infinite ease-in-out;
-}
-
-.skeletonTitle {
-  height: 12px;
-  width: 75%;
-  border-radius: 3px;
-  background: linear-gradient(90deg, var(--surface) 25%, var(--surface-hover) 50%, var(--surface) 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.8s infinite ease-in-out;
-}
-
-.skeletonArtist {
-  height: 10px;
-  width: 50%;
-  border-radius: 3px;
-  background: linear-gradient(90deg, var(--surface) 25%, var(--surface-hover) 50%, var(--surface) 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.8s infinite ease-in-out;
-}
-
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-}
-
-/* Large screens / projector / beamer */
-@media (min-width: 1440px) {
-  .grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--spacing-lg); max-width: 900px; }
-  .title { font-size: 1.8rem; }
-  .subtitle { font-size: 1rem; }
-  .cardTitle { font-size: 0.95rem; }
-  .cardArtist { font-size: 0.82rem; }
-  .playOverlay { font-size: 1.5rem; }
-  .brandingLogo { height: 32px; }
-  .emptyLogo { height: 64px; }
-}
-
-.card { color: var(--text); text-align: left; font: inherit; }

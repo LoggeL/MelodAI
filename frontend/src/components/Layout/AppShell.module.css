@@ -1,0 +1,3 @@
+.shell { background: var(--stage-0); color: var(--ink); }
+.top { position: sticky; top: 0; z-index: var(--z-header); }
+.narrow { max-width: 960px; }

@@ -1,11 +1,8 @@
-import { useState, useCallback } from 'react'
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import {
-  faMusic, faGripVertical, faRotateRight, faXmark,
-  faDice, faShuffle, faTrashCan, faPlay, faVolumeHigh,
-} from '@fortawesome/free-solid-svg-icons'
-import { Modal } from '../common/Modal'
+import { useState, type CSSProperties } from 'react'
+import { Icon } from '../common/Icon'
+import { Cover } from '../common/Cover'
 import type { QueueItem } from '../../types'
+import { pipelineLabel } from '../../utils/pipeline'
 import styles from './QueuePanel.module.css'
 
 interface Props {
@@ -16,74 +13,58 @@ interface Props {
   onReorder: (from: number, to: number) => void
   onRetry: (index: number) => void
   onRandom: () => void
-  onShuffle: () => void
-  onClear: () => void
+  /** Opens the search from the empty state. */
+  onSearch?: () => void
 }
 
-export function QueuePanel({
-  queue, currentIndex, onPlay, onRemove, onReorder, onRetry,
-  onRandom, onShuffle, onClear,
-}: Props) {
+/** Setlist rows (§5.5). The header with the actions lives in SetlistHead. */
+export function QueuePanel({ queue, currentIndex, onPlay, onRemove, onReorder, onRetry, onRandom, onSearch }: Props) {
   const [dragIdx, setDragIdx] = useState<number | null>(null)
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null)
-  const [showConfirm, setShowConfirm] = useState(false)
 
-  const handleClear = useCallback(() => {
-    if (queue.length === 0) return
-    setShowConfirm(true)
-  }, [queue])
+  if (queue.length === 0) {
+    return (
+      <div className="emptyState">
+        <Icon name="queue" size={48} />
+        <h3>Die Setlist ist leer.</h3>
+        <p>Such dir einen Song aus oder lass den Zufall entscheiden.</p>
+        <div className="actions">
+          {onSearch && <button type="button" className="btn btn--primary" onClick={onSearch}><Icon name="search" /> Song suchen</button>}
+          <button type="button" className="btn" onClick={onRandom}><Icon name="dice" /> Zufälligen Song hinzufügen</button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <>
-      {queue.length > 0 && (
-        <div className={styles.queueActions}>
-          <span className={styles.queueCount}>{queue.length} song{queue.length !== 1 ? 's' : ''}</span>
-          <div className={styles.actionBtns}>
-            <button className={styles.actionBtn} onClick={onRandom} title="Add random song">
-              <FontAwesomeIcon icon={faDice} />
-            </button>
-            <button className={styles.actionBtn} onClick={onShuffle} title="Shuffle queue">
-              <FontAwesomeIcon icon={faShuffle} />
-            </button>
-            <button className={`${styles.actionBtn} ${styles.actionBtnDanger}`} onClick={handleClear} title="Clear queue">
-              <FontAwesomeIcon icon={faTrashCan} />
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className={styles.list}>
-        {queue.length === 0 && (
-          <div className={styles.emptyState}>
-            <div className={styles.emptyIcon}><FontAwesomeIcon icon={faMusic} /></div>
-            <h3>Nothing in queue</h3>
-            <p>Search for a song or pick from the library</p>
-          </div>
-        )}
+      <ol className={styles.list} aria-label="Setlist">
         {queue.map((item, i) => {
           const isActive = i === currentIndex
+          const processing = !item.ready && !item.error
           const cls = [
             styles.item,
             isActive ? styles.active : '',
             item.error ? styles.error : '',
-            !item.ready && !item.error ? styles.processing : '',
+            processing ? styles.processing : '',
             dragIdx === i ? styles.dragging : '',
             dragOverIdx === i ? styles.dragOver : '',
           ].filter(Boolean).join(' ')
+          const state = isActive ? ', läuft gerade' : item.error ? ', Fehler' : processing ? `, ${pipelineLabel(item.status, item.progress)}` : ''
 
           return (
-            <div
+            <li
               key={item.id + '-' + i}
               className={cls}
               tabIndex={0}
-              aria-label={`${item.title} by ${item.artist}${isActive ? ', current song' : ''}`}
+              aria-label={`${i + 1}. ${item.title}${item.artist ? ` von ${item.artist}` : ''}${state}`}
+              aria-current={isActive ? 'true' : undefined}
               onKeyDown={event => {
                 if (event.target !== event.currentTarget) return
                 if ((event.key === 'Enter' || event.key === ' ') && item.ready) { event.preventDefault(); onPlay(i) }
                 if (event.altKey && event.key === 'ArrowUp' && i > 0) { event.preventDefault(); onReorder(i, i - 1) }
                 if (event.altKey && event.key === 'ArrowDown' && i < queue.length - 1) { event.preventDefault(); onReorder(i, i + 1) }
               }}
-              title="Enter to play. Alt + Up or Down to reorder."
               draggable
               onDragStart={() => setDragIdx(i)}
               onDragEnd={() => { setDragIdx(null); setDragOverIdx(null) }}
@@ -97,67 +78,37 @@ export function QueuePanel({
               }}
               onClick={() => item.ready && onPlay(i)}
             >
-              <div className={styles.grip}><FontAwesomeIcon icon={faGripVertical} /></div>
-
-              <div className={styles.thumbWrap}>
-                <img className={styles.thumb} src={item.thumbnail || '/logo.svg'} alt="" loading="lazy" />
-                {isActive && (
-                  <div className={styles.eqBars}>
-                    <span /><span /><span />
-                  </div>
-                )}
-                {!isActive && item.ready && (
-                  <div className={styles.playOverlay}>
-                    <FontAwesomeIcon icon={faPlay} />
-                  </div>
-                )}
-              </div>
-
-              <div className={styles.info}>
-                <div className={styles.titleRow}>
-                  {isActive && (
-                    <FontAwesomeIcon icon={faVolumeHigh} className={styles.nowIcon} />
-                  )}
-                  <span className={styles.title}>{item.title}</span>
-                </div>
-                <div className={styles.artist}>{item.artist}</div>
-                {item.error && <div className={styles.status} style={{ color: 'var(--danger)' }}>Error</div>}
-                {!item.ready && !item.error && (
-                  <>
-                    <div className={styles.status}>{item.status}</div>
-                    <div className={styles.progressBar}>
-                      <div className={styles.progressFill} style={{ width: `${item.progress}%` }} />
-                    </div>
-                  </>
-                )}
-              </div>
-
-              <div className={styles.actions} onClick={e => e.stopPropagation()}>
+              <span className={styles.grip} aria-hidden="true"><Icon name="grip" size={16} /></span>
+              <span className={styles.pos} aria-hidden="true">
+                {isActive ? <span className={styles.eqBars}><i /><i /><i /></span> : String(i + 1).padStart(2, '0')}
+              </span>
+              <Cover className={styles.thumb} src={item.thumbnail} />
+              <span className={styles.info}>
+                <span className={styles.title}>{item.title}</span>
+                <span className={styles.artist}>{item.artist}</span>
+                {processing && <span className={`meter meter--inst meter--thin ${styles.bar}`} aria-hidden="true"><i style={{ '--v': `${item.progress}%` } as CSSProperties} /></span>}
+              </span>
+              <span className={styles.slot} onClick={e => e.stopPropagation()}>
+                {isActive && <span className="chip chip--live chip--solid">Läuft</span>}
+                {processing && <span className="chip chip--work">{Math.round(item.progress)} %</span>}
                 {item.error && (
-                  <button className={styles.removeBtn} onClick={() => onRetry(i)} title="Retry" aria-label={`Retry ${item.title}`}>
-                    <FontAwesomeIcon icon={faRotateRight} />
+                  <button type="button" className="btn btn--sm" onClick={() => onRetry(i)} aria-label={`${item.title} erneut versuchen`}>
+                    <Icon name="redo" size={16} /> Erneut
                   </button>
                 )}
                 {!isActive && (
-                  <button className={styles.removeBtn} onClick={() => onRemove(i)} title="Remove" aria-label={`Remove ${item.title} from queue`}>
-                    <FontAwesomeIcon icon={faXmark} />
+                  <button type="button" className={`iconbtn iconbtn--sm ${styles.remove}`} onClick={() => onRemove(i)}
+                    title="Entfernen" aria-label={`${item.title} aus der Setlist entfernen`}>
+                    <Icon name="x" size={18} />
                   </button>
                 )}
-              </div>
-            </div>
+              </span>
+              {item.error && <span className={styles.errorLine}>Konnte nicht vorbereitet werden.</span>}
+            </li>
           )
         })}
-      </div>
-
-      {showConfirm && (
-        <Modal title="Clear queue?" size="small" onClose={() => setShowConfirm(false)}
-          footer={<>
-            <button className="button" onClick={() => setShowConfirm(false)}>Cancel</button>
-            <button className="button button-danger" onClick={() => { onClear(); setShowConfirm(false) }}>Clear queue</button>
-          </>}>
-          <p>Remove all songs except the currently selected one?</p>
-        </Modal>
-      )}
+      </ol>
+      <p className={styles.hint}>Ziehen oder Alt + ↑↓ zum Sortieren</p>
     </>
   )
 }

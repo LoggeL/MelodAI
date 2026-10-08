@@ -28,7 +28,7 @@ export function restoreQueue(items: unknown, selectedIndex: unknown): QueueSelec
     const id = normalizeTrackId(item.id)
     if (seen.has(id)) return []
     seen.add(id)
-    return [queueItem({ id, title: typeof item.title === 'string' ? item.title : 'Unknown song', artist: typeof item.artist === 'string' ? item.artist : '', thumbnail: typeof item.thumbnail === 'string' ? item.thumbnail : '' })]
+    return [queueItem({ id, title: typeof item.title === 'string' ? item.title : 'Unbekannter Song', artist: typeof item.artist === 'string' ? item.artist : '', thumbnail: typeof item.thumbnail === 'string' ? item.thumbnail : '' })]
   })
   return { queue, currentIndex: selectedId ? queue.findIndex(item => item.id === selectedId) : -1 }
 }

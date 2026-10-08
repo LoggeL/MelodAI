@@ -1,0 +1,107 @@
+/* MelodAI design tokens („Bühne“). The only file that defines colours, sizes,
+   radii, durations and z-indexes. Component CSS uses var(--…) exclusively.
+   Theme: :root = Nacht (dark, default), [data-theme="light"] = Tageslicht.
+   [data-theme] works on any element; Bühnenmodus forces dark locally. */
+
+@font-face {
+  font-family: 'Archivo Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400 900;
+  font-stretch: 80% 118%;
+  src: url('../assets/fonts/archivo-wdth-latin.woff2') format('woff2-variations'), url('../assets/fonts/archivo-wdth-latin.woff2') format('woff2');
+}
+@font-face { font-family: 'JetBrains Mono'; font-style: normal; font-display: swap; font-weight: 400; src: url('../assets/fonts/jetbrains-mono-400.woff2') format('woff2'); }
+@font-face { font-family: 'JetBrains Mono'; font-style: normal; font-display: swap; font-weight: 500; src: url('../assets/fonts/jetbrains-mono-500.woff2') format('woff2'); }
+@font-face { font-family: 'JetBrains Mono'; font-style: normal; font-display: swap; font-weight: 600; src: url('../assets/fonts/jetbrains-mono-600.woff2') format('woff2'); }
+/* Arial tuned to Archivo's line box (typo metrics 878 / 210 / 0 per 1000, divided by size-adjust) so the swap does not shift lines. */
+@font-face { font-family: 'Archivo Fallback'; src: local('Arial'), local('ArialMT'), local('Liberation Sans'); size-adjust: 98%; ascent-override: 89.6%; descent-override: 21.4%; line-gap-override: 0%; }
+
+:root {
+  /* type */
+  --font: 'Archivo Variable', 'Archivo', 'Archivo Fallback', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --wdth-ui: 100; --wdth-lyric: 82; --wdth-marquee: 116;
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.875rem;
+  --fs-md: 1rem;
+  --fs-lg: 1.25rem;
+  --fs-xl: 1.75rem;
+  --fs-2xl: clamp(2.25rem, 1.4rem + 2.4vw, 3.75rem);
+  --fs-lyric-near: clamp(1.375rem, 0.85rem + 1.55vw, 3rem);
+  --fs-lyric: clamp(2.125rem, 0.9rem + 3.4vw, 6rem);
+  --lyric-mode: 1;
+  --lyric-user: 1;
+  --lyric-fit: 1;
+  --lh-tight: 1.08; --lh-lyric: 1.14; --lh-body: 1.5;
+
+  /* spacing (4-pt) */
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 24px; --s-6: 32px; --s-7: 48px; --s-8: 64px;
+
+  /* radii */
+  --r-sm: 6px; --r-md: 10px; --r-lg: 18px; --r-pill: 999px;
+
+  /* motion */
+  --ease: cubic-bezier(.2, .8, .2, 1);
+  --dur-1: 120ms; --dur-2: 220ms; --dur-3: 480ms;
+
+  /* layout */
+  --header-h: 64px; --desk-h: 136px; --desk-mobile-h: 128px; --setlist-w: 360px; --page-max: 1440px; --tap: 44px;
+  --z-header: 30; --z-desk: 40; --z-drawer: 60; --z-popover: 70; --z-dialog: 80; --z-toast: 90;
+}
+
+/* Nacht (dark) — default */
+:root, [data-theme="dark"] {
+  color-scheme: dark;
+  --stage-0: #0A090C;  --stage-1: #131116;  --stage-2: #1C1920;  --stage-3: #2A2630;
+  --line: #2E2A34;
+  --line-strong: #6F6878;
+  --ink: #F6F1E9;  --ink-2: #CFC8BE;  --muted: #A29AA6;
+  --lyric-next: #C9C1B7;  --lyric-dim: #958E99;
+  --vocal: #FF5468;  --vocal-strong: #D81E3A;  --vocal-tint: rgba(255, 84, 104, .14);
+  --inst: #7C9DFF;   --inst-strong: #3E63D6;   --inst-tint: rgba(124, 157, 255, .14);
+  --spot: #FFD48A;  --spot-glow: rgba(255, 212, 138, .13);  --spot-beam: rgba(255, 226, 170, .075);
+  --ok: #5FD38D;  --warn: #FFC15E;
+  --on-ink: #0A090C;  --on-strong: #FFFFFF;
+  --focus: #FFD48A;
+  --backdrop-opacity: .18;  --backdrop-bright: .7;
+  --album-a: #2A2630; --album-b: #131116;
+  --shadow-1: 0 1px 0 rgba(255,255,255,.04) inset, 0 1px 2px rgba(0,0,0,.5);
+  --shadow-2: 0 18px 48px rgba(0,0,0,.55), 0 2px 6px rgba(0,0,0,.4);
+  --shadow-inset: inset 0 1px 2px rgba(0, 0, 0, .35);
+  --scrim: rgba(5, 4, 7, .72);
+  --fader-cap: #CFC8BE;
+}
+
+/* Tageslicht (light) */
+[data-theme="light"] {
+  color-scheme: light;
+  --stage-0: #F3EEE6;  --stage-1: #FBF8F3;  --stage-2: #FFFFFF;  --stage-3: #E9E2D7;
+  --line: #E0D8CC;  --line-strong: #8A8178;
+  --ink: #18141C;  --ink-2: #3F3943;  --muted: #625B66;
+  --lyric-next: #4A444E;  --lyric-dim: #67615C;
+  --vocal: #C4122F;  --vocal-strong: #C4122F;  --vocal-tint: rgba(196, 18, 47, .09);
+  --inst: #2A4FA8;   --inst-strong: #2A4FA8;   --inst-tint: rgba(42, 79, 168, .09);
+  --spot: #B86E00;  --spot-glow: rgba(255, 196, 92, .16);  --spot-beam: rgba(255, 205, 120, .10);
+  --ok: #126B3D;  --warn: #8C5300;
+  --on-ink: #FBF8F3;  --on-strong: #FFFFFF;
+  --focus: #2A4FA8;
+  --backdrop-opacity: .06;  --backdrop-bright: 1.15;
+  --album-a: #E9E2D7; --album-b: #FBF8F3;
+  --shadow-1: 0 1px 2px rgba(40, 28, 10, .08);
+  --shadow-2: 0 18px 48px rgba(40, 28, 10, .16), 0 2px 6px rgba(40, 28, 10, .08);
+  --shadow-inset: inset 0 1px 2px rgba(40, 28, 10, .14);
+  --scrim: rgba(40, 32, 24, .42);
+  --fader-cap: #FFFFFF;
+}
+
+@media (max-width: 599px) {
+  :root {
+    --header-h: 56px;
+    --fs-lyric: clamp(2.375rem, 1.6rem + 3vw, 3.5rem);
+    --fs-lyric-near: clamp(1.375rem, 1.1rem + 1vw, 1.75rem);
+  }
+}
+@media (max-width: 899px) {
+  :root { --header-h: 56px; }
+}

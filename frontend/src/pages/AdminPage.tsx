@@ -1,9 +1,12 @@
-import { useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faArrowLeft, faUsers, faKey, faChartBar, faMusic, faServer, faExclamationTriangle, faList } from '@fortawesome/free-solid-svg-icons'
 import { useAuth } from '../hooks/useAuth'
+import { admin } from '../services/api'
+import { AppShell } from '../components/Layout/AppShell'
+import { Icon } from '../components/common/Icon'
+import type { IconName } from '../components/common/icons'
 import { PageState } from '../components/common/PageState'
+import { formatInt } from '../utils/format'
 import { SongDetailView } from './SongDetailView'
 import styles from './AdminPage.module.css'
 import { UsersTab } from './admin/UsersTab'
@@ -16,15 +19,35 @@ import { ErrorsTab } from './admin/ErrorsTab'
 
 type Tab = 'users' | 'keys' | 'usage' | 'songs' | 'status' | 'logs' | 'errors'
 
-const TAB_CONFIG: { key: Tab; label: string; icon: typeof faUsers }[] = [
-  { key: 'users', label: 'Users', icon: faUsers },
-  { key: 'keys', label: 'Keys', icon: faKey },
-  { key: 'usage', label: 'Usage', icon: faChartBar },
-  { key: 'songs', label: 'Songs', icon: faMusic },
-  { key: 'status', label: 'Status', icon: faServer },
-  { key: 'logs', label: 'Logs', icon: faList },
-  { key: 'errors', label: 'Errors', icon: faExclamationTriangle },
+const TAB_CONFIG: { key: Tab; label: string; icon: IconName; lead: string }[] = [
+  { key: 'users', label: 'Nutzer', icon: 'users', lead: 'Konten freigeben, Rollen und Credits verwalten.' },
+  { key: 'keys', label: 'Schlüssel', icon: 'key', lead: 'Mit einem Einladungsschlüssel ist ein neues Konto sofort freigeschaltet.' },
+  { key: 'usage', label: 'Nutzung', icon: 'chart', lead: 'Wer hat was gesucht, gesungen und heruntergeladen.' },
+  { key: 'songs', label: 'Songs', icon: 'music', lead: 'Alle verarbeiteten Songs. Handlungsbedarf steht oben.' },
+  { key: 'status', label: 'Status', icon: 'server', lead: 'Speicher, Deezer-Zugang, Dienste und laufende Verarbeitung.' },
+  { key: 'logs', label: 'Logs', icon: 'doc', lead: 'Anwendungsprotokoll. Aktualisiert sich alle 15 Sekunden.' },
+  { key: 'errors', label: 'Fehler', icon: 'alert', lead: 'Fehler aus Pipeline und API. Erledigte kannst du aufräumen.' },
 ]
+
+/** Pending approvals and open errors for the red tab badges: loaded once, refreshed after a tab changes them. */
+function useBackstageCounts(enabled: boolean) {
+  const [counts, setCounts] = useState<{ pending: number; errors: number }>({ pending: 0, errors: 0 })
+  const [version, setVersion] = useState(0)
+  useEffect(() => {
+    if (!enabled) return
+    let cancelled = false
+    void Promise.allSettled([admin.users(), admin.errors(1, undefined, '0')]).then(([users, errors]) => {
+      if (cancelled) return
+      setCounts(previous => ({
+        pending: users.status === 'fulfilled' ? users.value.filter(user => !user.is_approved).length : previous.pending,
+        errors: errors.status === 'fulfilled' ? errors.value.total : previous.errors,
+      }))
+    })
+    return () => { cancelled = true }
+  }, [enabled, version])
+  const refresh = useCallback(() => setVersion(v => v + 1), [])
+  return { counts, refresh }
+}
 
 export function AdminPage() {
   const { checked, authenticated, isAdmin } = useAuth()
@@ -42,48 +65,53 @@ export function AdminPage() {
     if (['users', 'keys', 'usage', 'songs', 'status', 'logs', 'errors'].includes(path)) return path as Tab
     return 'users'
   }, [location.pathname, songDetailId])
+  const { counts, refresh: refreshCounts } = useBackstageCounts(checked && authenticated && isAdmin)
+  const current = TAB_CONFIG.find(t => t.key === tab)!
 
   useEffect(() => {
     if (checked && !authenticated) navigate('/login', { replace: true, state: { from: location.pathname } })
   }, [checked, authenticated, navigate, location.pathname])
 
-  if (!checked || !authenticated) return <PageState title="Checking your account" loading />
-  if (!isAdmin) return <PageState title="Admin access required" description="Your account does not have permission to view this page." action={<Link to="/">Back to player</Link>} />
+  if (!checked || !authenticated) return <PageState title="Konto wird geprüft …" loading />
+  if (!isAdmin) return <AppShell narrow><PageState icon="shield" kicker="Backstage" title="Nur für Admins." description="Dein Konto hat keinen Zugang zu diesem Bereich." action={<Link className="btn" to="/">Zur Bühne</Link>} /></AppShell>
 
   return (
-    <main className={styles.page}>
-      <div className={styles.container}>
-        {!songDetailId && (
-          <>
-            <div className={styles.header}>
-              <h1 className={styles.title}>Admin Panel</h1>
-              <Link to="/" className={styles.backBtn}><FontAwesomeIcon icon={faArrowLeft} /> Back to Player</Link>
+    <AppShell>
+      {songDetailId ? (
+        <SongDetailView key={songDetailId} trackId={songDetailId} />
+      ) : (
+        <>
+          <header className="page-head">
+            <div>
+              <span className="kicker">Backstage · {current.label}</span>
+              <h1>Admin</h1>
+              <p>{current.lead}</p>
             </div>
+          </header>
 
-            <nav className={styles.nav} aria-label="Admin sections">
-              {TAB_CONFIG.map(t => (
-                <Link to={'/admin/' + t.key} aria-current={tab === t.key ? 'page' : undefined} key={t.key} className={`${styles.navTab} ${tab === t.key ? styles.navTabActive : ''}`}>
-                  <FontAwesomeIcon icon={t.icon} /> {t.label}
+          <nav className={styles.nav} aria-label="Admin-Bereiche">
+            {TAB_CONFIG.map(t => {
+              const count = t.key === 'users' ? counts.pending : t.key === 'errors' ? counts.errors : 0
+              return (
+                <Link to={'/admin/' + t.key} aria-current={tab === t.key ? 'page' : undefined} key={t.key} data-testid={`admin-tab-${t.key}`}
+                  className={`${styles.navTab} ${tab === t.key ? styles.navTabActive : ''}`}>
+                  <Icon name={t.icon} size={18} />
+                  <span>{t.label}</span>
+                  {count > 0 && <span className={`badge badge--soft ${styles.navCount}`} aria-label={t.key === 'users' ? `${count} Freigaben ausstehend` : `${count} offene Fehler`}>{formatInt(count)}</span>}
                 </Link>
-              ))}
-            </nav>
-          </>
-        )}
+              )
+            })}
+          </nav>
 
-        {songDetailId ? (
-          <SongDetailView key={songDetailId} trackId={songDetailId} />
-        ) : (
-          <>
-            {tab === 'users' && <UsersTab />}
-            {tab === 'keys' && <KeysTab />}
-            {tab === 'usage' && <UsageTab />}
-            {tab === 'songs' && <SongsTab />}
-            {tab === 'status' && <StatusTab />}
-            {tab === 'logs' && <LogsTab />}
-            {tab === 'errors' && <ErrorsTab />}
-          </>
-        )}
-      </div>
-    </main>
+          {tab === 'users' && <UsersTab onChanged={refreshCounts} />}
+          {tab === 'keys' && <KeysTab />}
+          {tab === 'usage' && <UsageTab />}
+          {tab === 'songs' && <SongsTab />}
+          {tab === 'status' && <StatusTab />}
+          {tab === 'logs' && <LogsTab />}
+          {tab === 'errors' && <ErrorsTab onChanged={refreshCounts} />}
+        </>
+      )}
+    </AppShell>
   )
 }

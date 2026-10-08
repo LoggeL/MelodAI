@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SeparationStatus } from '../../../types'
-import { resplitAction, resplitSummary, workerLabel } from '../resplit'
+import { resplitAction, resplitDetail, resplitSummary, workerLabel } from '../resplit'
 
 function status(batch: Partial<SeparationStatus['batch']>, extra: Partial<SeparationStatus> = {}): SeparationStatus {
   return {
@@ -14,10 +14,10 @@ function status(batch: Partial<SeparationStatus['batch']>, extra: Partial<Separa
 
 describe('re-split panel helpers', () => {
   it('summarises progress', () => {
-    expect(resplitSummary(status({}).batch)).toBe('No re-split has run yet.')
+    expect(resplitSummary(status({}).batch)).toBe('Bisher lief noch keine Neutrennung.')
     expect(resplitSummary(status({ status: 'running', total: 213, counts: { done: 10, skipped: 2, failed: 1, pending: 200 } }).batch))
-      .toBe('13 of 213 songs processed · 10 re-split · 2 already current · 1 failed')
-    expect(resplitSummary(status({ status: 'done', total: 1, counts: { done: 1 } }).batch)).toBe('1 of 1 song processed · 1 re-split')
+      .toBe('13 von 213 Songs verarbeitet · 10 neu getrennt · 2 schon aktuell · 1 fehlgeschlagen')
+    expect(resplitSummary(status({ status: 'done', total: 1, counts: { done: 1 } }).batch)).toBe('1 von 1 Song verarbeitet · 1 neu getrennt')
   })
 
   it('offers start, resume or stop', () => {
@@ -30,9 +30,16 @@ describe('re-split panel helpers', () => {
   })
 
   it('describes the worker', () => {
-    expect(workerLabel(status({}))).toBe('Local worker ready · resurrection, kernels, bf16')
+    expect(workerLabel(status({}))).toBe('Lokaler Worker bereit · resurrection, kernels, bf16')
     expect(workerLabel(status({}, { worker: { available: false, state: 'stopped', error: 'turbo-roformer is not installed' } })))
-      .toBe('Local worker unavailable (turbo-roformer is not installed); new songs fall back to Replicate Demucs.')
-    expect(workerLabel(status({}, { split_backend: 'replicate' }))).toBe('Local separation is off; new songs use Replicate Demucs.')
+      .toBe('Lokaler Worker nicht verfügbar (turbo-roformer is not installed). Neue Songs nutzen ersatzweise Replicate Demucs.')
+    expect(workerLabel(status({}, { split_backend: 'replicate' }))).toBe('Lokale Trennung ist aus. Neue Songs nutzen Replicate Demucs.')
+  })
+
+  it('translates the per-song progress detail', () => {
+    expect(resplitDetail('Separating vocals (3/12)...')).toBe('Trennt Gesang (3/12) …')
+    expect(resplitDetail('Waiting in queue (position 2)...')).toBe('Wartet in der Warteschlange (Platz 2) …')
+    expect(resplitDetail('Loading separation model...')).toBe('Lädt das Trennmodell …')
+    expect(resplitDetail('something new')).toBe('something new')
   })
 })

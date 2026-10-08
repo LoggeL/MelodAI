@@ -1,0 +1,145 @@
+/* Shared fader (§5.12). --c = channel colour, --v = value in %, --vn = 0…1 */
+.fader {
+  --c: var(--vocal);
+  --cap-w: 22px;
+  --cap-h: 34px;
+  --fill: calc(var(--cap-w) / 2 + (100% - var(--cap-w)) * var(--vn));
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto 36px;
+  align-items: center;
+  column-gap: var(--s-3);
+  width: 280px;
+  min-width: 0;
+}
+.inst { --c: var(--inst); }
+.label { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: var(--fs-md); color: var(--ink); white-space: nowrap; }
+.label :global(.icon) { color: var(--c); }
+.value { justify-self: end; font: 600 var(--fs-sm)/1 var(--mono); color: var(--ink-2); font-feature-settings: 'tnum'; }
+.off.vocal .value, .off.vocal .big { color: var(--vocal); }
+.off.inst .value, .off.inst .big { color: var(--muted); }
+.trackWrap { grid-column: 1 / -1; position: relative; height: 36px; display: flex; align-items: center; }
+.ends {
+  position: absolute;
+  inset: 0 calc(var(--cap-w) / 2);
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(90deg, var(--line) 0 1px, transparent 1px 10%) 0 2px / calc(100% + 1px) 6px no-repeat,
+    repeating-linear-gradient(90deg, var(--line) 0 1px, transparent 1px 10%) 0 calc(100% - 2px) / calc(100% + 1px) 6px no-repeat;
+}
+
+.range {
+  position: relative;
+  width: 100%;
+  height: 36px;
+  margin: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  touch-action: none;
+}
+.range:focus-visible { outline: none; }
+.range:focus-visible::-webkit-slider-thumb { outline: 3px solid var(--focus); outline-offset: 2px; }
+.range:focus-visible::-moz-range-thumb { outline: 3px solid var(--focus); outline-offset: 2px; }
+.range::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: linear-gradient(90deg, var(--c) var(--fill), var(--stage-3) var(--fill));
+  box-shadow: var(--shadow-inset);
+}
+.range::-moz-range-track { height: 6px; border-radius: var(--r-pill); background: var(--stage-3); box-shadow: var(--shadow-inset); }
+.range::-moz-range-progress { height: 6px; border-radius: var(--r-pill); background: var(--c); }
+.range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: var(--cap-w);
+  height: var(--cap-h);
+  margin-top: calc((6px - var(--cap-h)) / 2);
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  background:
+    linear-gradient(90deg, transparent calc(50% - 1.5px), var(--c) calc(50% - 1.5px) calc(50% + 1.5px), transparent calc(50% + 1.5px)) center / 100% 70% no-repeat,
+    var(--fader-cap);
+  box-shadow: var(--shadow-1);
+}
+.range::-moz-range-thumb {
+  width: var(--cap-w);
+  height: var(--cap-h);
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  background:
+    linear-gradient(90deg, transparent calc(50% - 1.5px), var(--c) calc(50% - 1.5px) calc(50% + 1.5px), transparent calc(50% + 1.5px)) center / 100% 70% no-repeat,
+    var(--fader-cap);
+  box-shadow: var(--shadow-1);
+}
+.range:disabled { opacity: .45; cursor: not-allowed; }
+
+/* Compact: [label][track][value] in one 36 px row (desk between 900 and 1439 px) */
+.compact { grid-template-columns: 124px minmax(0, 1fr) 48px; grid-template-rows: 36px; width: 100%; }
+.compact .label { font-size: var(--fs-sm); }
+.compact .trackWrap { grid-column: 2; grid-row: 1; }
+.compact .value { grid-column: 3; grid-row: 1; }
+.compact { --cap-h: 28px; --cap-w: 18px; }
+
+/* Vertical channel strip (Ton sheet) */
+.vertical {
+  --cap-w: 26px;
+  --cap-h: 44px;
+  --fill: calc(var(--cap-w) / 2 + (100% - var(--cap-w)) * var(--vn));
+  grid-template-columns: 1fr;
+  grid-template-rows: auto auto auto auto;
+  justify-items: center;
+  row-gap: var(--s-2);
+  width: 100%;
+  padding: var(--s-4) var(--s-3);
+  background: var(--stage-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  text-align: center;
+}
+.big { font: 600 var(--fs-xl)/1 var(--mono); color: var(--ink); font-feature-settings: 'tnum'; }
+.big small { font-size: var(--fs-sm); color: var(--muted); }
+.vertical .trackWrap { grid-column: auto; height: 236px; width: 100%; justify-content: center; gap: var(--s-3); }
+.vertical .range {
+  width: 44px;
+  height: 236px;
+  writing-mode: vertical-lr;
+  direction: rtl;
+}
+.vertical .range::-webkit-slider-runnable-track {
+  width: 6px;
+  height: 100%;
+  background: linear-gradient(0deg, var(--c) var(--fill), var(--stage-3) var(--fill));
+}
+.vertical .range::-moz-range-track { width: 6px; height: 100%; }
+.vertical .range::-moz-range-progress { width: 6px; }
+.vertical .range::-webkit-slider-thumb {
+  width: var(--cap-h);
+  height: var(--cap-w);
+  margin-top: 0;
+  margin-left: calc((6px - var(--cap-h)) / 2);
+  background:
+    linear-gradient(0deg, transparent calc(50% - 1.5px), var(--c) calc(50% - 1.5px) calc(50% + 1.5px), transparent calc(50% + 1.5px)) center / 70% 100% no-repeat,
+    var(--fader-cap);
+}
+.vertical .range::-moz-range-thumb {
+  width: var(--cap-h);
+  height: var(--cap-w);
+  background:
+    linear-gradient(0deg, transparent calc(50% - 1.5px), var(--c) calc(50% - 1.5px) calc(50% + 1.5px), transparent calc(50% + 1.5px)) center / 70% 100% no-repeat,
+    var(--fader-cap);
+}
+.scale {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: calc(100% - var(--cap-w));
+  font: 500 var(--fs-xs)/1 var(--mono);
+  color: var(--muted);
+  text-align: right;
+  background: repeating-linear-gradient(180deg, var(--line) 0 1px, transparent 1px 25%) right / 6px calc(100% + 1px) no-repeat;
+  padding-right: 10px;
+}
+.scale i { font-style: normal; }
+.vertical .label { font-size: clamp(1rem, 4.4vw, var(--fs-lg)); font-weight: 800; white-space: normal; min-width: 0; }
+.description { font-size: var(--fs-sm); color: var(--ink-2); line-height: 1.35; max-width: 18ch; }

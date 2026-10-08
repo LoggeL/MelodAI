@@ -1,132 +1,130 @@
-.page { height: 100dvh; overflow-y: auto; background: var(--bg); }
-.container { max-width: 1100px; margin: 0 auto; padding: var(--spacing-lg) var(--spacing-lg) var(--spacing-2xl); }
-.header { display: flex; align-items: center; gap: var(--spacing-md); margin-bottom: var(--spacing-lg); }
-.headerInfo { flex: 1; min-width: 0; }
-.title { font-size: 2rem; font-weight: 800; color: var(--text); }
-.subtitle { font-size: .85rem; color: var(--text-secondary); margin-top: 4px; }
-.backBtn, .refreshBtn, .modeToggle, .viewToggleBtn, .listActionBtn, .listFavBtn, .playlistDeleteBtn, .addSongBtn {
-  display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex-shrink: 0;
-  border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text-secondary);
-  cursor: pointer; text-decoration: none; transition: background var(--transition), border-color var(--transition);
+/* Library (§4.5) */
+.toolbar { display: grid; gap: var(--s-3); margin-bottom: var(--s-5); }
+.tabs { overflow-x: auto; scrollbar-width: none; justify-self: start; max-width: 100%; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab { flex: none; padding: 0 10px; gap: 4px; }
+@media (min-width: 600px) { .tab { padding: 0 var(--s-4); gap: 6px; } }
+.tools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+.searchWrap { position: relative; flex: 1 1 260px; min-width: 0; display: flex; }
+.searchIcon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
+.filterInput {
+  width: 100%; height: 44px; padding: 0 var(--s-4) 0 42px;
+  border: 1px solid var(--line-strong); border-radius: var(--r-pill);
+  background: var(--stage-1); color: var(--ink); font-size: var(--fs-sm);
 }
-.backBtn:hover, .refreshBtn:hover, .modeToggle:hover, .viewToggleBtn:hover, .listActionBtn:hover, .listFavBtn:hover, .playlistDeleteBtn:hover, .addSongBtn:hover {
-  border-color: var(--primary); color: var(--primary); background: var(--primary-glow);
+.filterInput::placeholder { color: var(--muted); }
+.volume { display: inline-flex; align-items: center; gap: var(--s-2); color: var(--ink-2); }
+.volume input { width: 120px; accent-color: var(--ink); }
+.sort { flex: none; }
+.viewLabel { display: none; }
+
+/* ≥ 900: tabs, filter, sort and view toggle in one row (§4.5). */
+@media (min-width: 900px) {
+  .toolbar { display: flex; align-items: center; gap: var(--s-4); }
+  .tabs { flex: none; }
+  .tools { flex: 1 1 auto; flex-wrap: nowrap; justify-content: flex-end; min-width: 0; }
+  .searchWrap { flex: 1 1 12rem; max-width: 420px; }
+  .toolbarAdd .tools { justify-content: flex-start; }
+  .toolbarAdd .searchWrap { max-width: 640px; }
 }
-.creditsBadge { display: inline-flex; align-items: center; gap: 7px; padding: 8px 12px; border-radius: var(--radius-pill); border: 1px solid var(--border); color: var(--text-secondary); font-size: .8rem; white-space: nowrap; }
-.creditsBadge svg { color: var(--warning); }
-.pillRow { display: flex; gap: var(--spacing-xs); margin-bottom: var(--spacing-lg); flex-wrap: wrap; }
-.pill { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 9px 18px; border-radius: var(--radius-pill); border: 1px solid transparent; background: transparent; color: var(--text-secondary); font: 600 .85rem var(--font-body); cursor: pointer; }
-.pill:hover { background: var(--surface-hover); color: var(--text); }
-.pillActive, .pillActive:hover { background: var(--gradient); color: white; }
-.pillCount { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; padding: 2px 6px; border-radius: 20px; font-size: .72rem; background: var(--surface); }
-.pillActive .pillCount { background: rgba(255,255,255,.18); }
-.toolbar { display: flex; align-items: center; gap: var(--spacing-sm); margin-bottom: var(--spacing-lg); flex-wrap: wrap; }
-.searchWrap { flex: 1; min-width: 160px; position: relative; }
-.searchIcon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none; }
-.searchInput, .dialogInput { width: 100%; min-height: 44px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); font: .875rem var(--font-body); }
-.searchInput { padding-left: 40px; }
-.searchInput:focus, .dialogInput:focus { outline: 2px solid var(--primary); outline-offset: 2px; }
-.searchInput::placeholder, .dialogInput::placeholder { color: var(--text-muted); }
-.modeToggleLabel { width: auto; gap: 8px; padding-inline: 14px; font: 600 .8rem var(--font-body); }
-.modeToggleActive, .modeToggleActive:hover { background: var(--gradient); color: white; border-color: transparent; }
-.volumeWrap { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); }
-.volumeWrapVisible { min-height: 44px; }
-.volumeSlider { width: 70px; accent-color: var(--primary); }
-.viewToggle { display: flex; gap: 3px; }
-.viewToggleBtnActive, .listActionBtnActive, .listFavActive { color: var(--primary); border-color: var(--primary); background: var(--primary-glow); }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--spacing-md); }
-.card { position: relative; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; min-width: 0; }
-.card:hover { border-color: var(--border-strong); box-shadow: var(--shadow); }
-.cardPreviewing { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-glow); }
-.cardArt { position: relative; aspect-ratio: 1; overflow: hidden; }
-.cardArt img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.artPlayButton { display: block; border: 0; padding: 0; width: 100%; height: 100%; cursor: pointer; background: transparent; }
-.artPlayButton:focus-visible { outline-offset: -4px; }
-.karaokeHint { position: absolute; bottom: 12px; right: 12px; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%; background: rgba(0,0,0,.75); color: white; }
-.cardBody { padding: 12px; }
-.cardTitle, .listTitle { font: 600 .9rem var(--font-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); margin: 0; }
-.cardArtist, .listArtist { font-size: .8rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 3px; }
-.cardActions { display: flex; justify-content: space-between; gap: 6px; padding: 0 12px 12px; }
-.cardActions .listActionBtn, .cardActions .listFavBtn { flex: 1; min-width: 0; }
-.cardProcessing .cardArt img { filter: brightness(.35); }
-.processingOverlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 12px; }
-.processingProgress { font: 800 1.8rem var(--font-heading); color: white; }
-.processingDetail { font-size: .75rem; line-height: 1.5; color: white; text-align: center; overflow-wrap: anywhere; }
-.processingBar, .previewBar, .listPreviewBar, .listProcessingBar { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: var(--border); pointer-events: none; }
-.processingBarFill, .previewFill { height: 100%; background: var(--gradient); transition: width .3s ease; }
-.reprocessBtn, .listReprocessBtn { display: inline-flex; gap: 7px; align-items: center; justify-content: center; min-height: 44px; padding: 8px 14px; border: 1px solid var(--primary); border-radius: var(--radius-pill); background: var(--gradient); color: white; font: 600 .8rem var(--font-body); cursor: pointer; }
-.searchResultsHeader { margin-bottom: var(--spacing-md); color: var(--text-secondary); font-size: .85rem; }
-.deezerAddBtn { width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; padding: 8px; border: 0; border-radius: 8px; background: var(--gradient); color: white; font: 600 .8rem var(--font-body); cursor: pointer; }
-.listView { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
-.listHeader, .listRow { display: flex; align-items: center; gap: 14px; padding: 12px 16px; }
-.listHeader { font-size: .75rem; color: var(--text-secondary); background: var(--surface); }
-.listRow { position: relative; border-top: 1px solid var(--border); background: var(--bg-secondary); }
-.listRowPreviewing { background: var(--primary-glow); }
-.listColArt { width: 44px; flex-shrink: 0; }
-.listThumbWrap { width: 44px; height: 44px; position: relative; border-radius: 6px; overflow: hidden; }
-.listThumb { width: 44px; height: 44px; object-fit: cover; }
-.listThumbPlayOverlay { display: flex; position: absolute; inset: 0; align-items: center; justify-content: center; background: rgba(0,0,0,.4); color: white; }
-.listColTitle { flex: 2; min-width: 0; }
-.listColAlbum { flex: 1; min-width: 0; }
-.listAlbumText { display: block; font-size: .8rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.listColDuration { width: 56px; flex-shrink: 0; text-align: right; font: .8rem var(--font-body); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
-.listColActions { display: flex; gap: 4px; align-items: center; justify-content: flex-end; width: 140px; flex-shrink: 0; }
-.listStatusDetail, .listProcessing { color: var(--warning); font-size: .75rem; }
-.playlistsGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--spacing-md); }
-.playlistCard { position: relative; min-width: 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-secondary); overflow: hidden; }
-.playlistOpenButton { width: 100%; display: flex; flex-direction: column; padding: 0; border: 0; color: var(--text); background: transparent; text-align: left; cursor: pointer; }
-.playlistOpenButton:focus-visible { outline-offset: -4px; }
-.playlistCardMosaic { display: flex; align-items: center; justify-content: center; width: 100%; aspect-ratio: 1.65; font-size: 2.5rem; color: var(--primary); background: var(--primary-glow); }
-.playlistCardBody { display: flex; flex-direction: column; gap: 4px; width: 100%; padding: 14px; }
-.playlistCardName { font-size: .95rem; font-weight: 600; overflow-wrap: anywhere; }
-.playlistCardCount { font-size: .8rem; color: var(--text-secondary); }
-.playlistCardDelete { position: absolute; top: 8px; right: 8px; width: 40px; height: 40px; border: 1px solid var(--border); border-radius: 8px; color: var(--text-secondary); background: var(--bg-secondary); cursor: pointer; }
-.playlistCardDelete:hover { color: var(--danger); border-color: var(--danger); }
-.playlistNewCard { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; min-height: 200px; padding: 24px; border: 1px dashed var(--border-strong); border-radius: var(--radius); background: var(--surface); color: var(--text); cursor: pointer; }
-.playlistNewCard:hover { border-color: var(--primary); background: var(--primary-glow); }
-.playlistNewCardIcon { font-size: 1.5rem; color: var(--primary); }
-.playlistNewCardLabel { font: 600 .9rem var(--font-body); }
-.playlistDetailHeader { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: var(--spacing-lg); }
-.playlistBackBtn, .playlistAddSongsBtn { min-height: 44px; display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border: 1px solid var(--border); border-radius: var(--radius-pill); background: var(--surface); color: var(--text); font: 600 .8rem var(--font-body); cursor: pointer; }
-.playlistDetailInfo { flex: 1; min-width: 100px; }
-.playlistDetailName { font-size: 1.4rem; overflow-wrap: anywhere; }
-.playlistDetailCount { color: var(--text-secondary); font-size: .8rem; }
-.primaryButton, .secondaryButton, .dangerButton { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 10px 18px; border: 1px solid var(--border); border-radius: var(--radius-pill); font: 600 .85rem var(--font-body); cursor: pointer; }
-.primaryButton { color: white; background: var(--gradient); border-color: transparent; }
-.secondaryButton { color: var(--text); background: var(--surface); }
-.dangerButton { color: var(--danger); border-color: var(--danger); background: transparent; }
-.dialogForm { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; font-size: .85rem; }
-.dialogDescription { color: var(--text-secondary); font-size: .9rem; margin-bottom: 14px; overflow-wrap: anywhere; }
-.playlistChoices { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
-.playlistChoice { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; text-align: left; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font: .875rem var(--font-body); overflow-wrap: anywhere; cursor: pointer; }
-.playlistChoice:hover { border-color: var(--primary); }
-.addSongsList { display: flex; flex-direction: column; margin-top: 16px; }
-.addSongRow { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
-.addSongThumb { width: 44px; height: 44px; border-radius: 6px; object-fit: cover; }
-.addSongInfo { flex: 1; min-width: 0; }
-.addSongTitle { font-size: .9rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.addSongArtist { font-size: .8rem; color: var(--text-secondary); }
-@media (max-width: 700px) {
-  .container { padding: 16px 12px 32px; }
-  .header { gap: 10px; flex-wrap: wrap; }
-  .creditsBadge { font-size: .72rem; padding: 8px; }
-  .title { font-size: 1.7rem; }
-  .grid { grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); gap: 12px; }
-  .playlistsGrid { grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); gap: 12px; }
-  .listColAlbum, .listColDuration { display: none; }
-  .listHeader, .listRow { gap: 10px; padding: 10px; }
-  .listColActions { width: auto; }
-  .pill { padding-inline: 12px; }
+@media (min-width: 1440px) { .viewLabel { display: inline; } }
+
+/* Grid */
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-5) var(--s-3); }
+@media (min-width: 600px) { .grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--s-5) var(--s-4); } }
+@media (min-width: 900px) { .grid { grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); } }
+
+.card { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cardArt { position: relative; aspect-ratio: 1; border-radius: var(--r-md); overflow: hidden; margin-bottom: var(--s-2); box-shadow: var(--shadow-1); background: var(--stage-3); }
+.cardCover { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cardPlay {
+  position: absolute; right: var(--s-2); bottom: var(--s-2); width: 48px; height: 48px;
+  opacity: 0; transform: translateY(4px);
+  transition: opacity var(--dur-2) var(--ease), transform var(--dur-2) var(--ease);
 }
-@media (max-width: 440px) {
-  .headerInfo { min-width: 120px; }
-  .creditsBadge { order: 2; margin-left: 54px; }
-  .searchWrap { flex-basis: 100%; }
-  .modeToggleLabel { flex: 1; }
-  .listRow { display: grid; grid-template-columns: 44px minmax(0, 1fr); }
-  .listColActions { grid-column: 2; justify-content: flex-start; }
-  .listHeader .listColActions { display: none; }
-  .playlistDetailInfo { flex-basis: calc(100% - 140px); }
-  .cardBody { padding: 10px; }
-  .cardActions { padding-inline: 8px; gap: 3px; }
+.card:hover .cardPlay, .cardPlay:focus-visible { opacity: 1; transform: none; }
+@media (hover: none) { .cardPlay { opacity: 1; transform: none; width: 44px; height: 44px; } }
+.cardProcessing .cardCover { opacity: .55; }
+.cardState { position: absolute; inset: auto 0 0; display: grid; gap: var(--s-2); justify-items: start; padding: var(--s-2); }
+.cardState :global(.chip) { background: var(--stage-1); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; }
+.cardBar { width: 100%; }
+.previewBar { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 0; }
+.cardTitle {
+  font-size: var(--fs-sm); font-weight: 700; line-height: 1.25;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere;
 }
+.cardArtist { font-size: var(--fs-xs); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cardMeta { display: flex; align-items: center; justify-content: space-between; gap: var(--s-1); margin-top: auto; padding-top: 2px; }
+.duration { font: 500 var(--fs-xs)/1 var(--mono); color: var(--muted); font-feature-settings: 'tnum'; }
+.cardActions { display: inline-flex; margin-right: -6px; }
+.actionOn { color: var(--inst); }
+
+/* List / table */
+.listTable td { padding: 6px var(--s-2); }
+.listTable th { padding: 0 var(--s-2); }
+@media (min-width: 600px) { .listTable td { padding: 6px var(--s-4); } .listTable th { padding: 0 var(--s-4); } }
+.thumbCell { width: 56px; min-width: 56px; }
+.thumbButton { position: relative; display: block; padding: 0; border: 0; background: transparent; border-radius: var(--r-sm); overflow: hidden; }
+.thumbButton:disabled { cursor: default; }
+@media (max-width: 899px), (pointer: coarse) { .thumbButton { padding: 2px; } }
+.listThumb { width: 40px; min-width: 40px; height: 40px; border-radius: var(--r-sm); object-fit: cover; display: block; overflow: hidden; }
+.thumbPlay { position: absolute; inset: 0; display: grid; place-items: center; background: color-mix(in srgb, var(--stage-0) 55%, transparent); color: var(--ink); opacity: 0; transition: opacity var(--dur-1) var(--ease); }
+.thumbButton:hover .thumbPlay, .thumbButton:focus-visible .thumbPlay { opacity: 1; }
+.titleCell { min-width: 0; }
+.listTitle { font-weight: 700; font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.listArtist { font-size: var(--fs-xs); color: var(--ink-2); }
+.listWork { font: 500 var(--fs-xs)/1.4 var(--mono); color: var(--inst); }
+.listMuted { font: 500 var(--fs-xs)/1.4 var(--mono); color: var(--muted); }
+.listFailed { font: 500 var(--fs-xs)/1.4 var(--mono); color: var(--vocal); }
+.listBar { margin-top: 4px; max-width: 220px; }
+.albumCell { color: var(--ink-2); font-size: var(--fs-xs); }
+.actionsCell { white-space: nowrap; text-align: right; width: 1%; }
+.actionsCell :global(.iconbtn--sm) { width: 34px; }
+.rowPreviewing td { background: var(--inst-tint); }
+.hideSm { display: none; }
+@media (min-width: 600px) { .hideSm { display: table-cell; } }
+
+/* Playlists */
+.playlistHead { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); margin-bottom: var(--s-5); }
+.playlistTitle { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.playlistTitle h2 { font-size: var(--fs-xl); font-weight: 800; font-variation-settings: 'wdth' var(--wdth-marquee); overflow-wrap: anywhere; }
+.playlistTitle span { color: var(--muted); font-size: var(--fs-xs); }
+.playlistActions { display: flex; gap: var(--s-2); }
+.playlistCard { position: relative; min-width: 0; }
+.playlistOpen { display: grid; gap: 2px; width: 100%; padding: 0; border: 0; background: transparent; color: var(--ink); text-align: left; }
+.mosaic {
+  position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: 3px; aspect-ratio: 1; margin-bottom: var(--s-2);
+  border-radius: var(--r-md); overflow: hidden; box-shadow: var(--shadow-1);
+}
+.mosaic i:nth-child(1) { background: var(--vocal-tint); }
+.mosaic i:nth-child(2) { background: var(--stage-3); }
+.mosaic i:nth-child(3) { background: var(--stage-2); }
+.mosaic i:nth-child(4) { background: var(--inst-tint); }
+.mosaic :global(.icon) { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: var(--ink-2); }
+.playlistOpen:hover .mosaic { outline: 2px solid var(--line-strong); }
+.playlistName { font-weight: 700; font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.playlistCount { font: 500 var(--fs-xs)/1.3 var(--mono); color: var(--muted); }
+.playlistDelete { position: absolute; top: var(--s-2); right: var(--s-2); background: var(--stage-1); }
+.newPlaylist {
+  display: grid; place-items: center; align-content: center; gap: var(--s-2); aspect-ratio: 1;
+  border: 1px dashed var(--line-strong); border-radius: var(--r-md); background: transparent; color: var(--ink-2); font-weight: 700;
+}
+.newPlaylist:hover { color: var(--ink); border-color: var(--ink-2); }
+
+.resultsHead { font: 500 var(--fs-xs)/1 var(--mono); color: var(--muted); margin-bottom: var(--s-3); }
+
+/* Skeletons */
+.skeletonGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--s-5) var(--s-4); }
+.skeletonCard { display: grid; gap: var(--s-2); }
+.skeletonArt { aspect-ratio: 1; border-radius: var(--r-md); }
+.skeletonLine { height: 12px; width: 80%; }
+.short { width: 50%; }
+
+/* Dialogs */
+.dialogSong { font-weight: 700; margin-bottom: var(--s-3); }
+.dialogHint { color: var(--ink-2); font-size: var(--fs-sm); }
+.choices { display: grid; gap: var(--s-2); margin-bottom: var(--s-3); }
+.choices :global(.btn) { justify-content: flex-start; }
+.newForm { display: grid; gap: var(--s-3); margin-top: var(--s-4); padding-top: var(--s-4); border-top: 1px solid var(--line); }
+.addList { display: grid; gap: 2px; max-height: 50vh; overflow-y: auto; margin-top: var(--s-3); }
+.addRow { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: var(--s-3); padding: var(--s-2) 0; border-bottom: 1px solid var(--line); }

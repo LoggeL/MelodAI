@@ -1,0 +1,46 @@
+.status {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: var(--s-5);
+  height: 100%;
+  padding: var(--s-5) var(--s-4);
+  overflow-y: auto;
+}
+.track { display: flex; align-items: center; gap: var(--s-3); max-width: 480px; width: 100%; }
+.cover { width: 64px; height: 64px; flex: none; border-radius: var(--r-md); box-shadow: var(--shadow-2); object-fit: cover; overflow: hidden; }
+.meta { display: grid; gap: 2px; min-width: 0; }
+.title { font-size: var(--fs-lg); font-weight: 800; font-variation-settings: 'wdth' var(--wdth-marquee); line-height: 1.1; overflow-wrap: anywhere; }
+.artist { color: var(--ink-2); font-size: var(--fs-sm); }
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-1); width: 100%; max-width: 480px; }
+.step {
+  display: grid;
+  grid-template-columns: 32px 1fr auto;
+  align-items: center;
+  column-gap: var(--s-3);
+  min-height: 40px;
+  padding: var(--s-1) var(--s-3);
+  border-radius: var(--r-md);
+  font: 500 var(--fs-sm)/1.2 var(--mono);
+  color: var(--muted);
+}
+.no { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--line); font-size: var(--fs-xs); }
+.label { font-weight: 600; }
+.step[data-state='done'] { color: var(--ink-2); }
+.step[data-state='done'][data-tone='vocal'] .no { color: var(--vocal); border-color: color-mix(in srgb, var(--vocal) 50%, transparent); }
+.step[data-state='done'][data-tone='inst'] .no { color: var(--inst); border-color: color-mix(in srgb, var(--inst) 50%, transparent); }
+.step[data-state='current'] { color: var(--inst); background: var(--inst-tint); }
+.step[data-state='current'] .no { border-color: var(--inst); }
+.pct { font-weight: 600; font-feature-settings: 'tnum'; }
+.bar { grid-column: 2 / -1; margin-top: var(--s-1); }
+.hint { color: var(--ink-2); font-size: var(--fs-sm); text-align: center; }
+.error { max-width: 520px; width: 100%; }
+.actions { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-top: var(--s-2); }
+
+@media (min-width: 900px) {
+  .status { padding: var(--s-6); }
+  .cover { width: 72px; height: 72px; }
+  .title { font-size: var(--fs-xl); }
+}

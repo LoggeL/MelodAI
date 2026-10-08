@@ -1,0 +1,14 @@
+.page { position: relative; min-height: 100dvh; display: grid; grid-template-rows: auto 1fr; padding: var(--s-4); overflow: hidden; background: var(--stage-0); color: var(--ink); }
+.beam {
+  position: absolute; top: 0; left: 50%; width: min(980px, 100%); height: 90%; transform: translateX(-50%);
+  background: radial-gradient(ellipse 55% 100% at 50% 0%, var(--spot-beam), transparent 72%);
+  clip-path: polygon(38% 0, 62% 0, 100% 100%, 0 100%); pointer-events: none;
+}
+.logo { position: relative; justify-self: start; text-decoration: none; min-height: var(--tap); display: inline-flex; align-items: center; }
+.body { position: relative; display: grid; justify-items: center; align-content: center; gap: var(--s-3); text-align: center; }
+.body h1 {
+  max-width: 14ch; font-size: var(--fs-2xl); font-weight: 900; line-height: var(--lh-tight); letter-spacing: -.02em;
+  font-variation-settings: 'wdth' var(--wdth-marquee); text-wrap: balance;
+}
+.body p { color: var(--ink-2); margin-bottom: var(--s-3); }
+@media (min-width: 900px) { .page { padding: var(--s-5) var(--s-6); } }

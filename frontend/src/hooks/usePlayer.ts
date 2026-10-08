@@ -34,7 +34,6 @@ export function usePlayer(options: UsePlayerOptions = {}) {
   optionsRef.current = options
   favoritesRef.current = favorites
   const audioRef = useRef<AudioPlayback | null>(null)
-  const analyserRef = useRef<AnalyserNode | null>(null)
   const mountedRef = useRef(true)
   const lyricsVersionRef = useRef(0)
   const lyricsTrackRef = useRef<string | null>(null)
@@ -68,7 +67,6 @@ export function usePlayer(options: UsePlayerOptions = {}) {
   const getAudio = useCallback(() => {
     if (!audioRef.current) {
       audioRef.current = new AudioPlayback(settingsRef.current, {
-        onInit: analyser => { analyserRef.current = analyser },
         onState: state => {
           if (!mountedRef.current) return
           setPlayback(state)
@@ -101,7 +99,6 @@ export function usePlayer(options: UsePlayerOptions = {}) {
       invalidatePendingWork()
       audioRef.current?.dispose()
       audioRef.current = null
-      analyserRef.current = null
       if (syncTimerRef.current) clearTimeout(syncTimerRef.current)
     }
   }, [invalidatePendingWork])
@@ -193,7 +190,7 @@ export function usePlayer(options: UsePlayerOptions = {}) {
         if (!remote) scheduleSync()
       }
     } catch {
-      if (mountedRef.current && playbackVersionRef.current === version) showToast('Failed to load audio. Try playing the song again.', 'error')
+      if (mountedRef.current && playbackVersionRef.current === version) showToast('Audio konnte nicht geladen werden. Spiel den Song noch einmal ab.', 'error')
     }
   }, [getAudio, loadLyrics, replaceSelection, scheduleSync])
   playIndexRef.current = playIndex
@@ -218,7 +215,7 @@ export function usePlayer(options: UsePlayerOptions = {}) {
     if (!audio.hasBuffers) { await playIndex(state.currentIndex, remote); return }
     try {
       if (await audio.resume() && !remote) scheduleSync()
-    } catch { showToast('Playback could not start. Try again.', 'error') }
+    } catch { showToast('Wiedergabe konnte nicht starten. Versuch es noch einmal.', 'error') }
   }, [getAudio, playIndex, scheduleSync])
 
   const togglePlay = useCallback(() => {
@@ -229,7 +226,7 @@ export function usePlayer(options: UsePlayerOptions = {}) {
       // Resuming its context must retain that load instead of cancelling it.
       syncPlaybackIntentRef.current?.()
       remotePlaybackRef.current = false
-      void audio.activate().catch(() => showToast('Playback could not start. Try again.', 'error'))
+      void audio.activate().catch(() => showToast('Wiedergabe konnte nicht starten. Versuch es noch einmal.', 'error'))
     } else void resume()
   }, [pause, resume])
 
@@ -251,7 +248,7 @@ export function usePlayer(options: UsePlayerOptions = {}) {
       const active = selectionRef.current.queue[selectionRef.current.currentIndex]
       if (active?.id === item.id) pause()
       if (error instanceof ApiError && typeof error.data.credits === 'number') optionsRef.current.onCreditsUpdate?.(error.data.credits)
-      showToast(error instanceof ApiError && error.data.error === 'insufficient_credits' ? 'Not enough credits to continue playback.' : 'Could not verify your play credit. Playback paused; try again.', 'error')
+      showToast(error instanceof ApiError && error.data.error === 'insufficient_credits' ? 'Deine Credits reichen nicht für die weitere Wiedergabe.' : 'Credit-Prüfung fehlgeschlagen. Wiedergabe pausiert, bitte versuch es noch einmal.', 'error')
     }).finally(() => chargingRef.current.delete(item.id))
   }
 
@@ -314,12 +311,12 @@ export function usePlayer(options: UsePlayerOptions = {}) {
       if (!mountedRef.current) return
       if (!updateItem(item, { ...item, ready: false, error: true, status: 'error', progress: 0 })) return
       if (pendingAutoplayRef.current === item.id) pendingAutoplayRef.current = null
-      showToast(error instanceof ApiError && error.data.error === 'insufficient_credits' ? `Not enough credits (need ${error.data.required ?? 5}, have ${error.data.credits ?? 0})` : error instanceof Error ? error.message : 'Failed to add song', 'error')
+      showToast(error instanceof ApiError && error.data.error === 'insufficient_credits' ? `Dafür brauchst du ${error.data.required ?? 5} Credits. Dein Guthaben: ${error.data.credits ?? 0}.` : error instanceof Error ? error.message : 'Song konnte nicht hinzugefügt werden.', 'error')
     } finally { trackRequestsRef.current.delete(item.id) }
   }, [updateItem, maybeAutoplay])
 
   const addToQueue = useCallback(async (trackId: string, meta?: { title?: string; artist?: string; img_url?: string | null }, autoPlay?: boolean) => {
-    if (!isValidTrackId(trackId)) { showToast('Invalid track ID', 'error'); return }
+    if (!isValidTrackId(trackId)) { showToast('Ungültige Song-ID.', 'error'); return }
     // Mark before /add resolves, while the previous song can still be selected.
     if (autoPlay) syncPlaybackIntentRef.current?.()
     const id = normalizeTrackId(trackId)
@@ -329,13 +326,13 @@ export function usePlayer(options: UsePlayerOptions = {}) {
       if (autoPlay) {
         pendingAutoplayRef.current = id
         maybeAutoplay(id)
-      } else showToast('Song already in queue', 'warning')
+      } else showToast('Der Song ist schon in der Setlist.', 'warning')
       return
     }
-    const item = queueItem({ id, title: meta?.title || 'Loading...', artist: meta?.artist || '', thumbnail: meta?.img_url || '' }, false)
+    const item = queueItem({ id, title: meta?.title || 'Lädt …', artist: meta?.artist || '', thumbnail: meta?.img_url || '' }, false)
     if (autoPlay) pendingAutoplayRef.current = id
     replaceSelection({ ...current, queue: [...current.queue, item] })
-    showToast(`Added "${item.title}" to queue`, 'success')
+    showToast(meta?.title ? `„${meta.title}“ zur Setlist hinzugefügt.` : 'Song zur Setlist hinzugefügt.', 'success')
     await requestTrack(item)
   }, [replaceSelection, requestTrack, maybeAutoplay])
 
@@ -367,12 +364,12 @@ export function usePlayer(options: UsePlayerOptions = {}) {
     setSettings(settingsRef.current)
     audioRef.current?.setSettings(settingsRef.current)
   }, [])
-  const setVocalsVolume = useCallback((volume: number) => updateSettings({ vocalsVolume: normalizeVolume(volume) }), [updateSettings])
+  const setVocalsVolume = useCallback((volume: number) => updateSettings({ vocalsVolume: normalizeVolume(volume), karaokeMode: false }), [updateSettings])
   const setInstrumentalVolume = useCallback((volume: number) => updateSettings({ instrumentalVolume: normalizeVolume(volume) }), [updateSettings])
   const toggleKaraokeMode = useCallback(() => {
     const karaokeMode = !settingsRef.current.karaokeMode
     updateSettings({ karaokeMode })
-    showToast(karaokeMode ? 'Karaoke mode: vocals muted' : 'Vocals restored', 'success')
+    showToast(karaokeMode ? 'Karaoke: Gesang aus.' : 'Gesang wieder an.', 'success')
   }, [updateSettings])
 
   const toggleFavorite = useCallback(async (trackId: string) => {
@@ -389,7 +386,7 @@ export function usePlayer(options: UsePlayerOptions = {}) {
       else next.add(id)
       favoritesRef.current = next
       setFavorites(next)
-    } catch { if (mountedRef.current) showToast('Failed to update favorite', 'error') }
+    } catch { if (mountedRef.current) showToast('Favorit konnte nicht gespeichert werden.', 'error') }
     finally { favoritePendingRef.current.delete(id) }
   }, [])
 
@@ -405,8 +402,8 @@ export function usePlayer(options: UsePlayerOptions = {}) {
         if (!previous?.segments[segIdx]?.words[wordIdx]) return previous
         return { ...previous, segments: previous.segments.map((segment, i) => i === segIdx ? { ...segment, words: segment.words.map((word, j) => j === wordIdx ? { ...word, word: newWord } : word) } : segment) }
       })
-      showToast('Word updated', 'success')
-    } catch { if (mountedRef.current) showToast('Failed to update word', 'error') }
+      showToast('Wort gespeichert.', 'success')
+    } catch { if (mountedRef.current) showToast('Wort konnte nicht gespeichert werden.', 'error') }
   }, [])
 
   const shuffle = useCallback(() => {
@@ -418,7 +415,7 @@ export function usePlayer(options: UsePlayerOptions = {}) {
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
     }
     replaceSelection(selectById(shuffled, current.queue[current.currentIndex]?.id))
-    showToast('Queue shuffled', 'success')
+    showToast('Setlist gemischt.', 'success')
   }, [replaceSelection])
 
   const clearQueue = useCallback(() => {
@@ -426,7 +423,7 @@ export function usePlayer(options: UsePlayerOptions = {}) {
     const current = state.queue[state.currentIndex]
     pendingAutoplayRef.current = null
     replaceSelection({ queue: current ? [current] : [], currentIndex: current ? 0 : -1 })
-    showToast('Queue cleared', 'success')
+    showToast('Setlist geleert.', 'success')
   }, [replaceSelection])
 
   const reorderQueue = useCallback((fromIndex: number, toIndex: number) => {
@@ -493,7 +490,7 @@ export function usePlayer(options: UsePlayerOptions = {}) {
 
   return {
     queue, currentIndex, currentTrack: queue[currentIndex] ?? null, ...playback, lyrics, lyricsLoading,
-    karaokeMode: settings.karaokeMode, favorites, analyserRef,
+    karaokeMode: settings.karaokeMode, favorites,
     initialVocalsVolume: settings.vocalsVolume, initialInstrumentalVolume: settings.instrumentalVolume,
     addToQueue, playIndex, togglePlay, seek, prev, next, removeFromQueue,
     setVocalsVolume, setInstrumentalVolume, toggleKaraokeMode, toggleFavorite, editWord,

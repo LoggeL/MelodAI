@@ -1,101 +1,199 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faDownload, faShareNodes } from '@fortawesome/free-solid-svg-icons'
-import type { QueueItem } from '../../types'
+import { useState, useCallback, useEffect, useRef, useId } from 'react'
+import type { LyricTranslation, QueueItem, TranslationLanguage } from '../../types'
 import { useToast } from '../../hooks/useToast'
 import { HeartButton } from '../HeartButton/HeartButton'
+import { Icon } from '../common/Icon'
+import { Cover } from '../common/Cover'
+import { Modal } from '../common/Modal'
+import { LyricScale } from './LyricScale'
 import styles from './NowPlaying.module.css'
+
+export type TranslationMode = 'original' | 'translation' | 'both'
 
 interface Props {
   track: QueueItem | null
   isFavorite?: boolean
   onToggleFavorite?: (trackId: string) => void
+  /** „Ohne Timing“ or „Timing unsicher · 54 %“ kicker; never an overlay on the lyrics. */
+  lyricsNote?: { kind: 'untimed' } | { kind: 'low'; confidence: number } | null
+  translation?: LyricTranslation | null
+  translationLanguage?: TranslationLanguage
+  translationMode?: TranslationMode
+  translationLoading?: boolean
+  onTranslationLanguageChange?: (language: TranslationLanguage) => void
+  onTranslationModeChange?: (mode: TranslationMode) => void
+  onTranslate?: () => void
+  lyricScale?: number
+  onLyricScale?: (scale: number) => void
 }
 
-export function NowPlaying({ track, isFavorite, onToggleFavorite }: Props) {
-  const [showDownload, setShowDownload] = useState(false)
-  const downloadRef = useRef<HTMLDivElement>(null)
-  const [downloading, setDownloading] = useState(false)
+const LANGUAGES: Array<{ code: TranslationLanguage; label: string }> = [
+  { code: 'de', label: 'Deutsch' },
+  { code: 'en', label: 'Englisch' },
+]
+
+const DOWNLOADS = [
+  { type: 'no_vocals', file: 'no_vocals.mp3', label: 'Nur Instrumental', name: 'Instrumental' },
+  { type: 'vocals', file: 'vocals.mp3', label: 'Nur Gesang', name: 'Gesang' },
+  { type: 'song', file: 'song.mp3', label: 'Ganzer Song', name: 'Original' },
+] as const
+
+function useDismiss(open: boolean, close: () => void, ref: React.RefObject<HTMLElement | null>) {
   useEffect(() => {
-    if (!showDownload) return
-    const close = (event: MouseEvent) => { if (!downloadRef.current?.contains(event.target as Node)) setShowDownload(false) }
-    const key = (event: KeyboardEvent) => { if (event.key === 'Escape') { setShowDownload(false); downloadRef.current?.querySelector('button')?.focus() } }
-    document.addEventListener('mousedown', close); document.addEventListener('keydown', key)
-    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', key) }
-  }, [showDownload])
+    if (!open) return
+    const onPointer = (event: MouseEvent) => { if (!ref.current?.contains(event.target as Node)) close() }
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') { close(); ref.current?.querySelector('button')?.focus() } }
+    document.addEventListener('mousedown', onPointer)
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('mousedown', onPointer); document.removeEventListener('keydown', onKey) }
+  }, [open, close, ref])
+}
+
+export function NowPlaying({
+  track, isFavorite, onToggleFavorite, lyricsNote,
+  translation, translationLanguage = 'de', translationMode = 'original', translationLoading = false,
+  onTranslationLanguageChange, onTranslationModeChange, onTranslate, lyricScale = 1, onLyricScale,
+}: Props) {
+  const [menu, setMenu] = useState<'translation' | 'download' | null>(null)
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const [downloading, setDownloading] = useState(false)
+  const translationRef = useRef<HTMLDivElement>(null)
+  const downloadRef = useRef<HTMLDivElement>(null)
+  const translationPanelId = useId()
+  const downloadMenuId = useId()
+  const closeMenu = useCallback(() => setMenu(null), [])
+  useDismiss(menu === 'translation', closeMenu, translationRef)
+  useDismiss(menu === 'download', closeMenu, downloadRef)
   const toast = useToast()
 
-  const handleDownload = useCallback(async (type: string) => {
+  const handleDownload = useCallback(async (option: typeof DOWNLOADS[number]) => {
     if (!track || downloading) return
     setDownloading(true)
-    setShowDownload(false)
-    const fileMap: Record<string, string> = { vocals: 'vocals.mp3', no_vocals: 'no_vocals.mp3', song: 'song.mp3' }
-    const labelMap: Record<string, string> = { vocals: 'Vocals', no_vocals: 'Instrumental', song: 'Full' }
-    const url = `/songs/${track.id}/${fileMap[type]}`
-    const filename = `${track.artist} - ${track.title} (${labelMap[type]}).mp3`
-
-    toast.success(`Downloading ${labelMap[type]}...`)
+    setMenu(null)
+    setSheetOpen(false)
+    toast.success(`${option.name} wird heruntergeladen …`)
     try {
-      const resp = await fetch(url)
+      const resp = await fetch(`/songs/${track.id}/${option.file}`)
       if (!resp.ok) throw new Error('Download unavailable')
       const blob = await resp.blob()
       const a = document.createElement('a')
       a.href = URL.createObjectURL(blob)
-      a.download = filename
+      a.download = `${track.artist} - ${track.title} (${option.name}).mp3`
       document.body.appendChild(a)
       a.click()
       a.remove()
       setTimeout(() => URL.revokeObjectURL(a.href), 1000)
     } catch {
-      toast.error('Download failed')
+      toast.error('Download fehlgeschlagen.')
     } finally { setDownloading(false) }
   }, [track, toast, downloading])
 
   const handleShare = useCallback(() => {
     if (!track) return
+    setSheetOpen(false)
     const url = `${window.location.origin}/song/${track.id}`
-    if (!navigator.clipboard) { toast.warning('Clipboard is unavailable in this browser'); return }
+    if (!navigator.clipboard) { toast.warning('Die Zwischenablage ist in diesem Browser nicht verfügbar.'); return }
     navigator.clipboard.writeText(url).then(
-      () => toast.success('Link copied to clipboard!'),
-      () => toast.warning('Could not copy link')
+      () => toast.success('Link kopiert.'),
+      () => toast.warning('Link konnte nicht kopiert werden.'),
     )
   }, [track, toast])
 
   if (!track) return null
 
+  const translationAvailable = !!translation?.available
+  const translationPanel = (
+    <div className={styles.translationPanel}>
+      <label className="field">
+        <span className="field-label">Sprache</span>
+        <select className="input" value={translationLanguage} aria-label="Übersetzungssprache"
+          onChange={e => onTranslationLanguageChange?.(e.target.value as TranslationLanguage)}>
+          {LANGUAGES.map(lang => <option key={lang.code} value={lang.code}>{lang.label}</option>)}
+        </select>
+      </label>
+      <div className="seg" role="group" aria-label="Anzeige">
+        <button type="button" aria-pressed={translationMode === 'original'} onClick={() => onTranslationModeChange?.('original')}>Original</button>
+        <button type="button" aria-pressed={translationMode === 'translation'} disabled={!translationAvailable && !translationLoading} onClick={() => onTranslationModeChange?.('translation')}>Übersetzung</button>
+        <button type="button" aria-pressed={translationMode === 'both'} disabled={!translationAvailable && !translationLoading} onClick={() => onTranslationModeChange?.('both')}>Beide</button>
+      </div>
+      {!translationAvailable && (
+        <button type="button" className="btn btn--primary" onClick={onTranslate} disabled={translationLoading} aria-busy={translationLoading}>
+          {translationLoading ? <><span className="spinner" aria-hidden="true" /><span className="spinner-text">Lädt …</span> Übersetzt …</> : <><Icon name="lang" /> Übersetzen</>}
+        </button>
+      )}
+    </div>
+  )
+
   return (
     <div className={styles.wrapper}>
-      <img className={styles.art} src={track.thumbnail || '/logo.svg'} alt="" />
+      <Cover className={styles.art} src={track.thumbnail} />
       <div className={styles.info}>
-        <div className={styles.title}>{track.title}</div>
+        <span className={`kicker ${styles.live}`}><span className="live-dot" aria-hidden="true" />Läuft</span>
+        <h1 className={styles.title} aria-live="polite">{track.title}</h1>
         <div className={styles.artist}>{track.artist}</div>
+        {lyricsNote?.kind === 'untimed' && <span className={`kicker ${styles.note}`}>Ohne Timing<span className={styles.noteLong}> · gleichmäßiger Bildlauf</span></span>}
+        {lyricsNote?.kind === 'low' && <span className={`kicker ${styles.note} ${styles.noteWarn}`}><Icon name="alert" size={16} />Timing unsicher · {Math.round(lyricsNote.confidence * 100)} %</span>}
       </div>
       <div className={styles.actions}>
-        {onToggleFavorite && (
-          <HeartButton
-            active={isFavorite || false}
-            onClick={() => onToggleFavorite(track.id)}
-            className={styles.btn}
-            activeClassName={styles.favActive}
-            title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-          />
-        )}
-        <div ref={downloadRef} className={styles.downloadWrapper}>
-          <button className={styles.btn} onClick={() => setShowDownload(!showDownload)} disabled={downloading} aria-expanded={showDownload} aria-label="Download song" title="Download">
-            <FontAwesomeIcon icon={faDownload} />
+        <div ref={translationRef} className={`${styles.menuAnchor} ${styles.desktopOnly}`}>
+          <button type="button" className={`btn btn--pill ${styles.chipBtn}`} aria-expanded={menu === 'translation'} aria-controls={translationPanelId}
+            aria-label="Übersetzung" title="Übersetzung"
+            onClick={() => setMenu(menu === 'translation' ? null : 'translation')}>
+            <Icon name="lang" /><span className={styles.chipLabel}>Übersetzung</span><Icon name="chevron" size={16} className={`${styles.chipLabel} ${menu === 'translation' ? styles.flip : ''}`} />
           </button>
-          {showDownload && (
-            <div className={styles.dropdown}>
-              <button className={styles.dropdownOption} onClick={() => handleDownload('vocals')}>Vocals Only</button>
-              <button className={styles.dropdownOption} onClick={() => handleDownload('no_vocals')}>Instrumental Only</button>
-              <button className={styles.dropdownOption} onClick={() => handleDownload('song')}>Full Song</button>
-            </div>
-          )}
+          <div id={translationPanelId} className={styles.popover} hidden={menu !== 'translation'}>{translationPanel}</div>
         </div>
-        <button className={styles.btn} onClick={handleShare} title="Share" aria-label="Copy song link">
-          <FontAwesomeIcon icon={faShareNodes} />
+        {onToggleFavorite && (
+          <HeartButton active={isFavorite || false} onClick={() => onToggleFavorite(track.id)} />
+        )}
+        <div ref={downloadRef} className={`${styles.menuAnchor} ${styles.desktopOnly}`}>
+          <button type="button" className="iconbtn" onClick={() => setMenu(menu === 'download' ? null : 'download')} disabled={downloading}
+            aria-expanded={menu === 'download'} aria-controls={downloadMenuId} aria-label="Herunterladen" title="Herunterladen">
+            <Icon name="download" />
+          </button>
+          <div id={downloadMenuId} className={`${styles.popover} ${styles.menu}`} hidden={menu !== 'download'}>
+            {DOWNLOADS.map(option => (
+              <button key={option.type} type="button" className={styles.menuItem} onClick={() => handleDownload(option)}>
+                <Icon name="download" size={16} /> {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <button type="button" className={`iconbtn ${styles.desktopOnly}`} onClick={handleShare} title="Link kopieren" aria-label="Link kopieren">
+          <Icon name="share" />
+        </button>
+        <button type="button" className={`iconbtn ${styles.mobileOnly}`} aria-haspopup="dialog" aria-label="Weitere Optionen" onClick={() => setSheetOpen(true)}>
+          <Icon name="more" />
         </button>
       </div>
+
+      {sheetOpen && (
+        <Modal title="Optionen" variant="sheet" size="small" onClose={() => setSheetOpen(false)}>
+          <div className={styles.sheet}>
+            <section>
+              <h3 className="kicker">Übersetzung</h3>
+              {translationPanel}
+            </section>
+            {onLyricScale && (
+              <section>
+                <h3 className="kicker">Textgröße</h3>
+                <LyricScale value={lyricScale} onChange={onLyricScale} />
+              </section>
+            )}
+            <section>
+              <h3 className="kicker">Herunterladen</h3>
+              <div className={styles.sheetList}>
+                {DOWNLOADS.map(option => (
+                  <button key={option.type} type="button" className="btn" disabled={downloading} onClick={() => handleDownload(option)}>
+                    <Icon name="download" /> {option.label}
+                  </button>
+                ))}
+              </div>
+            </section>
+            <button type="button" className="btn btn--block" onClick={handleShare}><Icon name="share" /> Link kopieren</button>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }

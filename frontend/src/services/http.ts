@@ -1,3 +1,5 @@
+import { de, requestFailed } from '../utils/messages'
+
 const MAX_RETRIES = 2
 let redirectingToLogin = false
 
@@ -38,7 +40,7 @@ export async function request<T>(url: string, options: RequestOptions = {}): Pro
       response = await fetch(url, { ...init, headers, credentials: 'same-origin' })
     } catch (error) {
       if (init.signal?.aborted) throw error
-      if (!canRetry || attempt >= MAX_RETRIES) throw new ApiError('Unable to connect. Check your connection and try again.', 0)
+      if (!canRetry || attempt >= MAX_RETRIES) throw new ApiError(de('Unable to connect. Check your connection and try again.'), 0)
       await wait(500 * 2 ** attempt, init.signal)
       continue
     }
@@ -50,18 +52,18 @@ export async function request<T>(url: string, options: RequestOptions = {}): Pro
     const body = await response.text()
     if (body) {
       try { data = JSON.parse(body) } catch {
-        if (response.ok) throw new ApiError('The server returned an unexpected response. Please try again.', response.status)
+        if (response.ok) throw new ApiError(de('The server returned an unexpected response. Please try again.'), response.status)
       }
     }
     if (!response.ok) {
       const details = data && typeof data === 'object' && !Array.isArray(data) ? data as Record<string, unknown> : {}
-      let message = typeof details.error === 'string' ? details.error : `Request failed (${response.status}). Please try again.`
+      let message = typeof details.error === 'string' ? de(details.error) : requestFailed(response.status)
       if (details.error === 'insufficient_credits') {
-        message = 'You do not have enough credits for this action.'
+        message = 'Dafür reichen deine Credits nicht.'
         if (typeof details.required === 'number' && typeof details.credits === 'number') {
-          message = `This action requires ${details.required} credits. Your balance is ${details.credits}.`
+          message = `Dafür brauchst du ${details.required} Credits. Dein Guthaben: ${details.credits}.`
         } else if (typeof details.credits === 'number') {
-          message += ` Your balance is ${details.credits}.`
+          message += ` Dein Guthaben: ${details.credits}.`
         }
       }
       if (response.status === 401 && !skipAuthRedirect && !redirectingToLogin && window.location.pathname !== '/login') {

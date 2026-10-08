@@ -33,17 +33,16 @@ describe('Admin Page E2E', () => {
   describe('Admin page access', () => {
     it('should render admin page for admin user', async () => {
       const pageText = await page.evaluate(() => document.body.textContent || '')
-      expect(pageText).toContain('Users')
+      expect(pageText).toContain('Nutzer')
     })
 
     it('should have navigation tabs', async () => {
-      const pageText = await page.evaluate(() => document.body.textContent || '')
-      expect(pageText).toContain('Users')
-      expect(pageText).toContain('Keys')
-      expect(pageText).toContain('Usage')
-      expect(pageText).toContain('Songs')
-      expect(pageText).toContain('Status')
-      expect(pageText).toContain('Errors')
+      for (const tab of ['users', 'keys', 'usage', 'songs', 'status', 'logs', 'errors']) {
+        expect(await page.$(`[data-testid="admin-tab-${tab}"]`)).not.toBeNull()
+      }
+      const tabs = await page.$$eval('[class*="navTab"]', nodes => nodes.map(node => node.textContent || ''))
+      expect(tabs.join(' ')).toContain('Schlüssel')
+      expect(tabs.join(' ')).toContain('Fehler')
     })
   })
 
@@ -53,32 +52,16 @@ describe('Admin Page E2E', () => {
       expect(pageText).toContain(ADMIN_USER)
     })
 
-    it('should show Generate Invite Key button on Keys tab', async () => {
+    it('should show the create invite key button on the Keys tab', async () => {
       // Navigate to Keys tab
-      await page.evaluate(() => {
-        const tabs = document.querySelectorAll('[class*="navTab"]')
-        for (const tab of tabs) {
-          if (tab.textContent?.trim() === 'Keys') {
-            (tab as HTMLElement).click()
-            break
-          }
-        }
-      })
+      await page.click('[data-testid="admin-tab-keys"]')
       await waitForIdle(page, 2000)
 
       const pageText = await page.evaluate(() => document.body.textContent || '')
-      expect(pageText).toContain('Generate Invite Key')
+      expect(pageText).toContain('Einladungsschlüssel erstellen')
 
       // Navigate back to Users tab
-      await page.evaluate(() => {
-        const tabs = document.querySelectorAll('[class*="navTab"]')
-        for (const tab of tabs) {
-          if (tab.textContent?.trim() === 'Users') {
-            (tab as HTMLElement).click()
-            break
-          }
-        }
-      })
+      await page.click('[data-testid="admin-tab-users"]')
       await waitForIdle(page, 2000)
     })
 
@@ -100,7 +83,7 @@ describe('Admin Page E2E', () => {
         for (const row of rows) {
           if (row.textContent?.includes(username)) {
             const approveBtn = Array.from(row.querySelectorAll('button')).find(
-              b => b.textContent?.includes('Approve')
+              b => b.textContent?.includes('Freigeben')
             )
             if (approveBtn) {
               approveBtn.click()
@@ -122,20 +105,12 @@ describe('Admin Page E2E', () => {
 
   describe('Usage tab', () => {
     it('should switch to usage tab and show stats', async () => {
-      await page.evaluate(() => {
-        const tabs = document.querySelectorAll('[class*="navTab"]')
-        for (const tab of tabs) {
-          if (tab.textContent?.trim() === 'Usage') {
-            (tab as HTMLElement).click()
-            break
-          }
-        }
-      })
+      await page.click('[data-testid="admin-tab-usage"]')
       await waitForIdle(page, 2000)
 
       const pageText = await page.evaluate(() => document.body.textContent || '')
-      const hasStats = pageText.includes('Users') || pageText.includes('Plays') ||
-                       pageText.includes('Search') || pageText.includes('Downloads')
+      const hasStats = pageText.includes('Nutzer') || pageText.includes('Wiedergaben') ||
+                       pageText.includes('Suchen') || pageText.includes('Downloads')
       expect(hasStats).toBe(true)
     })
 
@@ -149,46 +124,32 @@ describe('Admin Page E2E', () => {
 
   describe('Songs tab', () => {
     it('should switch to songs tab', async () => {
-      await page.evaluate(() => {
-        const tabs = document.querySelectorAll('[class*="navTab"]')
-        for (const tab of tabs) {
-          if (tab.textContent?.trim() === 'Songs') {
-            (tab as HTMLElement).click()
-            break
-          }
-        }
-      })
+      await page.click('[data-testid="admin-tab-songs"]')
       await waitForIdle(page, 2000)
 
-      const pageText = await page.evaluate(() => document.body.textContent || '')
-      const hasSongsContent = pageText.includes('Songs') || pageText.includes('No songs') ||
-                              pageText.includes('song')
-      expect(hasSongsContent).toBe(true)
+      // Either real rows or the explicit empty state; the tab label alone must not count.
+      const state = await page.evaluate(() => ({
+        rows: document.querySelectorAll('[data-testid="admin-song-row"]').length,
+        empty: (document.body.textContent || '').includes('Noch keine verarbeiteten Songs.'),
+      }))
+      expect(state.rows > 0 || state.empty).toBe(true)
     })
   })
 
   describe('Status tab', () => {
-    it('should switch to status tab and show Run Checks button', async () => {
-      await page.evaluate(() => {
-        const tabs = document.querySelectorAll('[class*="navTab"]')
-        for (const tab of tabs) {
-          if (tab.textContent?.trim() === 'Status') {
-            (tab as HTMLElement).click()
-            break
-          }
-        }
-      })
+    it('should switch to status tab and show the health check button', async () => {
+      await page.click('[data-testid="admin-tab-status"]')
       await waitForIdle(page, 2000)
 
       const pageText = await page.evaluate(() => document.body.textContent || '')
-      expect(pageText).toContain('Run Checks')
+      expect(pageText).toContain('Prüfung starten')
     })
 
     it('should run health checks and show results', async () => {
       await page.evaluate(() => {
         const buttons = document.querySelectorAll('button')
         for (const btn of buttons) {
-          if (btn.textContent?.includes('Run Checks')) {
+          if (btn.textContent?.includes('Prüfung starten')) {
             btn.click()
             break
           }
@@ -196,11 +157,10 @@ describe('Admin Page E2E', () => {
       })
       await waitForIdle(page, 5000)
 
-      const pageText = await page.evaluate(() => document.body.textContent || '')
-      const hasResults = pageText.toLowerCase().includes('database') ||
-                         pageText.toLowerCase().includes('ok') ||
-                         pageText.toLowerCase().includes('healthy')
-      expect(hasResults).toBe(true)
+      await page.waitForSelector('[data-check="database"]', { timeout: 10000 })
+      const database = await page.$eval('[data-check="database"]', el => ({ status: el.getAttribute('data-status'), text: el.textContent || '' }))
+      expect(database.text).toContain('Datenbank')
+      expect(database.status).toBe('ok')
     })
   })
 })

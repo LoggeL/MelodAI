@@ -1,18 +1,16 @@
 import { useState, useCallback, useMemo, useRef } from 'react'
-import { useNavigate, Link, Navigate } from 'react-router-dom'
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import {
-  faArrowLeft, faRotateRight, faHeart, faMagnifyingGlass, faPlus,
-  faTableCells, faList, faVolumeLow, faTrash, faMusic,
-  faCoins, faGlobe, faListUl, faChevronLeft,
-} from '@fortawesome/free-solid-svg-icons'
+import { useNavigate, Navigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { tracks } from '../services/api'
 import { useToast } from '../hooks/useToast'
 import { Modal } from '../components/common/Modal'
 import { PageState } from '../components/common/PageState'
+import { AppShell } from '../components/Layout/AppShell'
+import { Icon } from '../components/common/Icon'
+import { Cover } from '../components/common/Cover'
+import { CustomSelect } from '../components/common/CustomSelect'
+import { de } from '../utils/messages'
 import { TrackCollection } from './library/TrackCollection'
-import { hiResCover } from './library/trackPresentation'
 import { useLibraryData } from './library/useLibraryData'
 import { useCatalogSearch } from './library/useCatalogSearch'
 import { usePreview } from './library/usePreview'
@@ -20,13 +18,29 @@ import type { LibraryTrack, Playlist, SearchResult } from '../types'
 import styles from './LibraryPage.module.css'
 
 type LibraryTab = 'all' | 'favorites' | 'playlists'
+type SortKey = 'title' | 'artist' | 'status'
+
+const SORTS: Array<{ value: SortKey; label: string }> = [
+  { value: 'status', label: 'Bereit zuerst' },
+  { value: 'title', label: 'Titel A–Z' },
+  { value: 'artist', label: 'Interpret A–Z' },
+]
+const VIEW_KEY = 'libraryView'
+function readView(): 'grid' | 'list' {
+  try { return localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'grid' } catch { return 'grid' }
+}
 
 export function LibraryPage() {
   const navigate = useNavigate()
   const { checked, authenticated } = useAuth()
   const toast = useToast()
   const [filter, setFilter] = useState('')
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  const [viewMode, setViewModeState] = useState<'grid' | 'list'>(readView)
+  const setViewMode = (mode: 'grid' | 'list') => {
+    setViewModeState(mode)
+    try { localStorage.setItem(VIEW_KEY, mode) } catch { /* Storage is optional. */ }
+  }
+  const [sort, setSort] = useState<SortKey>('status')
   const [activeTab, setActiveTab] = useState<LibraryTab>('all')
   const [viewingPlaylistId, setViewingPlaylistId] = useState<number | null>(null)
   const [addingSongsToPlaylist, setAddingSongsToPlaylist] = useState(false)
@@ -40,7 +54,7 @@ export function LibraryPage() {
   const [pending, setPending] = useState<Set<string>>(new Set())
   const pendingRef = useRef(new Set<string>())
   const data = useLibraryData(checked && authenticated, viewingPlaylistId)
-  const { songs, favorites, playlists, credits, statuses, playlistTracks } = data
+  const { songs, favorites, playlists, statuses, playlistTracks } = data
   const preview = usePreview()
   const search = useCatalogSearch(deezerQuery, searchMode === 'add')
 
@@ -49,7 +63,7 @@ export function LibraryPage() {
     pendingRef.current.add(key)
     setPending(new Set(pendingRef.current))
     try { await action() } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'The action failed. Please try again.')
+      toast.error(err instanceof Error ? de(err.message) : 'Das hat nicht geklappt. Bitte versuch es noch einmal.')
     } finally {
       pendingRef.current.delete(key)
       setPending(new Set(pendingRef.current))
@@ -63,9 +77,12 @@ export function LibraryPage() {
   const filtered = useMemo(() => {
     const query = filter.trim().toLowerCase()
     const rank = (song: LibraryTrack) => song.complete ? 2 : statuses[song.id]?.status === 'error' ? 0 : 1
-    return baseSongs.filter(song => !query || `${song.title} ${song.artist}`.toLowerCase().includes(query))
-      .sort((a, b) => rank(a) - rank(b) || a.title.localeCompare(b.title))
-  }, [baseSongs, filter, statuses])
+    const compare = (a: LibraryTrack, b: LibraryTrack) => sort === 'artist'
+      ? a.artist.localeCompare(b.artist, 'de') || a.title.localeCompare(b.title, 'de')
+      : sort === 'title' ? a.title.localeCompare(b.title, 'de')
+      : rank(b) - rank(a) || a.title.localeCompare(b.title, 'de')
+    return baseSongs.filter(song => !query || `${song.title} ${song.artist}`.toLowerCase().includes(query)).sort(compare)
+  }, [baseSongs, filter, statuses, sort])
 
   const addableSongs = useMemo(() => {
     const ids = new Set(playlistTracks.map(song => song.id))
@@ -98,7 +115,7 @@ export function LibraryPage() {
   const addToPlaylist = (playlistId: number, songId: string) => void run('playlist', async () => {
     await tracks.addToPlaylist(playlistId, songId)
     setAddToPlaylistSongId(null)
-    toast.success('Song is in the playlist')
+    toast.success('Song ist in der Playlist.')
     await data.refreshPlaylists()
     if (viewingPlaylistId === playlistId) await data.loadPlaylist(playlistId)
   })
@@ -115,15 +132,15 @@ export function LibraryPage() {
       await tracks.addToPlaylist(result.id, addToPlaylistSongId)
       setAddToPlaylistSongId(null)
       await data.refreshPlaylists()
-      toast.success(`Created "${name}" and added the song`)
-    } else toast.success(`Created "${name}"`)
+      toast.success(`„${name}“ erstellt und Song hinzugefügt.`)
+    } else toast.success(`„${name}“ erstellt.`)
   })
 
   const removeFromPlaylist = () => void run('playlist', async () => {
     if (viewingPlaylistId === null || addToPlaylistSongId === null) return
     await tracks.removeFromPlaylist(viewingPlaylistId, addToPlaylistSongId)
     setAddToPlaylistSongId(null)
-    toast.success('Removed from playlist')
+    toast.success('Aus der Playlist entfernt.')
     await Promise.all([data.refreshPlaylists(), data.loadPlaylist(viewingPlaylistId)])
   })
 
@@ -133,26 +150,26 @@ export function LibraryPage() {
     data.setPlaylists(previous => previous.filter(playlist => playlist.id !== deletePlaylist.id))
     if (viewingPlaylistId === deletePlaylist.id) selectTab('playlists')
     setDeletePlaylist(null)
-    toast.success(`Deleted "${deletePlaylist.name}"`)
+    toast.success(`„${deletePlaylist.name}“ gelöscht.`)
   })
 
   const addSong = (song: SearchResult) => void run(`add:${song.id}`, async () => {
     const response = await tracks.add(song.id)
-    if (response.error || response.status === 'error') throw new Error(response.error || 'Could not add the song.')
+    if (response.error || response.status === 'error') throw new Error(response.error || 'Der Song konnte nicht hinzugefügt werden.')
     const ready = response.status === 'complete' || response.status === 'ready'
     data.setSongs(previous => previous.some(track => track.id === song.id) ? previous : [{
       id: song.id, title: song.title, artist: song.artist, album: song.album,
       duration: 0, img_url: song.img_url, complete: ready,
     }, ...previous])
-    toast.success(ready ? `Added "${song.title}"` : `Processing "${song.title}"`)
+    toast.success(ready ? `„${song.title}“ hinzugefügt.` : `„${song.title}“ wird vorbereitet.`)
     try { data.setCredits((await tracks.credits()).credits) } catch { /* Keep the successful addition visible. */ }
   })
 
   const retrySong = (id: string) => void run(`retry:${id}`, async () => {
     const response = await tracks.add(id)
-    if (response.error || response.status === 'error') throw new Error(response.error || 'Could not retry this song.')
-    data.setStatuses(previous => ({ ...previous, [id]: { status: response.status, progress: response.progress || 0, detail: 'Queued', updated_at: new Date().toISOString() } }))
-    toast.success('Song queued for processing')
+    if (response.error || response.status === 'error') throw new Error(response.error || 'Der Song konnte nicht erneut gestartet werden.')
+    data.setStatuses(previous => ({ ...previous, [id]: { status: response.status, progress: response.progress || 0, detail: 'In der Warteschlange', updated_at: new Date().toISOString() } }))
+    toast.success('Song wird erneut verarbeitet.')
   })
 
   const refresh = () => {
@@ -160,7 +177,7 @@ export function LibraryPage() {
     if (viewingPlaylistId !== null) void data.loadPlaylist(viewingPlaylistId)
   }
 
-  if (!checked) return <PageState title="Loading library" loading />
+  if (!checked) return <PageState title="Bibliothek wird geladen …" loading />
   if (!authenticated) return <Navigate to="/login" replace state={{ from: '/library' }} />
 
   const readyCount = songs.filter(song => song.complete).length
@@ -172,127 +189,159 @@ export function LibraryPage() {
   const showSongViews = activeTab !== 'playlists' || isPlaylistDetail
   const playlistBusy = pending.has('playlist')
   const selectedSong = songs.find(song => song.id === addToPlaylistSongId)
+  const addMode = searchMode === 'add'
+  const toggleAddMode = () => { preview.stopPreview(); setSearchMode(addMode ? 'filter' : 'add'); setFilter(''); if (activeTab === 'playlists' && !isPlaylistDetail) setActiveTab('all') }
 
   return (
-    <main className={styles.page}>
-      <div className={styles.container}>
-        <header className={styles.header}>
-          <Link to="/" className={styles.backBtn} aria-label="Back to player" title="Back to player"><FontAwesomeIcon icon={faArrowLeft} /></Link>
-          <div className={styles.headerInfo}>
-            <h1 className={styles.title}>Library</h1>
-            <p className={styles.subtitle}>{readyCount} song{readyCount !== 1 ? 's' : ''} ready
-              {processingCount > 0 && <> · {processingCount} processing</>}{failedCount > 0 && <> · {failedCount} failed</>}
-            </p>
-          </div>
-          {credits !== null && <div className={styles.creditsBadge} title="Available credits"><FontAwesomeIcon icon={faCoins} /><span>{credits} credits</span></div>}
-          <button type="button" className={styles.refreshBtn} onClick={refresh} disabled={data.loading || data.playlistLoading} aria-label="Refresh library" title="Refresh library"><FontAwesomeIcon icon={faRotateRight} /></button>
-        </header>
+    <AppShell>
+      <header className="page-head">
+        <div>
+          <span className="kicker">Bibliothek · {readyCount} {readyCount === 1 ? 'Song' : 'Songs'} bereit
+            {processingCount > 0 && <> · {processingCount} in Arbeit</>}{failedCount > 0 && <> · {failedCount} fehlgeschlagen</>}</span>
+          <h1>{addMode ? 'Songs hinzufügen' : 'Bibliothek'}</h1>
+          <p>{addMode ? 'Such im Katalog. Neue Songs kosten 5 Credits und sind nach ca. 2 Minuten singbar.' : 'Alles, was schon getrennt und getimt ist. Sofort singbar.'}</p>
+        </div>
+        <div className="page-head__end">
+          <button type="button" className="iconbtn iconbtn--outline" onClick={refresh} disabled={data.loading || data.playlistLoading} aria-label="Bibliothek aktualisieren" title="Aktualisieren"><Icon name="redo" /></button>
+          <button type="button" className={`btn ${addMode ? '' : 'btn--primary'}`} aria-pressed={addMode} onClick={toggleAddMode}>
+            {addMode ? <><Icon name="library" /> Zur Bibliothek</> : <><Icon name="plus" /> Songs hinzufügen</>}
+          </button>
+        </div>
+      </header>
 
-        {data.error && <PageState title="Could not load library" description={data.error} action={<button type="button" className={styles.primaryButton} onClick={refresh} disabled={data.loading}>Try again</button>} />}
-        {!data.loaded && data.loading && <PageState title="Loading your library" loading />}
-        {data.loaded && <>
-          <nav className={styles.pillRow} aria-label="Library views">
-            <button type="button" className={`${styles.pill} ${activeTab === 'all' ? styles.pillActive : ''}`} aria-pressed={activeTab === 'all'} onClick={() => selectTab('all')}><FontAwesomeIcon icon={faMusic} /> All songs</button>
-            <button type="button" className={`${styles.pill} ${activeTab === 'favorites' ? styles.pillActive : ''}`} aria-pressed={activeTab === 'favorites'} onClick={() => selectTab('favorites')}><FontAwesomeIcon icon={faHeart} /> Favorites <span className={styles.pillCount}>{favCount}</span></button>
-            <button type="button" className={`${styles.pill} ${activeTab === 'playlists' ? styles.pillActive : ''}`} aria-pressed={activeTab === 'playlists'} onClick={() => selectTab('playlists')}><FontAwesomeIcon icon={faListUl} /> Playlists <span className={styles.pillCount}>{playlists.length}</span></button>
-          </nav>
-
-          {isPlaylistDetail && viewingPlaylist && <div className={styles.playlistDetailHeader}>
-            <button type="button" className={styles.playlistBackBtn} onClick={() => selectTab('playlists')}><FontAwesomeIcon icon={faChevronLeft} /> Playlists</button>
-            <div className={styles.playlistDetailInfo}><h2 className={styles.playlistDetailName}>{viewingPlaylist.name}</h2><span className={styles.playlistDetailCount}>{viewingPlaylist.track_count} tracks</span></div>
-            <button type="button" className={styles.playlistAddSongsBtn} onClick={() => { setAddingSongsToPlaylist(true); setAddSongsFilter('') }} disabled={data.playlistLoading || !!data.playlistError} aria-haspopup="dialog"><FontAwesomeIcon icon={faPlus} /> Add songs</button>
-            <button type="button" className={styles.playlistDeleteBtn} onClick={() => setDeletePlaylist(viewingPlaylist)} aria-label={`Delete playlist ${viewingPlaylist.name}`} title="Delete playlist"><FontAwesomeIcon icon={faTrash} /></button>
-          </div>}
-
-          {!showSongViews && <section aria-label="Your playlists">
-            <div className={styles.playlistsGrid}>
-              {playlists.map(playlist => <article key={playlist.id} className={styles.playlistCard}>
-                <button type="button" className={styles.playlistOpenButton} onClick={() => { setViewingPlaylistId(playlist.id); setFilter('') }} aria-label={`Open ${playlist.name}, ${playlist.track_count} tracks`}>
-                  <span className={styles.playlistCardMosaic}><FontAwesomeIcon icon={faListUl} /></span>
-                  <span className={styles.playlistCardBody}><span className={styles.playlistCardName}>{playlist.name}</span><span className={styles.playlistCardCount}>{playlist.track_count} track{playlist.track_count !== 1 ? 's' : ''}</span></span>
-                </button>
-                <button type="button" className={styles.playlistCardDelete} onClick={() => setDeletePlaylist(playlist)} aria-label={`Delete playlist ${playlist.name}`} title="Delete playlist"><FontAwesomeIcon icon={faTrash} /></button>
-              </article>)}
-              <button type="button" className={styles.playlistNewCard} onClick={() => { setCreatingPlaylist(true); setNewPlaylistName('') }} aria-haspopup="dialog"><span className={styles.playlistNewCardIcon}><FontAwesomeIcon icon={faPlus} /></span><span className={styles.playlistNewCardLabel}>New playlist</span></button>
-            </div>
-            {playlists.length === 0 && <PageState title="No playlists yet" description="Create a playlist to keep your favorite karaoke sets together." />}
-          </section>}
-
-          {showSongViews && <>
-            <div className={styles.toolbar}>
-              <div className={styles.searchWrap}>
-                <FontAwesomeIcon icon={searchMode === 'add' ? faGlobe : faMagnifyingGlass} className={styles.searchIcon} />
-                <input type="search" className={styles.searchInput} aria-label={searchMode === 'add' ? 'Search Deezer for songs' : 'Filter library songs'} placeholder={searchMode === 'add' ? 'Search Deezer to add songs...' : 'Filter songs by title or artist...'} value={searchMode === 'add' ? deezerQuery : filter} onChange={e => searchMode === 'add' ? setDeezerQuery(e.target.value) : setFilter(e.target.value)} />
+      {data.error && <PageState error title="Die Bibliothek konnte nicht geladen werden." description={de(data.error)} action={<button type="button" className="btn" onClick={refresh} disabled={data.loading}><Icon name="redo" /> Erneut versuchen</button>} />}
+      {!data.loaded && data.loading && <div className={styles.skeletonGrid} aria-busy="true" aria-label="Bibliothek wird geladen">
+        {Array.from({ length: 12 }, (_, i) => <div key={i} className={styles.skeletonCard}><div className={`skeleton ${styles.skeletonArt}`} /><div className={`skeleton ${styles.skeletonLine}`} /><div className={`skeleton ${styles.skeletonLine} ${styles.short}`} /></div>)}
+      </div>}
+      {data.loaded && <>
+        <div className={`${styles.toolbar} ${addMode ? styles.toolbarAdd : ''}`}>
+          {!addMode && <nav className={`seg ${styles.tabs}`} aria-label="Ansichten">
+            <button type="button" className={styles.tab} aria-pressed={activeTab === 'all' && !isPlaylistDetail} onClick={() => selectTab('all')}>Alle Songs <span className="count">{songs.length}</span></button>
+            <button type="button" className={styles.tab} aria-pressed={activeTab === 'favorites'} onClick={() => selectTab('favorites')}>Favoriten <span className="count">{favCount}</span></button>
+            <button type="button" className={styles.tab} aria-pressed={activeTab === 'playlists'} onClick={() => selectTab('playlists')}>Playlists <span className="count">{playlists.length}</span></button>
+          </nav>}
+          {showSongViews && <div className={styles.tools}>
+            <label className={styles.searchWrap}>
+              <span className="sr-only">{addMode ? 'Im Katalog suchen' : 'Bibliothek filtern'}</span>
+              <Icon name={addMode ? 'search' : 'filter'} size={18} className={styles.searchIcon} />
+              <input type="search" className={styles.filterInput} autoFocus={addMode}
+                placeholder={addMode ? 'Song oder Interpret im Katalog suchen' : 'Titel oder Interpret filtern'}
+                value={addMode ? deezerQuery : filter} onChange={e => addMode ? setDeezerQuery(e.target.value) : setFilter(e.target.value)} />
+            </label>
+            {preview.previewId !== null && <label className={styles.volume}>
+              <Icon name="volume" size={18} />
+              <span className="sr-only">Lautstärke Vorhören</span>
+              <input type="range" min={0} max={100} value={preview.previewVolume} onChange={e => preview.setPreviewVolume(Number(e.target.value))}
+                aria-valuetext={`${preview.previewVolume} Prozent`} />
+            </label>}
+            {!addMode && <>
+              <CustomSelect className={`input ${styles.sort}`} aria-label="Sortierung" value={sort} onChange={value => setSort(value as SortKey)} options={SORTS} />
+              <div className="seg" role="group" aria-label="Darstellung">
+                <button type="button" aria-pressed={viewMode === 'grid'} onClick={() => setViewMode('grid')} title="Raster"><Icon name="grid" size={18} /><span className={styles.viewLabel}>Raster</span></button>
+                <button type="button" aria-pressed={viewMode === 'list'} onClick={() => setViewMode('list')} title="Liste"><Icon name="rows" size={18} /><span className={styles.viewLabel}>Liste</span></button>
               </div>
-              <button type="button" className={`${styles.modeToggle} ${styles.modeToggleLabel} ${searchMode === 'add' ? styles.modeToggleActive : ''}`} onClick={() => { preview.stopPreview(); setSearchMode(searchMode === 'filter' ? 'add' : 'filter'); setFilter('') }} aria-pressed={searchMode === 'add'}><FontAwesomeIcon icon={searchMode === 'add' ? faMusic : faPlus} /><span>{searchMode === 'add' ? 'Library' : 'Add songs'}</span></button>
-              {preview.previewId !== null && <div className={`${styles.volumeWrap} ${styles.volumeWrapVisible}`}><FontAwesomeIcon icon={faVolumeLow} /><input type="range" min={0} max={100} value={preview.previewVolume} onChange={e => preview.setPreviewVolume(Number(e.target.value))} className={styles.volumeSlider} aria-label="Preview volume" aria-valuetext={`${preview.previewVolume}%`} /></div>}
-              {searchMode === 'filter' && <div className={styles.viewToggle} role="group" aria-label="Song layout">
-                <button type="button" className={`${styles.viewToggleBtn} ${viewMode === 'grid' ? styles.viewToggleBtnActive : ''}`} aria-label="Grid view" aria-pressed={viewMode === 'grid'} onClick={() => setViewMode('grid')} title="Grid view"><FontAwesomeIcon icon={faTableCells} /></button>
-                <button type="button" className={`${styles.viewToggleBtn} ${viewMode === 'list' ? styles.viewToggleBtnActive : ''}`} aria-label="List view" aria-pressed={viewMode === 'list'} onClick={() => setViewMode('list')} title="List view"><FontAwesomeIcon icon={faList} /></button>
-              </div>}
-            </div>
+            </>}
+          </div>}
+        </div>
 
-            {searchMode === 'add' ? <section aria-label="Deezer search results">
-              {deezerQuery.trim().length < 2 ? <PageState title="Find your next song" description="Enter at least two characters to search by title or artist." />
-                : search.loading ? <PageState title="Searching Deezer" loading />
-                : search.error ? <PageState title="Search unavailable" description={search.error} action={<button type="button" className={styles.primaryButton} onClick={search.retry}>Try again</button>} />
-                : search.results.length === 0 ? <PageState title="No songs found" description="Try a different title or artist." /> : <>
-                  <p className={styles.searchResultsHeader} role="status">{search.results.length} songs found</p>
-                  <div className={styles.grid}>{search.results.map(song => {
+        {isPlaylistDetail && viewingPlaylist && <div className={styles.playlistHead}>
+          <button type="button" className="btn btn--ghost btn--sm" onClick={() => selectTab('playlists')}><Icon name="chevron-left" size={16} /> Playlists</button>
+          <div className={styles.playlistTitle}><h2>{viewingPlaylist.name}</h2><span className="mono">{viewingPlaylist.track_count} {viewingPlaylist.track_count === 1 ? 'Song' : 'Songs'}</span></div>
+          <div className={styles.playlistActions}>
+            <button type="button" className="btn" onClick={() => { setAddingSongsToPlaylist(true); setAddSongsFilter('') }} disabled={data.playlistLoading || !!data.playlistError} aria-haspopup="dialog"><Icon name="plus" /> Songs hinzufügen</button>
+            <button type="button" className="iconbtn iconbtn--outline iconbtn--danger" onClick={() => setDeletePlaylist(viewingPlaylist)} aria-label={`Playlist ${viewingPlaylist.name} löschen`} title="Playlist löschen"><Icon name="trash" /></button>
+          </div>
+        </div>}
+
+        {!showSongViews && <section aria-label="Deine Playlists">
+          {playlists.length === 0 ? <PageState icon="list" title="Noch keine Playlists." description="Sammle deine Lieblingssongs für den nächsten Abend."
+            action={<button type="button" className="btn btn--primary" onClick={() => { setCreatingPlaylist(true); setNewPlaylistName('') }}><Icon name="plus" /> Playlist erstellen</button>} />
+            : <div className={styles.grid}>
+              {playlists.map(playlist => <article key={playlist.id} className={styles.playlistCard}>
+                <button type="button" className={styles.playlistOpen} onClick={() => { setViewingPlaylistId(playlist.id); setFilter('') }} aria-label={`${playlist.name} öffnen, ${playlist.track_count} Songs`}>
+                  <span className={styles.mosaic} aria-hidden="true"><i /><i /><i /><i /><Icon name="list" size={28} /></span>
+                  <span className={styles.playlistName}>{playlist.name}</span>
+                  <span className={styles.playlistCount}>{playlist.track_count} {playlist.track_count === 1 ? 'Song' : 'Songs'}</span>
+                </button>
+                <button type="button" className={`iconbtn iconbtn--sm ${styles.playlistDelete}`} onClick={() => setDeletePlaylist(playlist)} aria-label={`Playlist ${playlist.name} löschen`} title="Playlist löschen"><Icon name="trash" size={18} /></button>
+              </article>)}
+              <button type="button" className={styles.newPlaylist} onClick={() => { setCreatingPlaylist(true); setNewPlaylistName('') }} aria-haspopup="dialog">
+                <Icon name="plus" size={28} /><span>Neue Playlist</span>
+              </button>
+            </div>}
+        </section>}
+
+        {showSongViews && (addMode ? <section aria-label="Suchergebnisse im Katalog">
+          {deezerQuery.trim().length < 2 ? <PageState icon="search" title="Finde deinen nächsten Song." description="Gib mindestens zwei Zeichen ein, Titel oder Interpret." />
+            : search.loading ? <PageState title={`Sucht nach „${deezerQuery.trim()}“ …`} loading />
+            : search.error ? <PageState error title="Die Suche ist gerade nicht erreichbar." description={search.error} action={<button type="button" className="btn" onClick={search.retry}><Icon name="redo" /> Erneut versuchen</button>} />
+            : search.results.length === 0 ? <PageState icon="search" title={`Nichts gefunden für „${deezerQuery.trim()}“.`} description="Versuch’s mit dem Interpreten oder einer anderen Schreibweise." /> : <>
+              <p className={styles.resultsHead} role="status">{search.results.length} Treffer</p>
+              <div className="table-wrap">
+                <table className="table table--cards">
+                  <thead><tr><th scope="col"><span className="sr-only">Cover</span></th><th scope="col">Titel</th><th scope="col">Album</th><th scope="col"><span className="sr-only">Aktion</span></th></tr></thead>
+                  <tbody>{search.results.map(song => {
                     const inLibrary = songs.some(track => track.id === song.id)
                     const busy = pending.has(`add:${song.id}`)
-                    return <article key={song.id} className={styles.card}>
-                      <div className={styles.cardArt}><img src={hiResCover(song.img_url)} alt="" loading="lazy" /></div>
-                      <div className={styles.cardBody}><h3 className={styles.cardTitle} title={song.title}>{song.title}</h3><div className={styles.cardArtist}>{song.artist}</div></div>
-                      <div className={styles.cardActions}><button type="button" className={styles.deezerAddBtn} disabled={inLibrary || busy} onClick={() => addSong(song)}>{inLibrary ? 'In library' : busy ? 'Adding...' : <><FontAwesomeIcon icon={faPlus} /> Add to library</>}</button></div>
-                    </article>
-                  })}</div>
-                </>}
-            </section> : data.playlistLoading ? <PageState title="Loading playlist" loading />
-              : data.playlistError ? <PageState title="Could not load playlist" description={data.playlistError} action={<button type="button" className={styles.primaryButton} onClick={refresh}>Try again</button>} />
-              : filtered.length === 0 ? <PageState
-                title={filter.trim() ? 'No matching songs' : isPlaylistDetail ? 'This playlist is empty' : activeTab === 'favorites' ? 'No favorites yet' : 'Your library is empty'}
-                description={filter.trim() ? 'Try another title or artist, or clear the filter.' : isPlaylistDetail ? 'Add songs from your library to build this playlist.' : activeTab === 'favorites' ? 'Use the heart button on a song to save it here.' : 'Search Deezer to add your first karaoke song.'}
-                action={filter.trim() ? <button type="button" className={styles.secondaryButton} onClick={() => setFilter('')}>Clear filter</button> : !isPlaylistDetail && activeTab === 'all' ? <button type="button" className={styles.primaryButton} onClick={() => setSearchMode('add')}>Find songs</button> : undefined} />
-              : <TrackCollection songs={filtered} viewMode={viewMode} favorites={favorites} statuses={statuses} pending={pending}
-                previewId={preview.previewId} previewProgress={preview.previewProgress} onPlay={song => { preview.stopPreview(); navigate(`/song/${encodeURIComponent(song.id)}`) }} onFavorite={toggleFavorite} onPreview={preview.togglePreview} onPlaylist={id => { setAddToPlaylistSongId(id); setNewPlaylistName('') }} onRetry={retrySong} />}
-          </>}
-        </>}
-      </div>
+                    return <tr key={song.id}>
+                      <td className={styles.thumbCell} data-label=""><Cover className={styles.listThumb} src={song.img_url} /></td>
+                      <td className="cell-main" data-label=""><div className={styles.listTitle}>{song.title}</div><div className={styles.listArtist}>{song.artist}</div></td>
+                      <td data-label="Album" className={styles.albumCell}>{song.album}</td>
+                      <td className="cell-acts" data-label="">
+                        {inLibrary ? <span className="chip chip--ok"><Icon name="check" size={14} /> In der Bibliothek</span>
+                          : <button type="button" className="btn btn--sm btn--primary" disabled={busy} onClick={() => addSong(song)} aria-label={`${song.title} hinzufügen`}>
+                            {busy ? 'Wird hinzugefügt …' : <><Icon name="plus" size={16} /> Hinzufügen</>}
+                          </button>}
+                      </td>
+                    </tr>
+                  })}</tbody>
+                </table>
+              </div>
+            </>}
+        </section> : data.playlistLoading ? <PageState title="Playlist wird geladen …" loading />
+          : data.playlistError ? <PageState error title="Die Playlist konnte nicht geladen werden." description={de(data.playlistError)} action={<button type="button" className="btn" onClick={refresh}><Icon name="redo" /> Erneut versuchen</button>} />
+          : filtered.length === 0 ? <PageState
+            icon={filter.trim() ? 'filter' : activeTab === 'favorites' && !isPlaylistDetail ? 'heart' : 'library'}
+            title={filter.trim() ? `Kein Song passt zu „${filter.trim()}“.` : isPlaylistDetail ? 'Diese Playlist ist noch leer.' : activeTab === 'favorites' ? 'Noch keine Favoriten.' : 'Noch keine Songs.'}
+            description={filter.trim() ? 'Probier einen anderen Titel oder Interpreten.' : isPlaylistDetail ? 'Füge Songs aus deiner Bibliothek hinzu.' : activeTab === 'favorites' ? 'Tipp aufs Herz bei einem Song.' : 'Such deinen ersten Song, er landet danach hier.'}
+            action={filter.trim() ? <button type="button" className="btn" onClick={() => setFilter('')}>Filter zurücksetzen</button> : !isPlaylistDetail && activeTab === 'all' ? <button type="button" className="btn btn--primary" onClick={() => setSearchMode('add')}><Icon name="plus" /> Songs hinzufügen</button> : undefined} />
+          : <TrackCollection songs={filtered} viewMode={viewMode} favorites={favorites} statuses={statuses} pending={pending}
+            previewId={preview.previewId} previewProgress={preview.previewProgress} onPlay={song => { preview.stopPreview(); navigate(`/song/${encodeURIComponent(song.id)}`) }} onFavorite={toggleFavorite} onPreview={preview.togglePreview} onPlaylist={id => { setAddToPlaylistSongId(id); setNewPlaylistName('') }} onRetry={retrySong} />)}
+      </>}
 
-      {creatingPlaylist && <Modal title="Create playlist" onClose={() => setCreatingPlaylist(false)} busy={playlistBusy} size="small"
-        footer={<><button type="button" className={styles.secondaryButton} onClick={() => setCreatingPlaylist(false)} disabled={playlistBusy}>Cancel</button><button type="submit" form="create-playlist" className={styles.primaryButton} disabled={!newPlaylistName.trim() || playlistBusy}>{playlistBusy ? 'Creating...' : 'Create playlist'}</button></>}>
-        <form id="create-playlist" onSubmit={e => { e.preventDefault(); createPlaylist() }} className={styles.dialogForm}>
-          <label htmlFor="playlist-name">Playlist name</label><input id="playlist-name" autoFocus maxLength={100} value={newPlaylistName} onChange={e => setNewPlaylistName(e.target.value)} required className={styles.dialogInput} disabled={playlistBusy} />
+      {creatingPlaylist && <Modal title="Playlist erstellen" onClose={() => setCreatingPlaylist(false)} busy={playlistBusy} size="small"
+        footer={<><button type="button" className="btn" onClick={() => setCreatingPlaylist(false)} disabled={playlistBusy}>Abbrechen</button><button type="submit" form="create-playlist" className="btn btn--primary" disabled={!newPlaylistName.trim() || playlistBusy}>{playlistBusy ? 'Wird erstellt …' : 'Playlist erstellen'}</button></>}>
+        <form id="create-playlist" onSubmit={e => { e.preventDefault(); createPlaylist() }} className="field">
+          <label htmlFor="playlist-name">Name der Playlist</label><input id="playlist-name" className="input" autoFocus maxLength={100} value={newPlaylistName} onChange={e => setNewPlaylistName(e.target.value)} required disabled={playlistBusy} />
         </form>
       </Modal>}
 
-      {deletePlaylist && <Modal title="Delete playlist?" onClose={() => setDeletePlaylist(null)} busy={pending.has('delete-playlist')} size="small"
-        footer={<><button type="button" className={styles.secondaryButton} onClick={() => setDeletePlaylist(null)} disabled={pending.has('delete-playlist')}>Cancel</button><button type="button" className={styles.dangerButton} onClick={confirmDeletePlaylist} disabled={pending.has('delete-playlist')}>{pending.has('delete-playlist') ? 'Deleting...' : 'Delete playlist'}</button></>}>
-        <p>Delete "{deletePlaylist.name}"? The songs will stay in your library.</p>
+      {deletePlaylist && <Modal title="Playlist löschen?" onClose={() => setDeletePlaylist(null)} busy={pending.has('delete-playlist')} size="small"
+        footer={<><button type="button" className="btn" onClick={() => setDeletePlaylist(null)} disabled={pending.has('delete-playlist')}>Abbrechen</button><button type="button" className="btn btn--danger-solid" onClick={confirmDeletePlaylist} disabled={pending.has('delete-playlist')}>{pending.has('delete-playlist') ? 'Wird gelöscht …' : 'Playlist löschen'}</button></>}>
+        <p>„{deletePlaylist.name}“ wird gelöscht. Die Songs bleiben in deiner Bibliothek.</p>
       </Modal>}
 
-      {addToPlaylistSongId && <Modal title="Playlist options" onClose={() => setAddToPlaylistSongId(null)} busy={playlistBusy} size="small">
-        <p className={styles.dialogDescription}>{selectedSong?.title || 'Selected song'}</p>
-        <div className={styles.playlistChoices}>{playlists.length === 0 ? <p className={styles.dialogDescription}>Create your first playlist below.</p> : playlists.map(playlist => <button type="button" key={playlist.id} className={styles.playlistChoice} disabled={playlistBusy} onClick={() => addToPlaylist(playlist.id, addToPlaylistSongId)}><FontAwesomeIcon icon={faPlus} /> {playlist.name}</button>)}</div>
-        {isPlaylistDetail && <button type="button" className={styles.dangerButton} onClick={removeFromPlaylist} disabled={playlistBusy}><FontAwesomeIcon icon={faTrash} /> Remove from this playlist</button>}
-        <form className={styles.dialogForm} onSubmit={e => { e.preventDefault(); createPlaylist() }}>
-          <label htmlFor="new-playlist-name">New playlist name</label><input id="new-playlist-name" maxLength={100} required value={newPlaylistName} onChange={e => setNewPlaylistName(e.target.value)} className={styles.dialogInput} disabled={playlistBusy} />
-          <button type="submit" className={styles.primaryButton} disabled={!newPlaylistName.trim() || playlistBusy}>{playlistBusy ? 'Saving...' : 'Create playlist and add song'}</button>
+      {addToPlaylistSongId && <Modal title="Zur Playlist" variant="sheet" onClose={() => setAddToPlaylistSongId(null)} busy={playlistBusy} size="small">
+        <p className={styles.dialogSong}>{selectedSong?.title || 'Ausgewählter Song'}</p>
+        <div className={styles.choices}>{playlists.length === 0 ? <p className={styles.dialogHint}>Erstelle unten deine erste Playlist.</p> : playlists.map(playlist => <button type="button" key={playlist.id} className="btn" disabled={playlistBusy} onClick={() => addToPlaylist(playlist.id, addToPlaylistSongId)}><Icon name="plus" size={16} /> {playlist.name}</button>)}</div>
+        {isPlaylistDetail && <button type="button" className="btn btn--danger" onClick={removeFromPlaylist} disabled={playlistBusy}><Icon name="trash" size={16} /> Aus dieser Playlist entfernen</button>}
+        <form className={styles.newForm} onSubmit={e => { e.preventDefault(); createPlaylist() }}>
+          <div className="field"><label htmlFor="new-playlist-name">Neue Playlist</label><input id="new-playlist-name" className="input" maxLength={100} required value={newPlaylistName} onChange={e => setNewPlaylistName(e.target.value)} disabled={playlistBusy} /></div>
+          <button type="submit" className="btn btn--primary" disabled={!newPlaylistName.trim() || playlistBusy}>{playlistBusy ? 'Wird gespeichert …' : 'Erstellen und Song hinzufügen'}</button>
         </form>
       </Modal>}
 
-      {addingSongsToPlaylist && viewingPlaylistId !== null && <Modal title={`Add songs to ${viewingPlaylist?.name || 'playlist'}`} onClose={() => setAddingSongsToPlaylist(false)} busy={playlistBusy}>
-        <label className={styles.dialogForm}>Filter library songs<input type="search" className={styles.dialogInput} autoFocus value={addSongsFilter} onChange={e => setAddSongsFilter(e.target.value)} placeholder="Title or artist" /></label>
-        <div className={styles.addSongsList}>
-          {addableSongs.length === 0 ? <PageState title={addSongsFilter.trim() ? 'No matching songs' : 'No songs available'} description={addSongsFilter.trim() ? 'Try another title or artist.' : 'Songs must finish processing before you can add them. Songs already in this playlist are hidden.'} />
-            : addableSongs.map(song => <div key={song.id} className={styles.addSongRow}>
-              <img src={song.img_url || '/logo.svg'} alt="" className={styles.addSongThumb} loading="lazy" />
-              <div className={styles.addSongInfo}><div className={styles.addSongTitle}>{song.title}</div><div className={styles.addSongArtist}>{song.artist}</div></div>
-              <button type="button" className={styles.addSongBtn} onClick={() => addToPlaylist(viewingPlaylistId, song.id)} disabled={playlistBusy} aria-label={`Add ${song.title} to playlist`}><FontAwesomeIcon icon={faPlus} /></button>
+      {addingSongsToPlaylist && viewingPlaylistId !== null && <Modal title={`Songs zu „${viewingPlaylist?.name || 'Playlist'}“ hinzufügen`} onClose={() => setAddingSongsToPlaylist(false)} busy={playlistBusy}>
+        <label className="field">Bibliothek filtern<input type="search" className="input" autoFocus value={addSongsFilter} onChange={e => setAddSongsFilter(e.target.value)} placeholder="Titel oder Interpret" /></label>
+        <div className={styles.addList}>
+          {addableSongs.length === 0 ? <PageState icon="library" title={addSongsFilter.trim() ? 'Kein passender Song.' : 'Keine Songs verfügbar.'} description={addSongsFilter.trim() ? 'Probier einen anderen Titel oder Interpreten.' : 'Nur fertige Songs lassen sich hinzufügen. Songs, die schon in der Playlist sind, sind ausgeblendet.'} />
+            : addableSongs.map(song => <div key={song.id} className={styles.addRow}>
+              <Cover src={song.img_url} className={styles.listThumb} />
+              <div><div className={styles.listTitle}>{song.title}</div><div className={styles.listArtist}>{song.artist}</div></div>
+              <button type="button" className="iconbtn iconbtn--outline iconbtn--sm" onClick={() => addToPlaylist(viewingPlaylistId, song.id)} disabled={playlistBusy} aria-label={`${song.title} zur Playlist hinzufügen`}><Icon name="plus" size={18} /></button>
             </div>)}
         </div>
       </Modal>}
-    </main>
+    </AppShell>
   )
 }

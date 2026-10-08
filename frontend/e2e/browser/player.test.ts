@@ -18,10 +18,9 @@ afterAll(async () => {
 
 describe('Player Page E2E', () => {
   describe('Layout', () => {
-    it('should render sidebar with Queue and Library tabs', async () => {
-      const pageText = await page.evaluate(() => document.body.textContent || '')
-      expect(pageText).toContain('Queue')
-      expect(pageText).toContain('Library')
+    it('should render the setlist with queue and library tabs', async () => {
+      expect(await exists(page, '[data-testid="tab-queue"]')).toBe(true)
+      expect(await exists(page, '[data-testid="tab-library"]')).toBe(true)
     })
 
     it('should render header with profile link', async () => {
@@ -46,14 +45,14 @@ describe('Player Page E2E', () => {
 
   describe('Search', () => {
     it('should have a search input', async () => {
-      const hasSearch = await exists(page, 'input[placeholder*="Search"]')
+      const hasSearch = await exists(page, '[data-testid="search-input"]')
       expect(hasSearch).toBe(true)
     })
 
     it('should show search results on typing', async () => {
       // Set search value via React-compatible programmatic approach
       await page.evaluate(() => {
-        const input = document.querySelector('input[placeholder*="Search"]') as HTMLInputElement
+        const input = document.querySelector('[data-testid="search-input"]') as HTMLInputElement
         if (!input) return
         input.focus()
         // Use native setter to bypass React's controlled value
@@ -84,7 +83,7 @@ describe('Player Page E2E', () => {
     it('should not search for single character', async () => {
       // Set input to single char using React-compatible approach
       await page.evaluate(() => {
-        const input = document.querySelector('input[placeholder*="Search"]') as HTMLInputElement
+        const input = document.querySelector('[data-testid="search-input"]') as HTMLInputElement
         if (!input) return
         input.focus()
         const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
@@ -102,7 +101,7 @@ describe('Player Page E2E', () => {
 
       // Clear
       await page.evaluate(() => {
-        const input = document.querySelector('input[placeholder*="Search"]') as HTMLInputElement
+        const input = document.querySelector('[data-testid="search-input"]') as HTMLInputElement
         if (!input) return
         const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
         nativeSetter.call(input, '')
@@ -116,7 +115,7 @@ describe('Player Page E2E', () => {
     it('should add song to queue when clicking a search result', async () => {
       // Search using React-compatible approach
       await page.evaluate(() => {
-        const input = document.querySelector('input[placeholder*="Search"]') as HTMLInputElement
+        const input = document.querySelector('[data-testid="search-input"]') as HTMLInputElement
         if (!input) return
         input.focus()
         const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
@@ -144,13 +143,7 @@ describe('Player Page E2E', () => {
 
         // Switch to Queue tab to see the added item
         await page.evaluate(() => {
-          const tabs = document.querySelectorAll('[class*="tab"]')
-          for (const tab of tabs) {
-            if (tab.textContent?.trim() === 'Queue') {
-              (tab as HTMLElement).click()
-              break
-            }
-          }
+          (document.querySelector('[data-testid="tab-queue"]') as HTMLElement | null)?.click()
         })
         await waitForIdle(page, 500)
 
@@ -163,7 +156,7 @@ describe('Player Page E2E', () => {
 
       // Clear search
       await page.evaluate(() => {
-        const input = document.querySelector('input[placeholder*="Search"]') as HTMLInputElement
+        const input = document.querySelector('[data-testid="search-input"]') as HTMLInputElement
         if (!input) return
         const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
         nativeSetter.call(input, '')
@@ -179,17 +172,11 @@ describe('Player Page E2E', () => {
     it('should have Random button', async () => {
       // Ensure Queue tab is active
       await page.evaluate(() => {
-        const tabs = document.querySelectorAll('[class*="tab"]')
-        for (const tab of tabs) {
-          if (tab.textContent?.trim() === 'Queue') {
-            (tab as HTMLElement).click()
-            break
-          }
-        }
+        (document.querySelector('[data-testid="tab-queue"]') as HTMLElement | null)?.click()
       })
       await waitForIdle(page, 500)
 
-      const hasRandom = await exists(page, 'button[title="Add random song"]')
+      const hasRandom = await exists(page, '[data-testid="random-song"]')
       expect(hasRandom).toBe(true)
     })
   })
@@ -198,13 +185,7 @@ describe('Player Page E2E', () => {
     it('should switch between Queue and Library tabs', async () => {
       // Click Library tab
       await page.evaluate(() => {
-        const tabs = document.querySelectorAll('[class*="tab"]')
-        for (const tab of tabs) {
-          if (tab.textContent?.trim() === 'Library') {
-            (tab as HTMLElement).click()
-            break
-          }
-        }
+        (document.querySelector('[data-testid="tab-library"]') as HTMLElement | null)?.click()
       })
       await waitForIdle(page, 1500)
 
@@ -215,13 +196,7 @@ describe('Player Page E2E', () => {
 
       // Click Queue tab back
       await page.evaluate(() => {
-        const tabs = document.querySelectorAll('[class*="tab"]')
-        for (const tab of tabs) {
-          if (tab.textContent?.trim() === 'Queue') {
-            (tab as HTMLElement).click()
-            break
-          }
-        }
+        (document.querySelector('[data-testid="tab-queue"]') as HTMLElement | null)?.click()
       })
       await waitForIdle(page, 500)
     })
@@ -235,7 +210,7 @@ describe('Player Page E2E', () => {
 
       // Click the theme toggle button directly (standalone button in header)
       await page.evaluate(() => {
-        const btn = document.querySelector('button[title="Toggle Theme"]') as HTMLElement
+        const btn = document.querySelector('[data-testid="theme-toggle"]') as HTMLElement
         if (btn) btn.click()
       })
       await waitForIdle(page, 500)
@@ -247,7 +222,7 @@ describe('Player Page E2E', () => {
 
       // Toggle back
       await page.evaluate(() => {
-        const btn = document.querySelector('button[title="Toggle Theme"]') as HTMLElement
+        const btn = document.querySelector('[data-testid="theme-toggle"]') as HTMLElement
         if (btn) btn.click()
       })
       await waitForIdle(page, 300)
@@ -274,11 +249,11 @@ describe('Player Page E2E', () => {
       expect(profileLink!.href).toContain('/profile')
 
       // Logout button exists
-      const hasLogout = await exists(page, 'button[title="Logout"]')
+      const hasLogout = await exists(page, '[data-testid="logout"]')
       expect(hasLogout).toBe(true)
 
       // Theme toggle exists
-      const hasTheme = await exists(page, 'button[title="Toggle Theme"]')
+      const hasTheme = await exists(page, '[data-testid="theme-toggle"]')
       expect(hasTheme).toBe(true)
     })
   })

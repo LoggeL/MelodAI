@@ -1,17 +1,30 @@
 import { useState, useEffect, useId, useRef, type ReactNode } from 'react'
-import { NavLink } from 'react-router-dom'
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faChevronLeft, faChevronRight, faXmark, faListUl, faCompactDisc } from '@fortawesome/free-solid-svg-icons'
+import { Icon } from '../common/Icon'
+import { NavList } from './NavList'
+import { ThemeButton } from './Header'
 import styles from './Sidebar.module.css'
 
 interface Props {
+  /** Setlist header (title, count, actions). */
+  head?: ReactNode
   queueContent: ReactNode
   libraryContent: ReactNode
+  queueCount?: number
   mobileOpen?: boolean
   onMobileClose?: () => void
+  collapsed?: boolean
+  onCollapsedChange?: (collapsed: boolean) => void
+  isAdmin?: boolean
+  theme?: 'light' | 'dark'
+  onThemeToggle?: () => void
+  onLogout?: () => void
 }
 
-export function Sidebar({ queueContent, libraryContent, mobileOpen, onMobileClose }: Props) {
+/** Setlist panel (≥ 900, collapsible) and the right-hand drawer below 900 (§4.0, §5.9). */
+export function Sidebar({
+  head, queueContent, libraryContent, queueCount = 0, mobileOpen = false, onMobileClose,
+  collapsed = false, onCollapsedChange, isAdmin = false, theme, onThemeToggle, onLogout,
+}: Props) {
   const sidebarRef = useRef<HTMLElement>(null)
   useEffect(() => {
     if (!mobileOpen) return
@@ -30,76 +43,58 @@ export function Sidebar({ queueContent, libraryContent, mobileOpen, onMobileClos
     document.addEventListener('keydown', onKey)
     return () => { document.removeEventListener('keydown', onKey); previous?.focus() }
   }, [mobileOpen, onMobileClose])
-  const [collapsed, setCollapsed] = useState(false)
-  const [activeTab, setActiveTab] = useState<'queue' | 'library'>('library')
+  const [activeTab, setActiveTab] = useState<'queue' | 'library'>('queue')
   const contentId = useId()
   const isCollapsed = collapsed && !mobileOpen
 
-  const sidebarClass = [
-    styles.sidebar,
-    isCollapsed ? styles.collapsed : '',
-    mobileOpen ? styles.open : '',
-  ].filter(Boolean).join(' ')
+  const sidebarClass = [styles.sidebar, isCollapsed ? styles.collapsed : '', mobileOpen ? styles.open : ''].filter(Boolean).join(' ')
 
   return (
     <>
-      {mobileOpen && <div className={styles.backdrop} onClick={onMobileClose} />}
-      <aside ref={sidebarRef} className={sidebarClass} aria-label="Library and queue" role={mobileOpen ? 'dialog' : undefined} aria-modal={mobileOpen || undefined}>
-        <div className={styles.header} hidden={isCollapsed}>
-          <div className={styles.brand}>
-            <img src="/logo.svg" alt="MelodAI" className={styles.logo} />
-            <h1 className={styles.logoText}>Melod<span className={styles.logoAccent}>AI</span></h1>
-          </div>
-          <button className={styles.mobileClose} aria-label="Close library and queue" onClick={onMobileClose}>
-            <FontAwesomeIcon icon={faXmark} />
+      {mobileOpen && <div className={styles.backdrop} onClick={onMobileClose} aria-hidden="true" />}
+      <aside ref={sidebarRef} className={sidebarClass} aria-label="Setlist und Bibliothek"
+        role={mobileOpen ? 'dialog' : undefined} aria-modal={mobileOpen || undefined}>
+        <div className={styles.drawerHead}>
+          <span className={styles.drawerTitle}>Menü</span>
+          <button type="button" className="iconbtn" aria-label="Menü schließen" onClick={onMobileClose}>
+            <Icon name="x" />
           </button>
         </div>
-
-        <nav className={styles.mobileNav} aria-label="Main navigation" hidden={isCollapsed}>
-          <NavLink to="/">Player</NavLink><NavLink to="/library">Library</NavLink><NavLink to="/profile">Profile</NavLink>
-        </nav>
-        <div className={styles.tabBar} role="group" aria-label="Sidebar view" hidden={isCollapsed}>
-          <div
-            className={styles.tabIndicator}
-            style={{ transform: activeTab === 'queue' ? 'translateX(0)' : 'translateX(100%)' }}
-          />
-          <button
-            className={`${styles.tab} ${activeTab === 'queue' ? styles.tabActive : ''}`}
-            aria-pressed={activeTab === 'queue'}
-            onClick={() => setActiveTab('queue')}
-          >
-            <FontAwesomeIcon icon={faListUl} className={styles.tabIcon} />
-            <span>Queue</span>
-          </button>
-          <button
-            className={`${styles.tab} ${activeTab === 'library' ? styles.tabActive : ''}`}
-            aria-pressed={activeTab === 'library'}
-            onClick={() => setActiveTab('library')}
-          >
-            <FontAwesomeIcon icon={faCompactDisc} className={styles.tabIcon} />
-            <span>Library</span>
-          </button>
-        </div>
-
-        <div id={contentId} className={styles.content} hidden={isCollapsed}>
-          <div className={`${styles.panel} ${activeTab === 'queue' ? styles.panelActive : ''}`} hidden={activeTab !== 'queue'}>
-            {queueContent}
-          </div>
-          <div className={`${styles.panel} ${activeTab === 'library' ? styles.panelActive : ''}`} hidden={activeTab !== 'library'}>
-            {libraryContent}
-          </div>
+        <div className={styles.drawerNav}>
+          <NavList isAdmin={isAdmin} variant="drawer" onNavigate={onMobileClose} />
         </div>
 
         <button
+          type="button"
           className={styles.toggle}
-          onClick={() => setCollapsed(!collapsed)}
-          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          onClick={() => onCollapsedChange?.(!collapsed)}
+          title={collapsed ? 'Setlist einblenden' : 'Setlist ausblenden'}
+          aria-label={collapsed ? `Setlist einblenden, ${queueCount} Songs` : 'Setlist ausblenden'}
           aria-expanded={!isCollapsed}
           aria-controls={contentId}
         >
-          <FontAwesomeIcon icon={collapsed ? faChevronRight : faChevronLeft} />
+          <Icon name={collapsed ? 'chevron-left' : 'chevron-right'} />
+          {collapsed && queueCount > 0 && <span className={styles.collapsedCount} aria-hidden="true">{queueCount}</span>}
         </button>
+
+        <div id={contentId} className={styles.content} hidden={isCollapsed}>
+          {head}
+          <div className={`seg ${styles.tabs}`} role="group" aria-label="Ansicht">
+            <button type="button" className={styles.tab} aria-pressed={activeTab === 'queue'} data-testid="tab-queue" onClick={() => setActiveTab('queue')}>
+              Warteschlange <span className="count">{queueCount}</span>
+            </button>
+            <button type="button" className={styles.tab} aria-pressed={activeTab === 'library'} data-testid="tab-library" onClick={() => setActiveTab('library')}>
+              Bibliothek
+            </button>
+          </div>
+          <div className={styles.panel} hidden={activeTab !== 'queue'}>{queueContent}</div>
+          <div className={styles.panel} hidden={activeTab !== 'library'}>{libraryContent}</div>
+        </div>
+
+        <div className={styles.drawerFooter}>
+          {onThemeToggle && <ThemeButton theme={theme} onToggle={onThemeToggle} withLabel />}
+          {onLogout && <button type="button" className="btn btn--ghost" onClick={onLogout}><Icon name="logout" /> Abmelden</button>}
+        </div>
       </aside>
     </>
   )

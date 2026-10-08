@@ -1,14 +1,26 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faUsers, faPlay, faDownload, faMagnifyingGlass, faCrown, faArrowUp, faArrowDown } from '@fortawesome/free-solid-svg-icons'
 import { admin } from '../../services/api'
 import type { AdminStats, UsageLog } from '../../types'
-import { CustomSelect } from '../../components/common/CustomSelect'
+import { Icon } from '../../components/common/Icon'
 import { PageState } from '../../components/common/PageState'
+import { formatDateTime, formatInt } from '../../utils/format'
 import { errorMessage } from '../account/errors'
+import { LoadError, Pagination, SearchField, SectionHead, Updating } from './shared'
 import styles from '../AdminPage.module.css'
 
 type SortDir = 'asc' | 'desc'
+type LogSortKey = 'username' | 'action' | 'detail' | 'created_at'
+
+const ACTIONS: { value: string; label: string }[] = [
+  { value: '', label: 'Alle' },
+  { value: 'play', label: 'Wiedergabe' },
+  { value: 'search', label: 'Suche' },
+  { value: 'download', label: 'Download' },
+]
+const ACTION_LABEL: Record<string, string> = { play: 'Wiedergabe', search: 'Suche', download: 'Download' }
+const COLUMNS: { key: LogSortKey; label: string }[] = [
+  { key: 'username', label: 'Nutzer' }, { key: 'action', label: 'Aktion' }, { key: 'detail', label: 'Detail' }, { key: 'created_at', label: 'Zeit' },
+]
 
 // ─── Usage Tab ───
 export function UsageTab() {
@@ -19,7 +31,7 @@ export function UsageTab() {
   const [page, setPage] = useState(1)
   const [filterUser, setFilterUser] = useState('')
   const [filterAction, setFilterAction] = useState('')
-  const [logSortKey, setLogSortKey] = useState<'username' | 'action' | 'detail' | 'created_at'>('created_at')
+  const [logSortKey, setLogSortKey] = useState<LogSortKey>('created_at')
   const [logSortDir, setLogSortDir] = useState<SortDir>('desc')
   const [error, setError] = useState('')
   const requestId = useRef(0)
@@ -48,7 +60,7 @@ export function UsageTab() {
 
   useEffect(() => { void load(); return cancelRequest }, [load, cancelRequest])
 
-  const handleLogSort = (key: typeof logSortKey) => {
+  const handleLogSort = (key: LogSortKey) => {
     if (logSortKey === key) setLogSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setLogSortKey(key); setLogSortDir('asc') }
   }
@@ -66,93 +78,52 @@ export function UsageTab() {
     })
   }, [logs, logSortKey, logSortDir])
 
-  const LogSortIndicator = ({ column }: { column: typeof logSortKey }) => {
-    if (logSortKey !== column) return null
-    return <FontAwesomeIcon icon={logSortDir === 'asc' ? faArrowUp : faArrowDown} className={styles.sortIcon} />
-  }
-
-  if (loading) return <PageState title="Loading usage" loading />
+  if (loading) return <PageState title="Nutzung wird geladen …" loading />
 
   return (
     <>
-      {error && <PageState title="Could not load usage" description={error} action={<button className={styles.primaryBtn} onClick={load}>Try again</button>} />}
-      {refreshing && <p role="status" className={styles.subtle}>Updating usage…</p>}
+      {error && <LoadError title="Die Nutzung konnte nicht geladen werden." error={error} onRetry={load} />}
       {statsData && (
-        <div className={styles.stats}>
-          <div className={`${styles.statCard} ${styles.statCardUsers}`}>
-            <div className={styles.statIcon} style={{ color: 'var(--primary)' }}><FontAwesomeIcon icon={faUsers} /></div>
-            <div className={styles.statValue}>{statsData.total_users}</div>
-            <div className={styles.statLabel}>Users</div>
-          </div>
-          <div className={`${styles.statCard} ${styles.statCardPlays}`}>
-            <div className={styles.statIcon} style={{ color: 'var(--success)' }}><FontAwesomeIcon icon={faPlay} /></div>
-            <div className={styles.statValue}>{statsData.total_plays}</div>
-            <div className={styles.statLabel}>Plays</div>
-          </div>
-          <div className={`${styles.statCard} ${styles.statCardDownloads}`}>
-            <div className={styles.statIcon} style={{ color: '#6366f1' }}><FontAwesomeIcon icon={faDownload} /></div>
-            <div className={styles.statValue}>{statsData.total_downloads}</div>
-            <div className={styles.statLabel}>Downloads</div>
-          </div>
-          <div className={`${styles.statCard} ${styles.statCardSearches}`}>
-            <div className={styles.statIcon} style={{ color: 'var(--warning)' }}><FontAwesomeIcon icon={faMagnifyingGlass} /></div>
-            <div className={styles.statValue}>{statsData.total_searches}</div>
-            <div className={styles.statLabel}>Searches</div>
-          </div>
-          {statsData.most_active_user && (
-            <div className={`${styles.statCard} ${styles.statCardActive}`}>
-              <div className={styles.statIcon} style={{ color: '#f59e0b' }}><FontAwesomeIcon icon={faCrown} /></div>
-              <div className={styles.statValue}>{statsData.most_active_count}</div>
-              <div className={styles.statLabel}>{statsData.most_active_user}</div>
-            </div>
-          )}
+        <div className={`stats ${styles.statStrip}`}>
+          <div className="stat"><b>{formatInt(statsData.total_users)}</b><span className="kicker">Nutzer</span></div>
+          <div className="stat"><b>{formatInt(statsData.total_plays)}</b><span className="kicker">Wiedergaben</span></div>
+          <div className="stat"><b>{formatInt(statsData.total_searches)}</b><span className="kicker">Suchen</span></div>
+          <div className="stat"><b>{formatInt(statsData.total_downloads)}</b><span className="kicker">Downloads</span></div>
+          {statsData.most_active_user && <div className="stat"><b>{formatInt(statsData.most_active_count)}</b><span className="kicker">Aktivste Person</span><small className={styles.statName}>{statsData.most_active_user}</small></div>}
         </div>
       )}
 
-      <div className={styles.section}>
+      <section className={styles.section}>
+        <SectionHead title="Aktivität" count={total}><Updating active={refreshing} /></SectionHead>
         <div className={styles.filters}>
-          <input className={styles.filterInput} aria-label="Filter usage by username" placeholder="Filter by username..." value={filterUser}
-            onChange={e => { setFilterUser(e.target.value); setPage(1) }} />
-          <CustomSelect
-          aria-label="Usage action"
-            value={filterAction}
-            onChange={v => { setFilterAction(v); setPage(1) }}
-            options={[
-              { value: '', label: 'All actions' },
-              { value: 'search', label: 'Search' },
-              { value: 'play', label: 'Play' },
-              { value: 'download', label: 'Download' },
-            ]}
-          />
+          <SearchField label="Nach Nutzer filtern" placeholder="Nutzer filtern" value={filterUser} onChange={value => { setFilterUser(value); setPage(1) }} />
+          <div className="seg" role="group" aria-label="Aktion">
+            {ACTIONS.map(action => <button type="button" key={action.value} aria-pressed={filterAction === action.value} onClick={() => { setFilterAction(action.value); setPage(1) }}>{action.label}</button>)}
+          </div>
         </div>
 
-        <p className={styles.subtle}>Sort columns within the current page.</p>
-        {!error && logs.length === 0 && <PageState title="No matching activity" description="Try another username or action." />}
-        <div className={styles.tableScroll} role="region" aria-label="Usage table" tabIndex={0}><table className={styles.table}>
-          <thead><tr>
-            <th aria-sort={logSortKey === 'username' ? logSortDir === 'asc' ? 'ascending' : 'descending' : 'none'}><button className={styles.sortButton} onClick={() => handleLogSort('username')}>User <LogSortIndicator column="username" /></button></th>
-            <th aria-sort={logSortKey === 'action' ? logSortDir === 'asc' ? 'ascending' : 'descending' : 'none'}><button className={styles.sortButton} onClick={() => handleLogSort('action')}>Action <LogSortIndicator column="action" /></button></th>
-            <th aria-sort={logSortKey === 'detail' ? logSortDir === 'asc' ? 'ascending' : 'descending' : 'none'}><button className={styles.sortButton} onClick={() => handleLogSort('detail')}>Detail <LogSortIndicator column="detail" /></button></th>
-            <th aria-sort={logSortKey === 'created_at' ? logSortDir === 'asc' ? 'ascending' : 'descending' : 'none'}><button className={styles.sortButton} onClick={() => handleLogSort('created_at')}>Time <LogSortIndicator column="created_at" /></button></th>
-          </tr></thead>
-          <tbody>
-            {sortedLogs.map(l => (
-              <tr key={l.id}>
-                <td>{l.username}</td>
-                <td><span className={`${styles.tag} ${styles.tagPrimary}`}>{l.action}</span></td>
-                <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.detail}</td>
-                <td>{l.created_at?.replace('T', ' ').slice(0, 16)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table></div>
-
-        <div className={styles.pagination}>
-          <button className={styles.actionBtn} disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Previous</button>
-          <span className={styles.pageInfo}>Page {page} of {Math.ceil(total / 50) || 1}</span>
-          <button className={styles.actionBtn} disabled={page * 50 >= total} onClick={() => setPage(p => p + 1)}>Next</button>
-        </div>
-      </div>
+        {!error && logs.length === 0 ? <PageState icon="chart" title="Keine passende Aktivität." description="Versuch einen anderen Namen oder eine andere Aktion." /> : <div className="table-wrap">
+          <table className="table table--cards">
+            <thead><tr>
+              {COLUMNS.map(column => <th key={column.key} scope="col" aria-sort={logSortKey === column.key ? logSortDir === 'asc' ? 'ascending' : 'descending' : 'none'}>
+                <button type="button" className={styles.sortButton} onClick={() => handleLogSort(column.key)}>{column.label}{logSortKey === column.key && <Icon name={logSortDir === 'asc' ? 'arrow-up' : 'arrow-down'} size={12} />}</button>
+              </th>)}
+            </tr></thead>
+            <tbody>
+              {sortedLogs.map(l => (
+                <tr key={l.id}>
+                  <td className={`cell-main ${styles.cellTitle}`}>{l.username}</td>
+                  <td data-label="Aktion" className="cell-inline"><span className={`chip ${l.action === 'play' ? '' : l.action === 'download' ? 'chip--work' : ''}`}>{ACTION_LABEL[l.action] ?? l.action}</span></td>
+                  <td data-label="Detail" className={styles.cellSub}>{l.detail || '–'}</td>
+                  <td data-label="Zeit" className={`cell-inline ${styles.mono} ${styles.nowrap}`}>{formatDateTime(l.created_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>}
+        <p className={styles.subtle}>Sortieren gilt für die aktuelle Seite.</p>
+        <Pagination page={page} pages={Math.ceil(total / 50) || 1} onPage={setPage} label="Seiten der Aktivität" />
+      </section>
     </>
   )
 }
