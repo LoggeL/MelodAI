@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react'
-import { BrowserRouter, Link, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { NotFound } from './pages/NotFound'
 import { AuthProvider } from './hooks/AuthProvider'
 import { PageState } from './components/common/PageState'
 import { ErrorBoundary } from './components/common/ErrorBoundary'
@@ -19,8 +20,8 @@ export default function App() {
     <BrowserRouter>
       <ErrorBoundary>
         <AuthProvider>
-          <div id="toast-container" aria-label="Notifications" />
-          <Suspense fallback={<PageState loading title="Loading page" />}>
+          <div id="toast-container" aria-label="Benachrichtigungen" />
+          <Suspense fallback={<PageState loading title="Seite wird geladen …" />}>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/about" element={<AboutPage />} />
@@ -29,7 +30,7 @@ export default function App() {
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/song/:trackId" element={<PlayerPage />} />
               <Route path="/" element={<PlayerPage />} />
-              <Route path="*" element={<PageState title="Page not found" description="This page does not exist." action={<Link className="button" to="/">Back to player</Link>} />} />
+              <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>
         </AuthProvider>

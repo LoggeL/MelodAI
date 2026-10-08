@@ -9,7 +9,7 @@ interface Props {
   activeClassName?: string
   title?: string
   disabled?: boolean
-  size?: 16 | 20
+  size?: 16 | 18 | 20
 }
 
 export function HeartButton({ active, onClick, className = 'iconbtn', activeClassName = '', title, disabled = false, size = 20 }: Props) {

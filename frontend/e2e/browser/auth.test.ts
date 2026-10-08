@@ -34,8 +34,8 @@ describe('Auth E2E - Login Page', () => {
       await page.goto(`${BASE}/login`, { waitUntil: 'networkidle2' })
 
       const pageText = await page.evaluate(() => document.body.textContent || '')
-      expect(pageText).toContain('Login')
-      expect(pageText).toContain('Register')
+      expect(pageText).toContain('Anmelden')
+      expect(pageText).toContain('Registrieren')
       await page.close()
     })
 
@@ -69,7 +69,8 @@ describe('Auth E2E - Login Page', () => {
       await waitForIdle(page, 500)
 
       const pageText = await page.evaluate(() => document.body.textContent || '')
-      const hasError = pageText.includes('Invalid') || pageText.includes('failed') || pageText.includes('Error')
+      const hasError = pageText.includes('Anmeldung fehlgeschlagen') || pageText.includes('falsch') ||
+                       pageText.includes('Invalid') || pageText.includes('failed') || pageText.includes('Error')
       expect(hasError).toBe(true)
       await page.close()
       await context.close()
@@ -115,7 +116,7 @@ describe('Auth E2E - Login Page', () => {
       await page.evaluate(() => {
         const buttons = document.querySelectorAll('button')
         for (const btn of buttons) {
-          if (btn.textContent?.trim() === 'Register') {
+          if (btn.textContent?.trim() === 'Registrieren') {
             btn.click()
             break
           }
@@ -150,7 +151,8 @@ describe('Auth E2E - Login Page', () => {
         return el?.textContent || ''
       })
       const pageText = await page.evaluate(() => document.body.textContent || '')
-      const hasMessage = messageText.includes('pending') || messageText.includes('Waiting') ||
+      const hasMessage = messageText.includes('Freigabe') || pageText.includes('Freigabe') ||
+                         messageText.includes('pending') || messageText.includes('Waiting') ||
                          messageText.includes('approval') || messageText.includes('success') ||
                          pageText.includes('pending') || pageText.includes('Waiting') ||
                          pageText.includes('approval')

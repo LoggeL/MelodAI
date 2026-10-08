@@ -167,3 +167,5 @@
   .wordNow { background: none; color: var(--vocal); }
   .wordNow::after { transform: none; }
 }
+.preview { display: grid; justify-items: center; text-align: center; pointer-events: none; }
+.preview .word { cursor: default; }

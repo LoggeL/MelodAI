@@ -1,16 +1,16 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import {
-  faArrowLeft, faCoins, faMusic, faPlay, faListUl, faHeart,
-  faCalendar, faKey, faGear, faCircleInfo, faShieldHalved, faDownload,
-  faArrowUpWideShort, faArrowDownWideShort, faFilter,
-} from '@fortawesome/free-solid-svg-icons'
 import { useAuth } from '../hooks/useAuth'
 import { auth } from '../services/api'
 import { useToast } from '../hooks/useToast'
 import type { ActivityItem } from '../types'
 import { PageState } from '../components/common/PageState'
+import { AppShell } from '../components/Layout/AppShell'
+import { Icon } from '../components/common/Icon'
+import { Cover } from '../components/common/Cover'
+import { CustomSelect } from '../components/common/CustomSelect'
+import { formatDate, formatInt, formatMonthYear } from '../utils/format'
+import { initials } from '../utils/user'
 import { errorMessage } from './account/errors'
 import styles from './ProfilePage.module.css'
 
@@ -26,13 +26,20 @@ interface ProfileStats {
   is_admin: boolean
 }
 
-function formatDate(iso: string): string {
-  const d = new Date(iso)
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-}
+interface ActivityRow { item: ActivityItem; count: number; total: number }
 
-function SkeletonLine({ width = '100%', height = '1em' }: { width?: string; height?: string }) {
-  return <div className={styles.skeleton} style={{ width, height }} />
+/** Consecutive entries for the same song, action and day collapse into one row with „×3“. */
+function groupActivity(items: ActivityItem[]): ActivityRow[] {
+  const rows: ActivityRow[] = []
+  for (const item of items) {
+    const last = rows[rows.length - 1]
+    if (last && last.item.track_id === item.track_id && last.item.action === item.action
+      && new Date(last.item.created_at).toDateString() === new Date(item.created_at).toDateString()) {
+      last.count += 1
+      last.total += item.cost
+    } else rows.push({ item, count: 1, total: item.cost })
+  }
+  return rows
 }
 
 export function ProfilePage() {
@@ -72,7 +79,7 @@ export function ProfilePage() {
     setProfileError('')
     setLoaded(false)
     try { const result = await auth.profileStats(); if (requestId === profileRequest.current) setStats(result) }
-    catch (error) { if (requestId === profileRequest.current) setProfileError(errorMessage(error, 'Failed to load profile')) }
+    catch (error) { if (requestId === profileRequest.current) setProfileError(errorMessage(error, 'Das Profil konnte nicht geladen werden.')) }
     finally { if (requestId === profileRequest.current) setLoaded(true) }
   }, [])
 
@@ -91,7 +98,7 @@ export function ProfilePage() {
       setActivity(data.items)
       setActivityTotal(data.total)
     } catch (error) {
-      if (requestId === activityRequest.current) setActivityError(errorMessage(error, 'Could not load credit activity'))
+      if (requestId === activityRequest.current) setActivityError(errorMessage(error, 'Der Credit-Verlauf konnte nicht geladen werden.'))
     } finally {
       if (requestId === activityRequest.current) setActivityLoading(false)
     }
@@ -115,277 +122,153 @@ export function ProfilePage() {
   const handleChangePassword = useCallback(async () => {
     if (changing) return
     if (!currentPw || !newPw) {
-      toast.error('Fill in all password fields')
+      toast.error('Bitte füll alle Passwortfelder aus.')
       return
     }
     if (newPw.length < 8) {
-      toast.error('New password must be at least 8 characters')
+      toast.error('Das neue Passwort braucht mindestens 8 Zeichen.')
       return
     }
     if (newPw !== confirmPw) {
-      toast.error('Passwords do not match')
+      toast.error('Die Passwörter stimmen nicht überein.')
       return
     }
     setChanging(true)
     try {
       const result = await auth.changePassword(currentPw, newPw)
       if (result.success) {
-        toast.success('Password changed successfully')
+        toast.success('Passwort gespeichert.')
         setCurrentPw('')
         setNewPw('')
         setConfirmPw('')
       } else {
-        toast.error(result.error || 'Failed to change password')
+        toast.error(result.error ? errorMessage(new Error(result.error), 'Das Passwort konnte nicht geändert werden.') : 'Das Passwort konnte nicht geändert werden.')
       }
     } catch (error) {
-      toast.error(errorMessage(error, 'Failed to change password'))
+      toast.error(errorMessage(error, 'Das Passwort konnte nicht geändert werden.'))
     }
     setChanging(false)
   }, [currentPw, newPw, confirmPw, toast, changing])
 
-  if (!checked || !authenticated) return <PageState title="Checking your account" loading />
-  if (profileError) return <main className={styles.page}><PageState title="Could not load your profile" description={profileError} action={<button className={styles.primaryBtn} onClick={loadProfile}>Try again</button>} /><Link to="/">Back to player</Link></main>
+  if (!checked || !authenticated) return <PageState title="Konto wird geprüft …" loading />
+  if (profileError) return <AppShell><PageState error title="Dein Profil konnte nicht geladen werden." description={profileError} action={<><button type="button" className="btn" onClick={loadProfile}><Icon name="redo" /> Erneut versuchen</button><Link className="btn btn--ghost" to="/">Zur Bühne</Link></>} /></AppShell>
 
-  const initial = (stats?.display_name || stats?.username || '?').charAt(0).toUpperCase()
+  const name = stats?.display_name || stats?.username || ''
+  const rows = groupActivity(activity)
+  const pages = Math.max(1, Math.ceil(activityTotal / 15))
+  const statCells = [
+    { label: 'Songs gesungen', value: stats?.total_plays },
+    { label: 'Songs verarbeitet', value: stats?.songs_processed },
+    { label: 'Favoriten', value: stats?.favorites_count },
+    { label: 'Playlists', value: stats?.playlists_count },
+    { label: 'Credits übrig', value: stats?.credits },
+  ]
 
   return (
-    <main className={styles.page}>
-      <div className={styles.container}>
-        {/* Back button */}
-        <Link to="/" className={styles.backBtn} aria-label="Back to player" title="Back to player">
-          <FontAwesomeIcon icon={faArrowLeft} />
-        </Link>
+    <AppShell narrow>
+      <header className={`page-head ${styles.head}`}>
+        <div className={`${styles.avatar} ${!loaded ? 'skeleton' : ''}`} aria-hidden="true">{loaded ? initials(stats?.display_name || '', stats?.username || '') : ''}</div>
+        <div className={styles.identity}>
+          {loaded && stats ? <>
+            <span className="kicker">Dabei seit {formatMonthYear(stats.member_since)}</span>
+            <h1>{name}</h1>
+            <p className={styles.handle}>@{stats.username}{stats.is_admin && <span className="chip chip--work"><Icon name="shield" size={14} /> Admin</span>}</p>
+          </> : <>
+            <span className={`skeleton ${styles.skelKicker}`} />
+            <span className={`skeleton ${styles.skelName}`} />
+          </>}
+        </div>
+        <div className="page-head__end">
+          {stats && !stats.is_admin && <span className={styles.credits}><span className={styles.creditDot} aria-hidden="true" />{formatInt(stats.credits)}<span className={styles.creditLabel}> Credits</span></span>}
+          {stats?.is_admin && <Link className="btn" to="/admin"><Icon name="backstage" /> Backstage</Link>}
+          <Link className="btn btn--ghost" to="/about"><Icon name="info" /> Über MelodAI</Link>
+        </div>
+      </header>
 
-        {/* Profile header */}
-        <div className={styles.profileHeader}>
-          <div className={styles.avatarRow}>
-            <Link to="/about" className={styles.sideLink}>
-              <FontAwesomeIcon icon={faCircleInfo} className={styles.sideLinkIcon} />
-              <span className={styles.sideLinkLabel}>About</span>
-            </Link>
-            <div className={`${styles.avatarLarge} ${!loaded ? styles.avatarLoading : ''}`}>
-              {loaded ? initial : ''}
+      <section className="stats" aria-label="Deine Zahlen">
+        {statCells.map(cell => (
+          <div key={cell.label} className="stat">
+            <b>{loaded ? formatInt(cell.value ?? 0) : <span className={`skeleton ${styles.skelNum}`} />}</b>
+            <span className="kicker">{cell.label}</span>
+          </div>
+        ))}
+      </section>
+
+      <section className={styles.section} aria-labelledby="credit-history">
+        <div className={styles.sectionHead}>
+          <h2 id="credit-history">Credit-Verlauf {activityTotal > 0 && <span className={styles.count}>{formatInt(activityTotal)}</span>}</h2>
+          <div className={styles.sectionTools}>
+            <div className="seg" role="group" aria-label="Filter">
+              <button type="button" aria-pressed={activityFilter === ''} onClick={() => handleFilterChange('')}>Alle</button>
+              <button type="button" aria-pressed={activityFilter === 'play'} onClick={() => handleFilterChange('play')}>Wiedergabe</button>
+              <button type="button" aria-pressed={activityFilter === 'download'} onClick={() => handleFilterChange('download')}>Verarbeitung</button>
             </div>
-            {stats?.is_admin ? (
-              <Link to="/admin" className={styles.sideLink}>
-                <FontAwesomeIcon icon={faGear} className={styles.sideLinkIcon} />
-                <span className={styles.sideLinkLabel}>Admin</span>
-              </Link>
-            ) : (
-              <div className={styles.sideLinkSpacer} />
-            )}
+            <CustomSelect className="input" aria-label="Sortierung" value={activitySort}
+              onChange={value => { if (value !== activitySort) handleSortToggle() }}
+              options={[{ value: 'date_desc', label: 'Neueste zuerst' }, { value: 'date_asc', label: 'Älteste zuerst' }]} />
           </div>
-          <div className={styles.profileIdentity}>
-            {loaded ? (
-              <>
-                <h1 className={styles.displayName}>
-                  {stats?.display_name || stats?.username || 'Unknown'}
-                </h1>
-                <span className={styles.username}>@{stats?.username}</span>
-              </>
-            ) : (
-              <>
-                <SkeletonLine width="180px" height="1.8rem" />
-                <SkeletonLine width="100px" height="0.82rem" />
-              </>
-            )}
-            {stats?.is_admin && (
-              <span className={styles.adminBadge}>
-                <FontAwesomeIcon icon={faShieldHalved} /> Admin
-              </span>
-            )}
-          </div>
-          {loaded ? (
-            stats && (
-              <div className={styles.memberSince}>
-                <FontAwesomeIcon icon={faCalendar} />
-                Member since {formatDate(stats.member_since)}
-              </div>
-            )
-          ) : (
-            <SkeletonLine width="160px" height="0.78rem" />
-          )}
         </div>
 
-        {/* Stats grid */}
-        <div className={styles.statsGrid}>
-          {[
-            { icon: faCoins, label: 'Credits', value: stats?.credits, accent: true },
-            { icon: faMusic, label: 'Songs Processed', value: stats?.songs_processed },
-            { icon: faPlay, label: 'Total Plays', value: stats?.total_plays },
-            { icon: faListUl, label: 'Playlists', value: stats?.playlists_count },
-            { icon: faHeart, label: 'Favorites', value: stats?.favorites_count },
-          ].map((stat, i) => (
-            <div
-              key={stat.label}
-              className={`${styles.statCard} ${stat.accent ? styles.statCardAccent : ''}`}
-              style={{ animationDelay: `${i * 60}ms` }}
-            >
-              <div className={styles.statIcon}>
-                <FontAwesomeIcon icon={stat.icon} />
-              </div>
-              <div className={styles.statValue}>
-                {loaded ? (stat.value ?? 0) : <SkeletonLine width="2ch" height="1.6rem" />}
-              </div>
-              <div className={styles.statLabel}>{stat.label}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* Credit Activity */}
-        <div className={styles.card} style={{ animationDelay: '300ms' }}>
-          <div className={styles.cardHeader}>
-            <FontAwesomeIcon icon={faCoins} className={styles.cardIcon} />
-            <h2>Credit Activity</h2>
-            {activityTotal > 0 && (
-              <span className={styles.activityCount}>{activityTotal}</span>
-            )}
-          </div>
-
-          {/* Controls row */}
-          {(activityTotal > 0 || activityFilter) && (
-            <div className={styles.activityControls}>
-              <div className={styles.activityFilters}>
-                <FontAwesomeIcon icon={faFilter} className={styles.filterIcon} />
-                <button
-                  className={`${styles.filterPill} ${activityFilter === '' ? styles.filterPillActive : ''}`}
-                  aria-pressed={activityFilter === ''} onClick={() => handleFilterChange('')}
-                >All</button>
-                <button
-                  className={`${styles.filterPill} ${activityFilter === 'play' ? styles.filterPillActive : ''}`}
-                  aria-pressed={activityFilter === 'play'} onClick={() => handleFilterChange('play')}
-                >
-                  <FontAwesomeIcon icon={faPlay} /> Play
-                </button>
-                <button
-                  className={`${styles.filterPill} ${activityFilter === 'download' ? styles.filterPillActive : ''}`}
-                  aria-pressed={activityFilter === 'download'} onClick={() => handleFilterChange('download')}
-                >
-                  <FontAwesomeIcon icon={faDownload} /> Process
-                </button>
-              </div>
-              <button className={styles.sortBtn} onClick={handleSortToggle} title={activitySort === 'date_desc' ? 'Newest first' : 'Oldest first'}>
-                <FontAwesomeIcon icon={activitySort === 'date_desc' ? faArrowDownWideShort : faArrowUpWideShort} />
-                <span className={styles.sortLabel}>{activitySort === 'date_desc' ? 'Newest' : 'Oldest'}</span>
-              </button>
-            </div>
-          )}
-
-          {activityError ? <PageState title="Could not load credit activity" description={activityError} action={<button className={styles.primaryBtn} onClick={() => loadActivity(activityPage, activitySort, activityFilter)}>Try again</button>} /> : activityLoading && activity.length === 0 ? (
-            <div className={styles.activitySkeletons}>
-              {[...Array(4)].map((_, i) => (
-                <div key={i} className={styles.activityItemSkeleton}>
-                  <SkeletonLine width="36px" height="36px" />
-                  <div className={styles.activitySkeletonText}>
-                    <SkeletonLine width="60%" height="0.82rem" />
-                    <SkeletonLine width="40%" height="0.72rem" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : activity.length === 0 ? (
-            <div className={styles.activityEmpty}>
-              {activityFilter ? 'No matching activity' : 'No activity yet'}
-            </div>
-          ) : (
-            <>
-              <div aria-busy={activityLoading} className={`${styles.activityList} ${activityLoading ? styles.activityListLoading : ''}`}>
-                {activity.map((item, i) => (
-                  <div key={`${item.track_id}-${item.created_at}-${i}`} className={styles.activityItem}>
-                    <img className={styles.activityThumb} src={item.img_url || '/logo.svg'} alt="" loading="lazy" />
-                    <div className={styles.activityInfo}>
-                      <div className={styles.activityTitle}>{item.title}</div>
-                      <div className={styles.activityArtist}>{item.artist}</div>
-                    </div>
-                    <div className={styles.activityMeta}>
-                      <span className={`${styles.activityBadge} ${item.action === 'download' ? styles.activityBadgeDownload : styles.activityBadgePlay}`}>
-                        <FontAwesomeIcon icon={item.action === 'download' ? faDownload : faPlay} />
-                        <span className={styles.badgeLabel}>{item.action === 'download' ? 'Process' : 'Play'}</span>
+        {activityError ? <PageState error title="Der Credit-Verlauf konnte nicht geladen werden." description={activityError} action={<button type="button" className="btn" onClick={() => loadActivity(activityPage, activitySort, activityFilter)}><Icon name="redo" /> Erneut versuchen</button>} />
+          : <div className="table-wrap">
+            <table className="table table--cards" aria-busy={activityLoading}>
+              <thead><tr><th scope="col">Datum</th><th scope="col">Song</th><th scope="col">Aktion</th><th scope="col" className="num">Credits</th></tr></thead>
+              <tbody className={activityLoading && activity.length > 0 ? styles.dim : undefined}>
+                {activityLoading && activity.length === 0 ? [0, 1, 2, 3].map(i => (
+                  <tr key={i} aria-hidden="true"><td colSpan={4}><span className={`skeleton ${styles.skelRow}`} /></td></tr>
+                )) : rows.length === 0 ? (
+                  <tr className="empty-row"><td colSpan={4}>{activityFilter ? 'Keine passenden Einträge.' : 'Noch keine Einträge. Sing deinen ersten Song!'}</td></tr>
+                ) : rows.map(({ item, count, total }, i) => (
+                  <tr key={`${item.track_id}-${item.created_at}-${i}`}>
+                    <td className={`num ${styles.dateCell}`} data-label="Datum">{formatDate(item.created_at)}</td>
+                    <td className="cell-main" data-label="">
+                      <span className={styles.song}>
+                        <Cover className={styles.thumb} src={item.img_url} />
+                        <span className={styles.songText}><span className={styles.songTitle}>{item.title}</span><span className={styles.songArtist}>{item.artist}</span></span>
                       </span>
-                      <span className={styles.activityCost}>-{item.cost} cr</span>
-                    </div>
-                    <div className={styles.activityDate}>
-                      {new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                    </div>
-                  </div>
+                    </td>
+                    <td data-label="Aktion">
+                      <span className={`chip ${item.action === 'download' ? 'chip--work' : ''}`}>{item.action === 'download' ? 'Verarbeitung' : 'Wiedergabe'}{count > 1 && ` ×${count}`}</span>
+                    </td>
+                    <td className="num cell-acts" data-label="Credits">−{total}</td>
+                  </tr>
                 ))}
-              </div>
-              {activityTotal > 15 && (
-                <div className={styles.activityPagination}>
-                  <button
-                    className={styles.activityPageBtn}
-                    disabled={activityLoading || activityPage <= 1}
-                    onClick={() => setActivityPage(p => p - 1)}
-                  >Previous</button>
-                  <span className={styles.activityPageInfo}>
-                    {activityPage} / {Math.ceil(activityTotal / 15)}
-                  </span>
-                  <button
-                    className={styles.activityPageBtn}
-                    disabled={activityLoading || activityPage * 15 >= activityTotal}
-                    onClick={() => setActivityPage(p => p + 1)}
-                  >Next</button>
-                </div>
-              )}
-            </>
-          )}
-        </div>
+              </tbody>
+            </table>
+          </div>}
+        {activityTotal > 15 && (
+          <nav className={styles.pagination} aria-label="Seiten">
+            <button type="button" className="btn btn--sm" disabled={activityLoading || activityPage <= 1} onClick={() => setActivityPage(p => p - 1)}><Icon name="chevron-left" size={16} /> Zurück</button>
+            <span className="mono">{activityPage} / {pages}</span>
+            <button type="button" className="btn btn--sm" disabled={activityLoading || activityPage >= pages} onClick={() => setActivityPage(p => p + 1)}>Weiter <Icon name="chevron-right" size={16} /></button>
+          </nav>
+        )}
+      </section>
 
-        {/* Change password */}
-        <div className={styles.card} style={{ animationDelay: '360ms' }}>
-          <div className={styles.cardHeader}>
-            <FontAwesomeIcon icon={faKey} className={styles.cardIcon} />
-            <h2>Change Password</h2>
+      <section className={`panel ${styles.password}`} aria-labelledby="change-password">
+        <h2 id="change-password">Passwort ändern</h2>
+        <form className={styles.form} aria-busy={changing} onSubmit={e => { e.preventDefault(); void handleChangePassword() }}>
+          <div className="field">
+            <label htmlFor="profile-current-password">Aktuelles Passwort</label>
+            <input id="profile-current-password" type="password" required disabled={changing} className="input"
+              value={currentPw} onChange={e => setCurrentPw(e.target.value)} autoComplete="current-password" />
           </div>
-          <form className={styles.formStack} aria-busy={changing} onSubmit={e => { e.preventDefault(); void handleChangePassword() }}>
-            <label className={styles.fieldLabel} htmlFor="profile-current-password">Current password</label>
-            <input
-              id="profile-current-password"
-              type="password"
-              required
-              disabled={changing}
-              className={styles.input}
-              placeholder="Current password"
-              value={currentPw}
-              onChange={e => setCurrentPw(e.target.value)}
-              autoComplete="current-password"
-            />
-            <label className={styles.fieldLabel} htmlFor="profile-new-password">New password</label>
-            <input
-              id="profile-new-password"
-              type="password"
-              required
-              disabled={changing}
-              minLength={8}
-              className={styles.input}
-              placeholder="At least 8 characters"
-              value={newPw}
-              onChange={e => setNewPw(e.target.value)}
-              autoComplete="new-password"
-            />
-            <label className={styles.fieldLabel} htmlFor="profile-confirm-password">Confirm new password</label>
-            <input
-              id="profile-confirm-password"
-              type="password"
-              required
-              disabled={changing}
-              minLength={8}
-              className={styles.input}
-              placeholder="Confirm new password"
-              value={confirmPw}
-              onChange={e => setConfirmPw(e.target.value)}
-              autoComplete="new-password"
-            />
-            <button
-              className={styles.primaryBtn}
-              type="submit"
-              disabled={changing || !currentPw || !newPw || !confirmPw}
-            >
-              {changing ? 'Changing...' : 'Update Password'}
-            </button>
-          </form>
-        </div>
-      </div>
-    </main>
+          <div className="field">
+            <label htmlFor="profile-new-password">Neues Passwort</label>
+            <input id="profile-new-password" type="password" required disabled={changing} minLength={8} className="input"
+              aria-describedby="profile-new-password-help" value={newPw} onChange={e => setNewPw(e.target.value)} autoComplete="new-password" />
+            <span id="profile-new-password-help" className="field-help">Mindestens 8 Zeichen.</span>
+          </div>
+          <div className="field">
+            <label htmlFor="profile-confirm-password">Neues Passwort bestätigen</label>
+            <input id="profile-confirm-password" type="password" required disabled={changing} minLength={8} className="input"
+              value={confirmPw} onChange={e => setConfirmPw(e.target.value)} autoComplete="new-password" />
+          </div>
+          <button className="btn btn--primary" type="submit" disabled={changing || !currentPw || !newPw || !confirmPw}>
+            {changing ? 'Wird gespeichert …' : 'Passwort speichern'}
+          </button>
+        </form>
+      </section>
+    </AppShell>
   )
 }
