@@ -1,12 +1,24 @@
 import { errorMessage } from '../account/errors'
-import { useState, useEffect, useCallback, useRef, Fragment } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { Link } from 'react-router-dom'
 import { admin } from '../../services/api'
 import type { AppLogEntry } from '../../types'
-import { CustomSelect } from '../../components/common/CustomSelect'
+import { Icon } from '../../components/common/Icon'
 import { PageState } from '../../components/common/PageState'
+import { formatDateTime } from '../../utils/format'
 import { ConfirmAction, type Confirmation } from './AdminAction'
+import { LoadError, Pagination, SectionHead, Updating } from './shared'
 import styles from '../AdminPage.module.css'
 
+const LEVELS: { value: string; label: string }[] = [
+  { value: '', label: 'Alle' },
+  { value: 'error', label: 'Nur Fehler' },
+  { value: 'warning', label: 'Warnungen' },
+  { value: 'info', label: 'Info' },
+  { value: 'debug', label: 'Debug' },
+]
+const LEVEL_CHIP: Record<string, string> = { error: 'chip--err', warning: 'chip--warn', info: '', debug: '' }
+const LEVEL_LABEL: Record<string, string> = { error: 'Fehler', warning: 'Warnung', info: 'Info', debug: 'Debug' }
 
 // ─── Logs Tab ───
 export function LogsTab() {
@@ -17,6 +29,7 @@ export function LogsTab() {
   const [levelFilter, setLevelFilter] = useState('')
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const [error, setError] = useState('')
+  const [live, setLive] = useState(true)
   const requestId = useRef(0)
   const cancelRequest = useCallback(() => { requestId.current++ }, [])
   const [refreshing, setRefreshing] = useState(false)
@@ -43,100 +56,56 @@ export function LogsTab() {
   useEffect(() => { void load(); return cancelRequest }, [load, cancelRequest])
 
   useEffect(() => {
+    if (!live) return
     refreshRef.current = setInterval(load, 15000)
     return () => { if (refreshRef.current) clearInterval(refreshRef.current) }
-  }, [load])
-
+  }, [load, live])
 
   const totalPages = Math.ceil(total / 50) || 1
 
-  const levelTagClass = (level: string) => {
-    switch (level) {
-      case 'info': return styles.tagSuccess
-      case 'warning': return styles.tagWarning
-      case 'error': return styles.tagDanger
-      default: return styles.tagPrimary
-    }
-  }
-
-  if (loading) return <PageState title="Loading logs" loading />
+  if (loading) return <PageState title="Logs werden geladen …" loading />
 
   return (
-    <div className={styles.section}>
-      {error && <PageState title="Could not load logs" description={error} action={<button className={styles.primaryBtn} onClick={load}>Try again</button>} />}
-      {refreshing && <p role="status" className={styles.subtle}>Updating logs…</p>}
-      <div className={styles.sectionHeader}>
-        <h3>Application Logs ({total})</h3>
-        <button className={`${styles.actionBtn} ${styles.dangerBtn}`} disabled={total === 0} onClick={() => setConfirmation({ title: 'Clear all application logs?', description: 'All application log records will be permanently deleted. This cannot be undone.', label: 'Clear logs', action: admin.clearLogs, success: 'Application logs cleared' })}>Clear All</button>
-      </div>
+    <section className={styles.section}>
+      {error && <LoadError title="Die Logs konnten nicht geladen werden." error={error} onRetry={load} />}
+      <SectionHead title="Anwendungsprotokoll" count={total}>
+        <Updating active={refreshing} />
+        <button type="button" className={styles.actionBtn} aria-pressed={!live} onClick={() => setLive(value => !value)}>
+          <Icon name={live ? 'pause' : 'play'} size={16} /> {live ? 'Pausieren' : 'Fortsetzen'}
+        </button>
+        <button type="button" className={`${styles.actionBtn} ${styles.danger}`} disabled={total === 0} onClick={() => setConfirmation({ title: 'Alle Logs löschen?', description: 'Alle Einträge im Anwendungsprotokoll werden dauerhaft gelöscht. Das lässt sich nicht rückgängig machen.', label: 'Logs löschen', action: admin.clearLogs, success: 'Logs gelöscht.' })}><Icon name="trash" size={16} /> Alle löschen</button>
+      </SectionHead>
 
       <div className={styles.filters}>
-        <CustomSelect
-          aria-label="Log level"
-          value={levelFilter}
-          onChange={v => { setLevelFilter(v); setPage(1) }}
-          options={[
-            { value: '', label: 'All levels' },
-            { value: 'info', label: 'Info' },
-            { value: 'warning', label: 'Warning' },
-            { value: 'error', label: 'Error' },
-            { value: 'debug', label: 'Debug' },
-          ]}
-        />
+        <div className="seg" role="group" aria-label="Log-Level">
+          {LEVELS.map(level => <button type="button" key={level.value} aria-pressed={levelFilter === level.value} onClick={() => { setLevelFilter(level.value); setPage(1) }}>{level.label}</button>)}
+        </div>
       </div>
 
-      {!error && logs.length === 0 && <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No logs found</p>}
+      {!error && logs.length === 0 ? <PageState icon="doc" title="Keine Einträge." description={levelFilter ? 'Für dieses Level gibt es gerade nichts.' : 'Das Protokoll ist leer.'} /> : <ol className={styles.logViewer} aria-label="Logeinträge">
+        {logs.map(log => {
+          const open = expandedId === log.id
+          return <li key={log.id} className={styles.logLine}>
+            <button type="button" className={styles.logButton} aria-expanded={open} onClick={() => setExpandedId(open ? null : log.id)}>
+              <span className={styles.logTime}>{formatDateTime(log.created_at)}</span>
+              <span className={`chip ${styles.logLevel} ${LEVEL_CHIP[log.level] ?? ''}`}>{LEVEL_LABEL[log.level] ?? log.level}</span>
+              <span className={styles.logText}>
+                <span className={styles.logSource}>{log.source}{log.username ? ` · ${log.username}` : ''}</span>
+                <span className={styles.logMessage}>{log.message}</span>
+              </span>
+            </button>
+            {open && (log.track_id || log.details) && <div className={styles.logDetail}>
+              <div className={styles.detailBox}>
+                {log.track_id && <div className={styles.detailMeta}><span><b>Song:</b> <Link to={'/admin/songs/' + log.track_id}>#{log.track_id}</Link></span></div>}
+                {log.details && <pre className={styles.stackTrace}>{log.details}</pre>}
+              </div>
+            </div>}
+          </li>
+        })}
+      </ol>}
 
-      <div className={styles.tableScroll} role="region" aria-label="Logs table" tabIndex={0}><table className={styles.table}>
-        <thead><tr>
-          <th>Level</th>
-          <th>Source</th>
-          <th>Message</th>
-          <th>User</th>
-          <th>Time</th>
-        </tr></thead>
-        <tbody>
-          {logs.map(log => (
-            <Fragment key={log.id}>
-              <tr>
-                <td>
-                  <span className={`${styles.tag} ${levelTagClass(log.level)}`}>
-                    {log.level}
-                  </span>
-                </td>
-                <td>{log.source}</td>
-                <td style={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><button className={styles.detailButton} aria-expanded={expandedId === log.id} onClick={() => setExpandedId(expandedId === log.id ? null : log.id)}>{log.message}</button></td>
-                <td>{log.username || '-'}</td>
-                <td>{log.created_at?.replace('T', ' ').slice(0, 16)}</td>
-              </tr>
-              {expandedId === log.id && (
-                <tr key={`${log.id}-detail`}>
-                  <td colSpan={5} style={{ padding: 0 }}>
-                    <div className={styles.errorDetail}><p>{log.message}</p>
-                      {log.track_id && <div style={{ fontSize: '0.8rem' }}><strong>Track ID:</strong> {log.track_id}</div>}
-                      {log.details && (
-                        <div>
-                          <strong style={{ fontSize: '0.8rem' }}>Details:</strong>
-                          <pre className={styles.stackTrace}>{log.details}</pre>
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </Fragment>
-          ))}
-        </tbody>
-      </table></div>
-
-      {totalPages > 1 && (
-        <div className={styles.pagination}>
-          <button className={styles.actionBtn} disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Previous</button>
-          <span className={styles.pageInfo}>Page {page} of {totalPages}</span>
-          <button className={styles.actionBtn} disabled={page * 50 >= total} onClick={() => setPage(p => p + 1)}>Next</button>
-        </div>
-      )}
+      <Pagination page={page} pages={totalPages} onPage={setPage} label="Seiten des Protokolls" />
       {confirmation && <ConfirmAction confirmation={confirmation} onClose={() => setConfirmation(null)} onSuccess={() => { setPage(1); void load() }} />}
-    </div>
+    </section>
   )
 }

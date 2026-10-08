@@ -15,7 +15,7 @@ export function useAdminAction() {
     try {
       const result = await action()
       if (result && typeof result === 'object' && 'success' in result && result.success === false) {
-        throw new Error('The change could not be saved. Please try again.')
+        throw new Error('Die Änderung konnte nicht gespeichert werden. Versuch es noch einmal.')
       }
       toast.success(success)
       return true

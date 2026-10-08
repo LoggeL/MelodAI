@@ -1,15 +1,31 @@
 import { errorMessage } from '../account/errors'
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faHardDrive, faDatabase, faMusic, faTrash, faRotateRight } from '@fortawesome/free-solid-svg-icons'
+import { useState, useEffect, useCallback, useRef, type CSSProperties } from 'react'
 import { useToast } from '../../hooks/useToast'
 import { admin } from '../../services/api'
 import type { HealthCheck, StorageStats, UnfinishedTrack, ProcessingStatus, DeezerConfigStatus } from '../../types'
+import { Icon } from '../../components/common/Icon'
 import { PageState } from '../../components/common/PageState'
+import { formatBytes, formatInt } from '../../utils/format'
+import { de } from '../../utils/messages'
+import { PIPELINE_STEPS, pipelineIndex, pipelineLabel } from '../../utils/pipeline'
 import { ConfirmAction, type Confirmation } from './AdminAction'
+import { LoadError, Pagination, SectionHead } from './shared'
 import styles from '../AdminPage.module.css'
 
 const PAGE_SIZE = 20
+
+const CHECK_NAMES: Record<string, string> = {
+  database: 'Datenbank', deezer: 'Deezer', filesystem: 'Speicher', replicate: 'Replicate', queue: 'Warteschlange', lrclib: 'lrclib', openrouter: 'OpenRouter', voxtral: 'Voxtral',
+}
+
+/** Health check texts come from the backend in English; translate the known shapes. */
+function checkMessage(message: string) {
+  const processing = message.match(/^(\d+) tracks processing$/)
+  if (processing) return `${processing[1]} ${processing[1] === '1' ? 'Song' : 'Songs'} in Arbeit.`
+  const free = message.match(/^([\d.]+) GB free$/)
+  if (free) return `${free[1].replace('.', ',')} GB frei.`
+  return de(message)
+}
 
 // ─── Status Tab ───
 export function StatusTab() {
@@ -63,31 +79,31 @@ export function StatusTab() {
     try {
       const r = await admin.runChecks()
       setChecks(r)
-      toast.success('Health checks complete')
+      toast.success('Prüfung abgeschlossen.')
     } catch {
-      toast.error('Health checks failed')
+      toast.error('Die Prüfung ist fehlgeschlagen.')
     }
     setRunning(false)
   }
 
   const handleSaveDeezerArl = async () => {
     if (!deezerArl.trim()) {
-      toast.error('Paste a Deezer ARL first')
+      toast.error('Füg zuerst einen Deezer-ARL ein.')
       return
     }
     setDeezerSaving(true)
     try {
       const result = await admin.setDeezerArl(deezerArl.trim())
       if (result.error || result.status === 'error') {
-        toast.error(result.success ? 'ARL saved, but the login test failed. Check the credential and try again.' : result.error || result.message || 'Deezer login failed')
+        toast.error(result.success ? 'ARL gespeichert, aber die Anmeldung ist fehlgeschlagen. Prüf den Wert und versuch es noch einmal.' : de(result.error || result.message || 'Deezer login failed'))
       } else {
-        toast.success('Deezer ARL saved and tested')
+        toast.success('Deezer-ARL gespeichert und getestet.')
         setDeezerArl('')
       }
       if (result.success) setDeezerArl('')
       setDeezerConfig(result)
     } catch (error) {
-      toast.error(errorMessage(error, 'Failed to save Deezer ARL'))
+      toast.error(errorMessage(error, 'Der Deezer-ARL konnte nicht gespeichert werden.'))
     }
     setDeezerSaving(false)
   }
@@ -96,11 +112,11 @@ export function StatusTab() {
     setDeezerTesting(true)
     try {
       const result = await admin.testDeezerArl(deezerArl.trim() || undefined)
-      if (result.status === 'ok') toast.success('Deezer login active')
-      else toast.error(result.message || result.error || 'Deezer login failed')
+      if (result.status === 'ok') toast.success('Deezer-Anmeldung aktiv.')
+      else toast.error(de(result.message || result.error || 'Deezer login failed'))
       setDeezerConfig(prev => ({ ...(prev || {}), ...result }))
     } catch (error) {
-      toast.error(errorMessage(error, 'Deezer test failed'))
+      toast.error(errorMessage(error, 'Der Deezer-Test ist fehlgeschlagen.'))
     }
     setDeezerTesting(false)
   }
@@ -108,145 +124,128 @@ export function StatusTab() {
   const unfinishedPages = Math.ceil(unfinished.length / PAGE_SIZE) || 1
   const currentPage = Math.min(unfinishedPage, unfinishedPages)
   const pagedUnfinished = unfinished.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+  const queueEntries = Object.entries(queue)
+  const checkEntries = Object.entries(checks)
 
-  const formatBytes = (bytes: number) => {
-    if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(1) + ' GB'
-    if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + ' MB'
-    if (bytes >= 1024) return (bytes / 1024).toFixed(0) + ' KB'
-    return bytes + ' B'
-  }
+  if (loading) return <PageState title="Systemstatus wird geladen …" loading />
+  if (loadError) return <LoadError title="Der Systemstatus ist gerade nicht verfügbar." error={loadError} onRetry={load} />
 
-  if (loading) return <PageState title="Loading system status" loading />
-  if (loadError) return <PageState title="System status unavailable" description={loadError} action={<button className={styles.primaryBtn} onClick={load}>Try again</button>} />
+  const share = (bytes: number) => storage && storage.disk_total > 0 ? `${Math.max(0, (bytes / storage.disk_total) * 100)}%` : '0%'
 
   return (
     <>
       {storage && (
-        <div className={styles.section}>
-          <div className={styles.sectionHeader}>
-            <h3>Storage</h3>
-            <button className={styles.primaryBtn} onClick={() => setConfirmation({ title: 'Compress song audio?', description: 'This rewrites stored song audio in the background. Playback may be temporarily affected.', label: 'Start compression', action: admin.compressSongs, success: 'Compression started in background' })}>
-              Compress songs
+        <section className={styles.section}>
+          <div className={`stats ${styles.statStrip}`}>
+            <div className="stat"><b>{formatBytes(storage.disk_free)}</b><span className="kicker">Frei von {formatBytes(storage.disk_total)}</span></div>
+            <div className="stat"><b>{formatBytes(storage.songs_size)}</b><span className="kicker">{formatInt(storage.songs_count)} {storage.songs_count === 1 ? 'Song' : 'Songs'}</span></div>
+            <div className="stat"><b>{formatBytes(storage.db_size)}</b><span className="kicker">Datenbank</span></div>
+            <div className={`stat ${queueEntries.length ? 'stat--work' : ''}`}><b>{formatInt(queueEntries.length)}</b><span className="kicker">In Arbeit</span></div>
+            <div className={`stat ${unfinished.length ? 'stat--err' : ''}`}><b>{formatInt(unfinished.length)}</b><span className="kicker">Unfertig</span></div>
+          </div>
+          <SectionHead title="Speicher">
+            <button type="button" className={styles.actionBtn} onClick={() => setConfirmation({ title: 'Song-Audio komprimieren?', description: 'Die gespeicherten Audiodateien werden im Hintergrund neu geschrieben. Die Wiedergabe kann kurz gestört sein.', label: 'Komprimierung starten', tone: 'neutral', action: admin.compressSongs, success: 'Komprimierung läuft im Hintergrund.' })}>
+              <Icon name="disk" size={16} /> Songs komprimieren
             </button>
+          </SectionHead>
+          <div className={styles.storageBar} role="img" aria-label={`Belegt: System ${formatBytes(storage.disk_used - storage.songs_size)}, Songs ${formatBytes(storage.songs_size)}, frei ${formatBytes(storage.disk_free)}`}>
+            <i className={styles.barSystem} style={{ width: share(storage.disk_used - storage.songs_size) } as CSSProperties} />
+            <i className={styles.barSongs} style={{ width: share(storage.songs_size) } as CSSProperties} />
           </div>
-          <div className={styles.stats}>
-            <div className={`${styles.statCard} ${styles.statCardPlays}`}>
-              <div className={styles.statIcon} style={{ color: 'var(--success)' }}><FontAwesomeIcon icon={faHardDrive} /></div>
-              <div className={styles.statValue}>{formatBytes(storage.disk_free)}</div>
-              <div className={styles.statLabel}>Free of {formatBytes(storage.disk_total)}</div>
-            </div>
-            <div className={`${styles.statCard} ${styles.statCardDownloads}`}>
-              <div className={styles.statIcon} style={{ color: '#6366f1' }}><FontAwesomeIcon icon={faMusic} /></div>
-              <div className={styles.statValue}>{formatBytes(storage.songs_size)}</div>
-              <div className={styles.statLabel}>{storage.songs_count} song{storage.songs_count !== 1 ? 's' : ''}</div>
-            </div>
-            <div className={`${styles.statCard} ${styles.statCardSearches}`}>
-              <div className={styles.statIcon} style={{ color: 'var(--warning)' }}><FontAwesomeIcon icon={faDatabase} /></div>
-              <div className={styles.statValue}>{formatBytes(storage.db_size)}</div>
-              <div className={styles.statLabel}>Database</div>
-            </div>
+          <div className={styles.legend}>
+            <span><i className={styles.barSystem} /> System {formatBytes(storage.disk_used - storage.songs_size)}</span>
+            <span><i className={styles.barSongs} /> Songs {formatBytes(storage.songs_size)}</span>
+            <span><i className={styles.legendFree} /> Frei {formatBytes(storage.disk_free)}</span>
           </div>
-          <div className={styles.storageBar}>
-            <div className={styles.storageBarUsed} style={{ width: `${((storage.disk_used - storage.songs_size) / storage.disk_total) * 100}%` }} />
-            <div className={styles.storageBarSongs} style={{ width: `${(storage.songs_size / storage.disk_total) * 100}%` }} />
-          </div>
-          <div className={styles.storageBarLegend}>
-            <span><span className={styles.legendDot} style={{ background: 'var(--text-muted)' }} /> System ({formatBytes(storage.disk_used - storage.songs_size)})</span>
-            <span><span className={styles.legendDot} style={{ background: 'var(--primary)' }} /> Songs ({formatBytes(storage.songs_size)})</span>
-            <span><span className={styles.legendDot} style={{ background: 'var(--border)' }} /> Free ({formatBytes(storage.disk_free)})</span>
-          </div>
-        </div>
+        </section>
       )}
 
-      <div className={styles.section}>
-        <h3>Deezer ARL</h3>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: 'var(--spacing-md)' }}>
-          Current: {deezerConfig?.masked || 'not configured'}
-          {deezerConfig?.status && ` · Last test: ${deezerConfig.status}${deezerConfig.message ? ` (${deezerConfig.message})` : ''}`}
+      <section className={styles.section}>
+        <SectionHead title="Dienste">
+          <button type="button" className="btn btn--primary" onClick={runChecks} disabled={running} aria-busy={running}>
+            <Icon name="pulse" /> {running ? 'Prüfung läuft …' : 'Prüfung starten'}
+          </button>
+        </SectionHead>
+        {checkEntries.length === 0
+          ? <p className={styles.subtle}>Starte die Prüfung, um Datenbank, Speicher, Deezer, Replicate und lrclib zu testen.</p>
+          : <div className={styles.healthGrid}>
+            {checkEntries.map(([name, check]) => (
+              <div key={name} className={styles.healthCard}>
+                <div className={styles.healthHead}>
+                  <span className={styles.healthTitle}>{CHECK_NAMES[name] ?? name}</span>
+                  <span className={`chip ${check.status === 'ok' ? 'chip--ok' : 'chip--err'}`}>{check.status === 'ok' ? 'OK' : 'Fehler'}</span>
+                </div>
+                <div className={styles.healthMessage}>{checkMessage(check.message)}</div>
+              </div>
+            ))}
+          </div>}
+      </section>
+
+      <section className={styles.section}>
+        <SectionHead title="Deezer-Zugang" />
+        <p className={styles.sectionLead}>
+          Aktuell: <span className={styles.mono}>{deezerConfig?.masked || 'nicht hinterlegt'}</span>
+          {deezerConfig?.status && <> · Letzter Test: <span className={`chip ${deezerConfig.status === 'ok' ? 'chip--ok' : 'chip--err'}`}>{deezerConfig.status === 'ok' ? 'OK' : 'Fehler'}</span>{deezerConfig.message ? ` ${de(deezerConfig.message)}` : ''}</>}
         </p>
-        <div style={{ display: 'flex', gap: 'var(--spacing-sm)', alignItems: 'center', flexWrap: 'wrap' }}>
+        <div className={styles.arlForm}>
           <input
+            className="input"
             type="password"
-            aria-label="New Deezer ARL"
+            aria-label="Neuer Deezer-ARL"
             value={deezerArl}
             onChange={e => setDeezerArl(e.target.value)}
-            placeholder="Paste new Deezer ARL"
+            placeholder="Neuen Deezer-ARL einfügen"
             autoComplete="off"
-            style={{
-              flex: '1 1 360px',
-              minWidth: 0,
-              padding: '0.65rem 0.75rem',
-              borderRadius: 8,
-              border: '1px solid var(--border)',
-              background: 'var(--surface)',
-              color: 'var(--text)',
-            }}
           />
-          <button className={styles.primaryBtn} onClick={handleSaveDeezerArl} disabled={deezerSaving || deezerTesting || !deezerArl.trim()}>
-            {deezerSaving ? 'Saving...' : 'Save & Test'}
+          <button type="button" className="btn btn--primary" onClick={handleSaveDeezerArl} disabled={deezerSaving || deezerTesting || !deezerArl.trim()} aria-busy={deezerSaving}>
+            {deezerSaving ? 'Wird gespeichert …' : 'Speichern und testen'}
           </button>
-          <button className={styles.actionBtn} onClick={handleTestDeezerArl} disabled={deezerSaving || deezerTesting}>
-            {deezerTesting ? 'Testing...' : 'Test'}
+          <button type="button" className="btn" onClick={handleTestDeezerArl} disabled={deezerSaving || deezerTesting} aria-busy={deezerTesting}>
+            {deezerTesting ? 'Wird getestet …' : 'Testen'}
           </button>
         </div>
-      </div>
+      </section>
 
-      <div className={styles.section}>
-        <div className={styles.sectionHeader}>
-          <h3>Health Checks</h3>
-          <button className={styles.primaryBtn} onClick={runChecks} disabled={running}>
-            {running ? 'Running...' : 'Run Checks'}
-          </button>
-        </div>
-        <div className={styles.healthGrid}>
-          {Object.keys(checks).length === 0 && <p className={styles.subtle}>Run checks to test the configured services.</p>}
-          {Object.entries(checks).map(([name, check]) => (
-            <div key={name} className={`${styles.healthCard} ${check.status === 'ok' ? styles.healthCardOk : styles.healthCardError}`}>
-              <div className={styles.healthTitle}>{name}</div>
-              <div className={styles.healthMessage}>{check.message}</div>
+      <section className={styles.section}>
+        <SectionHead title="Verarbeitung läuft" count={queueEntries.length} />
+        {queueEntries.length === 0 && <p className={styles.subtle}>Gerade wird nichts verarbeitet.</p>}
+        {queueEntries.length > 0 && <div className={styles.queueList}>
+          {queueEntries.map(([id, status]) => (
+            <div key={id} className={styles.queueItem}>
+              <div className={styles.cellStack}>
+                <span className={styles.cellTitle}>Song <span className={styles.mono}>#{id}</span></span>
+                <span className={styles.cellSub}>{pipelineLabel(status.status, status.progress)}{status.detail ? ` · ${status.detail}` : ''}</span>
+              </div>
+              <span className="meter meter--inst" aria-hidden="true"><i style={{ '--v': `${status.progress}%` } as CSSProperties} /></span>
             </div>
           ))}
-        </div>
-      </div>
+        </div>}
+      </section>
 
-      <div className={styles.section}>
-        <h3>Processing Queue</h3>
-        {Object.keys(queue).length === 0 && <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No active processing</p>}
-        {Object.entries(queue).map(([id, status]) => (
-          <div key={id} className={styles.songItem}>
-            <div className={styles.songInfo}>
-              <div className={styles.songTitle}>Track {id}</div>
-              <div className={styles.songArtist}>{status.detail || status.status} - {status.progress}%</div>
-            </div>
-            <div style={{ width: 100, height: 4, background: 'var(--border)', borderRadius: 2 }}>
-              <div style={{ width: `${status.progress}%`, height: '100%', background: 'var(--gradient)', borderRadius: 2, transition: 'width 0.5s' }} />
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className={styles.section}>
-        <h3>Unfinished Tracks ({unfinished.length})</h3>
-        {unfinished.length === 0 && <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No unfinished tracks</p>}
-        {pagedUnfinished.map(t => (
-          <div key={t.track_id} className={styles.songItem}>
-            <div className={styles.songInfo}>
-              <div className={styles.songTitle}>{t.title}</div>
-              <div className={styles.songArtist}>{t.artist} &middot; Stage: {t.stage} &middot; Failures: {t.failure_count}</div>
-              {t.error_message && <div style={{ fontSize: '0.7rem', color: 'var(--danger)', marginTop: 2 }}>{t.error_message.slice(0, 100)}</div>}
-            </div>
-            <button className={styles.actionBtn} aria-label={`Reprocess ${t.title}`} onClick={() => setConfirmation({ title: `Reprocess ${t.title}?`, description: 'This replaces generated audio and lyrics and may use paid processing services.', label: 'Reprocess track', action: () => admin.reprocessSong(t.track_id), success: 'Reprocessing started' })} title="Reprocess"><FontAwesomeIcon icon={faRotateRight} /></button>
-            <button className={`${styles.actionBtn} ${styles.dangerBtn}`} aria-label={`Delete ${t.title}`} onClick={() => setConfirmation({ title: `Delete ${t.title}?`, description: 'The track and its generated files will be permanently removed for everyone.', label: 'Delete track', action: () => admin.deleteSong(t.track_id), success: 'Track deleted' })} title="Delete"><FontAwesomeIcon icon={faTrash} /></button>
-          </div>
-        ))}
-        {unfinishedPages > 1 && (
-          <div className={styles.pagination}>
-            <button className={styles.actionBtn} disabled={currentPage <= 1} onClick={() => setUnfinishedPage(currentPage - 1)}>Previous</button>
-            <span className={styles.pageInfo}>Page {currentPage} of {unfinishedPages}</span>
-            <button className={styles.actionBtn} disabled={currentPage >= unfinishedPages} onClick={() => setUnfinishedPage(currentPage + 1)}>Next</button>
-          </div>
-        )}
-      </div>
+      <section className={styles.section}>
+        <SectionHead title="Unfertige Songs" count={unfinished.length} />
+        {unfinished.length === 0 ? <p className={styles.subtle}>Keine unfertigen Songs.</p> : <div className="table-wrap">
+          <table className="table table--cards">
+            <thead><tr><th scope="col">Song</th><th scope="col">Schritt</th><th scope="col" className="num">Fehlversuche</th><th scope="col" className="num"><span className="sr-only">Aktionen</span></th></tr></thead>
+            <tbody>{pagedUnfinished.map(t => (
+              <tr key={t.track_id}>
+                <td className="cell-main"><div className={styles.cellStack}>
+                  <span className={styles.cellTitle}>{t.title}</span>
+                  <span className={styles.cellSub}>{t.artist} · <span className={styles.mono}>#{t.track_id}</span></span>
+                  {t.error_message && <span className={styles.cellError}>{t.error_message.slice(0, 160)}</span>}
+                </div></td>
+                <td data-label="Schritt" className="cell-inline"><span className="chip chip--err">{PIPELINE_STEPS[pipelineIndex(t.stage)].label}</span></td>
+                <td data-label="Fehlversuche" className="num cell-inline">{formatInt(t.failure_count)}</td>
+                <td className="num"><div className={styles.tableActions}>
+                  <button type="button" className={`${styles.actionBtn} ${styles.reprocessWide}`} onClick={() => setConfirmation({ title: `„${t.title}“ neu verarbeiten?`, description: 'Audio und Lyrics werden neu erzeugt. Das kann kostenpflichtige Dienste nutzen.', label: 'Neu verarbeiten', tone: 'neutral', action: () => admin.reprocessSong(t.track_id), success: 'Verarbeitung gestartet.' })}><Icon name="redo" size={16} /> Neu verarbeiten</button>
+                  <button type="button" className={`${styles.actionBtn} ${styles.iconOnly} ${styles.danger}`} aria-label={`${t.title} löschen`} title="Löschen" onClick={() => setConfirmation({ title: `„${t.title}“ löschen?`, description: 'Der Song und seine erzeugten Dateien verschwinden für alle.', label: 'Song löschen', action: () => admin.deleteSong(t.track_id), success: 'Song gelöscht.' })}><Icon name="trash" size={16} /></button>
+                </div></td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>}
+        <Pagination page={currentPage} pages={unfinishedPages} onPage={setUnfinishedPage} label="Seiten der unfertigen Songs" />
+      </section>
       {confirmation && <ConfirmAction confirmation={confirmation} onClose={() => setConfirmation(null)} onSuccess={load} />}
     </>
   )

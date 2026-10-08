@@ -1,15 +1,18 @@
 import { useAdminAction } from './useAdminAction'
 import { errorMessage } from '../account/errors'
 import { useState, useEffect, useCallback, useRef, Fragment } from 'react'
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faCheck } from '@fortawesome/free-solid-svg-icons'
+import { Link } from 'react-router-dom'
 import { admin } from '../../services/api'
 import type { ErrorLogEntry } from '../../types'
-import { CustomSelect } from '../../components/common/CustomSelect'
+import { Icon } from '../../components/common/Icon'
 import { PageState } from '../../components/common/PageState'
+import { formatDateTime } from '../../utils/format'
 import { ConfirmAction, type Confirmation } from './AdminAction'
+import { LoadError, Pagination, SectionHead, Updating } from './shared'
 import styles from '../AdminPage.module.css'
 
+const TYPES = [{ value: '', label: 'Alle Bereiche' }, { value: 'pipeline', label: 'Pipeline' }, { value: 'api', label: 'API' }]
+const RESOLUTION = [{ value: '0', label: 'Offen' }, { value: '1', label: 'Erledigt' }, { value: '', label: 'Alle' }]
 
 // ─── Errors Tab ───
 export function ErrorsTab() {
@@ -52,108 +55,75 @@ export function ErrorsTab() {
     return () => { if (refreshRef.current) clearInterval(refreshRef.current) }
   }, [load])
 
-
   const totalPages = Math.ceil(total / 50) || 1
 
-  if (loading) return <PageState title="Loading errors" loading />
+  if (loading) return <PageState title="Fehler werden geladen …" loading />
 
   return (
-    <div className={styles.section}>
-      {error && <PageState title="Could not load errors" description={error} action={<button className={styles.primaryBtn} onClick={load}>Try again</button>} />}
-      {refreshing && <p role="status" className={styles.subtle}>Updating errors…</p>}
-      <div className={styles.sectionHeader}>
-        <h3>Error Log ({total})</h3>
-        <button className={`${styles.actionBtn} ${styles.dangerBtn}`} disabled={busy} onClick={() => setConfirmation({ title: 'Clear resolved errors?', description: 'Resolved error records will be permanently deleted. Unresolved errors will be kept.', label: 'Clear resolved errors', action: admin.clearResolved, success: 'Resolved errors cleared' })}>Clear Resolved</button>
-      </div>
+    <section className={styles.section}>
+      {error && <LoadError title="Die Fehler konnten nicht geladen werden." error={error} onRetry={load} />}
+      <SectionHead title="Fehlerprotokoll" count={total}>
+        <Updating active={refreshing} />
+        <button type="button" className={`${styles.actionBtn} ${styles.danger}`} disabled={busy} onClick={() => setConfirmation({ title: 'Erledigte Fehler löschen?', description: 'Erledigte Einträge werden dauerhaft gelöscht. Offene Fehler bleiben.', label: 'Erledigte löschen', action: admin.clearResolved, success: 'Erledigte Fehler gelöscht.' })}><Icon name="trash" size={16} /> Erledigte löschen</button>
+      </SectionHead>
 
       <div className={styles.filters}>
-        <CustomSelect
-          aria-label="Error type"
-          value={typeFilter}
-          onChange={v => { setTypeFilter(v); setPage(1) }}
-          options={[
-            { value: '', label: 'All types' },
-            { value: 'pipeline', label: 'Pipeline' },
-            { value: 'api', label: 'API' },
-          ]}
-        />
-        <CustomSelect
-          aria-label="Resolution status"
-          value={resolvedFilter}
-          onChange={v => { setResolvedFilter(v); setPage(1) }}
-          options={[
-            { value: '0', label: 'Unresolved' },
-            { value: '1', label: 'Resolved' },
-            { value: '', label: 'All' },
-          ]}
-        />
+        <div className="seg" role="group" aria-label="Bearbeitungsstand">
+          {RESOLUTION.map(option => <button type="button" key={option.value} aria-pressed={resolvedFilter === option.value} onClick={() => { setResolvedFilter(option.value); setPage(1) }}>{option.label}</button>)}
+        </div>
+        <div className="seg" role="group" aria-label="Bereich">
+          {TYPES.map(option => <button type="button" key={option.value} aria-pressed={typeFilter === option.value} onClick={() => { setTypeFilter(option.value); setPage(1) }}>{option.label}</button>)}
+        </div>
       </div>
 
-      {!error && errors.length === 0 && <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No errors found</p>}
-
-      <div className={styles.tableScroll} role="region" aria-label="Errors table" tabIndex={0}><table className={styles.table}>
-        <thead><tr>
-          <th>Type</th>
-          <th>Source</th>
-          <th>Message</th>
-          <th>User</th>
-          <th>Time</th>
-          <th>Actions</th>
-        </tr></thead>
-        <tbody>
-          {errors.map(err => (
-            <Fragment key={err.id}>
-              <tr>
-                <td>
-                  <span className={`${styles.tag} ${err.error_type === 'pipeline' ? styles.tagWarning : styles.tagDanger}`}>
-                    {err.error_type}
-                  </span>
-                </td>
-                <td>{err.source}</td>
-                <td style={{ maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><button className={styles.detailButton} aria-expanded={expandedId === err.id} onClick={() => setExpandedId(expandedId === err.id ? null : err.id)}>{err.error_message}</button></td>
-                <td>{err.username || '-'}</td>
-                <td>{err.created_at?.replace('T', ' ').slice(0, 16)}</td>
-                <td>
-                  <button className={styles.actionBtn} disabled={busy} onClick={async () => { if (await run(() => admin.resolveError(err.id), err.resolved ? 'Error reopened' : 'Error resolved')) void load() }} aria-label={err.resolved ? 'Reopen error' : 'Resolve error'}
-                    title={err.resolved ? 'Unresolve' : 'Resolve'}>
-                    <FontAwesomeIcon icon={faCheck} style={err.resolved ? { color: 'var(--success)' } : undefined} />
-                  </button>
-                </td>
-              </tr>
-              {expandedId === err.id && (
-                <tr key={`${err.id}-detail`}>
-                  <td colSpan={6} style={{ padding: 0 }}>
-                    <div className={styles.errorDetail}>
-                      <div style={{ display: 'flex', gap: 'var(--spacing-lg)', flexWrap: 'wrap', fontSize: '0.8rem' }}>
-                        {err.track_id && <div><strong>Track ID:</strong> {err.track_id}</div>}
-                        {err.request_method && <div><strong>Method:</strong> {err.request_method}</div>}
-                        {err.request_path && <div><strong>Path:</strong> {err.request_path}</div>}
-                        {err.resolved_at && <div><strong>Resolved:</strong> {err.resolved_at.replace('T', ' ').slice(0, 19)}</div>}
-                      </div>
-                      <div style={{ fontSize: '0.8rem' }}><strong>Full message:</strong> {err.error_message}</div>
-                      {err.stack_trace && (
-                        <div>
-                          <strong style={{ fontSize: '0.8rem' }}>Stack trace:</strong>
-                          <pre className={styles.stackTrace}>{err.stack_trace}</pre>
-                        </div>
-                      )}
-                    </div>
+      {!error && errors.length === 0 ? <PageState icon="check" title={resolvedFilter === '0' ? 'Keine offenen Fehler.' : 'Keine Einträge.'} description={resolvedFilter === '0' ? 'Alles läuft. Neue Fehler erscheinen hier automatisch.' : 'Für diesen Filter gibt es nichts.'} /> : <div className="table-wrap">
+        <table className="table table--cards">
+          <thead><tr>
+            <th scope="col">Meldung</th>
+            <th scope="col">Bereich</th>
+            <th scope="col">Song</th>
+            <th scope="col">Nutzer</th>
+            <th scope="col">Zeit</th>
+            <th scope="col" className="num"><span className="sr-only">Aktionen</span></th>
+          </tr></thead>
+          <tbody>
+            {errors.map(err => (
+              <Fragment key={err.id}>
+                <tr>
+                  <td className="cell-main"><button type="button" className={`${styles.messageButton} ${styles.mono}`} aria-expanded={expandedId === err.id} onClick={() => setExpandedId(expandedId === err.id ? null : err.id)}>{err.error_message}</button></td>
+                  <td data-label="Bereich" className="cell-inline"><span className={`chip ${err.error_type === 'pipeline' ? 'chip--warn' : 'chip--err'}`}>{err.error_type === 'pipeline' ? 'Pipeline' : 'API'}</span><span className={styles.cellSub}>{err.source}</span></td>
+                  <td data-label="Song" className={`cell-inline ${styles.mono}`}>{err.track_id ? <Link to={'/admin/songs/' + err.track_id}>#{err.track_id}</Link> : '–'}</td>
+                  <td data-label="Nutzer" className="cell-inline">{err.username || '–'}</td>
+                  <td data-label="Zeit" className={`cell-inline ${styles.mono} ${styles.nowrap}`}>{formatDateTime(err.created_at)}</td>
+                  <td className="cell-acts num">
+                    <button type="button" className={`${styles.actionBtn} ${styles.iconOnly}`} disabled={busy} aria-pressed={err.resolved} onClick={async () => { if (await run(() => admin.resolveError(err.id), err.resolved ? 'Fehler wieder geöffnet.' : 'Fehler erledigt.')) void load() }} aria-label={err.resolved ? 'Wieder öffnen' : 'Als erledigt markieren'}
+                      title={err.resolved ? 'Wieder öffnen' : 'Als erledigt markieren'}>
+                      <Icon name={err.resolved ? 'redo' : 'check'} size={16} />
+                    </button>
                   </td>
                 </tr>
-              )}
-            </Fragment>
-          ))}
-        </tbody>
-      </table></div>
+                {expandedId === err.id && (
+                  <tr className={styles.detailRow}>
+                    <td colSpan={6}>
+                      <div className={styles.detailBox}>
+                        <div className={styles.detailMeta}>
+                          {err.request_method && <span><b>Methode:</b> <span className={styles.mono}>{err.request_method}</span></span>}
+                          {err.request_path && <span><b>Pfad:</b> <span className={styles.mono}>{err.request_path}</span></span>}
+                          {err.resolved_at && <span><b>Erledigt:</b> <span className={styles.mono}>{formatDateTime(err.resolved_at)}</span></span>}
+                        </div>
+                        {err.stack_trace && <pre className={styles.stackTrace}>{err.stack_trace}</pre>}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>}
 
-      {totalPages > 1 && (
-        <div className={styles.pagination}>
-          <button className={styles.actionBtn} disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Previous</button>
-          <span className={styles.pageInfo}>Page {page} of {totalPages}</span>
-          <button className={styles.actionBtn} disabled={page * 50 >= total} onClick={() => setPage(p => p + 1)}>Next</button>
-        </div>
-      )}
+      <Pagination page={page} pages={totalPages} onPage={setPage} label="Seiten des Fehlerprotokolls" />
       {confirmation && <ConfirmAction confirmation={confirmation} onClose={() => setConfirmation(null)} onSuccess={() => { setPage(1); void load() }} />}
-    </div>
+    </section>
   )
 }

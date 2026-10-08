@@ -63,6 +63,10 @@ const MESSAGES: Record<string, string> = {
   'Deezer login failed': 'Deezer-Anmeldung fehlgeschlagen.',
   'No active processing': 'Gerade wird nichts verarbeitet.',
   'No Deezer ARL configured': 'Kein Deezer-ARL hinterlegt.',
+  'Database connection successful': 'Datenbank erreichbar.',
+  'Replicate API accessible': 'Replicate erreichbar.',
+  'lrclib.net accessible': 'lrclib.net erreichbar.',
+  'OpenRouter API accessible': 'OpenRouter erreichbar.',
   // client
   'Unable to connect. Check your connection and try again.': 'Keine Verbindung. Prüf deine Internetverbindung und versuch es noch einmal.',
   'The server returned an unexpected response. Please try again.': 'Der Server hat unerwartet geantwortet. Bitte versuch es noch einmal.',

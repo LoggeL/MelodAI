@@ -10,6 +10,8 @@ export interface Confirmation {
   label: string
   action: () => Promise<unknown>
   success: string
+  /** `danger` (default) for destructive actions, `neutral` for reversible ones. */
+  tone?: 'danger' | 'neutral'
 }
 
 export function ConfirmAction({ confirmation, onClose, onSuccess }: {
@@ -21,8 +23,8 @@ export function ConfirmAction({ confirmation, onClose, onSuccess }: {
   const [failed, setFailed] = useState(false)
   return (
     <Modal title={confirmation.title} onClose={onClose} busy={busy} size="small" footer={<>
-      <button className={styles.actionBtn} disabled={busy} onClick={onClose}>Cancel</button>
-      <button className={`${styles.primaryBtn} ${styles.dangerBtn}`} disabled={busy} onClick={async () => {
+      <button type="button" className="btn" disabled={busy} onClick={onClose}>Abbrechen</button>
+      <button type="button" className={confirmation.tone === 'neutral' ? 'btn btn--primary' : 'btn btn--danger-solid'} disabled={busy} aria-busy={busy} onClick={async () => {
         setFailed(false)
         if (await run(confirmation.action, confirmation.success)) {
           onSuccess?.()
@@ -30,10 +32,10 @@ export function ConfirmAction({ confirmation, onClose, onSuccess }: {
         } else {
           setFailed(true)
         }
-      }}>{busy ? 'Saving…' : confirmation.label}</button>
+      }}>{busy ? 'Wird ausgeführt …' : confirmation.label}</button>
     </>}>
       <p>{confirmation.description}</p>
-      {failed && <p role="alert">The action failed. Your changes have not been confirmed. Please try again.</p>}
+      {failed && <p role="alert" className={styles.alert}>Das hat nicht geklappt. Es wurde nichts geändert. Versuch es noch einmal.</p>}
     </Modal>
   )
 }

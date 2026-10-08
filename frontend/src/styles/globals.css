@@ -219,6 +219,9 @@ select.input {
   .table--cards td.cell-acts::before { display: none; }
   .table--cards tbody tr:hover td { background: transparent; }
   .table--cards .empty-row { display: block; }
+  /* Label and value on one line: compact cards for short values. */
+  .table--cards td.cell-inline { display: flex; align-items: center; flex-wrap: wrap; gap: 2px var(--s-3); }
+  .table--cards td.cell-inline[data-label]::before { min-width: 10.5em; }
 }
 
 /* ── States (§7) ── */
