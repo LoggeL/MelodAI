@@ -30,6 +30,7 @@
 .navTab:hover { color: var(--ink); }
 .navTabActive { background: var(--stage-3); color: var(--ink); }
 .navCount { position: absolute; top: 4px; right: 4px; }
+.navTabActive .navCount { background: var(--vocal-strong); color: var(--on-strong); }
 
 @media (min-width: 600px) {
   .nav {
@@ -111,16 +112,17 @@
 }
 
 /* ── Tables ── */
-@media (max-width: 599px) {
+@media (max-width: 899px) {
   .tableActions:has(.reprocessWide) { justify-content: stretch; }
   .reprocessWide { flex: 1; }
 }
 .tableActions { display: flex; justify-content: flex-end; gap: var(--s-2); flex-wrap: wrap; }
 .sortButton {
-  display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none;
+  display: flex; align-items: center; gap: 4px; width: 100%; min-height: 40px; padding: 0; border: 0; background: none;
   font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer;
 }
 .sortButton:hover { color: var(--ink); }
+:global(th.num) > .sortButton { justify-content: flex-end; }
 .cellStack { display: grid; gap: 2px; min-width: 0; }
 .cellTitle { font-weight: 700; overflow-wrap: anywhere; }
 .cellSub { color: var(--ink-2); font-size: var(--fs-xs); overflow-wrap: anywhere; }
@@ -140,6 +142,10 @@
 .dots { display: inline-flex; gap: 3px; align-items: center; }
 .dots i { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--ink-2); }
 .dots i.on { background: var(--ink-2); }
+@media (max-width: 899px), (pointer: coarse) {
+  .messageButton { min-height: var(--tap); }
+  .trackLink { display: inline-flex; align-items: center; min-height: var(--tap); min-width: var(--tap); }
+}
 .pendingTable { border-color: color-mix(in srgb, var(--vocal) 40%, var(--line)); }
 .messageButton {
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
@@ -175,6 +181,18 @@
 }
 
 /* ── Status ── */
+/* ── Stimmtrennung erneuern (re-split batch) ── */
+.resplit {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-3) var(--s-5);
+  margin-bottom: var(--s-6); padding: var(--s-4); border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--stage-1);
+}
+.resplitInfo { display: grid; gap: var(--s-1); flex: 1 1 320px; min-width: 0; }
+.resplitHead { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+.resplitHead h3 { font-size: var(--fs-md); font-weight: 800; }
+.resplitStatus { font-size: var(--fs-sm); color: var(--ink-2); overflow-wrap: anywhere; }
+.resplit .subtle, .resplitStatus { margin: 0; }
+.resplit details ul { margin: var(--s-2) 0 0; padding-left: var(--s-5); }
+.sepChip { margin-left: var(--s-1); }
 .healthGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--s-3); }
 .healthCard { display: grid; gap: var(--s-2); align-content: start; padding: var(--s-4); border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--stage-1); }
 .healthHead { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); }

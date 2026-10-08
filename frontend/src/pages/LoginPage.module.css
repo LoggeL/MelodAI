@@ -41,7 +41,8 @@
   border: 1px solid var(--line); border-radius: var(--r-md); background: color-mix(in srgb, var(--stage-1) 80%, transparent);
   font: 500 var(--fs-xs)/1.3 var(--mono); color: var(--ink-2);
 }
-.pipeline b { font-size: var(--fs-sm); }
+.pipeline li { min-width: 0; }
+.pipeline b { font-size: var(--fs-sm); hyphens: auto; overflow-wrap: break-word; }
 .pipeline [data-tone='vocal'] b { color: var(--vocal); }
 .pipeline [data-tone='inst'] b { color: var(--inst); }
 .footer { order: 5; font: 500 var(--fs-xs)/1.4 var(--mono); color: var(--muted); }
@@ -63,7 +64,7 @@
 .password { position: relative; display: flex; }
 .password :global(.input) { padding-right: 104px; }
 .reveal {
-  position: absolute; right: 4px; top: 4px; bottom: 4px;
+  position: absolute; right: 2px; top: 2px; bottom: 2px;
   display: inline-flex; align-items: center; gap: 6px; padding: 0 var(--s-3);
   border: 0; border-radius: var(--r-sm); background: transparent; color: var(--ink-2); font-size: var(--fs-xs); font-weight: 700;
 }
@@ -78,7 +79,6 @@
 
 @media (min-width: 600px) {
   .page { padding: var(--s-5) var(--s-5) var(--s-7); }
-  .pipeline { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 }
 @media (min-width: 900px) {
   .page { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 0; padding: 0; }
@@ -88,4 +88,8 @@
   .dek { font-size: var(--fs-lg); }
   .panel { align-content: center; padding: var(--s-6); background: var(--stage-1); border-left: 1px solid var(--line); }
   .card { padding: 0; border: 0; background: transparent; }
+}
+/* Six columns only where the mono labels („Stimmtrennung“) fit. */
+@media (min-width: 1440px) {
+  .pipeline { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 }

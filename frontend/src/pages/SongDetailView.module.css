@@ -13,8 +13,9 @@
 .cover { width: 72px; height: 72px; border-radius: var(--r-md); object-fit: cover; overflow: hidden; box-shadow: var(--shadow-1); }
 .headInfo { display: grid; gap: var(--s-1); min-width: 0; }
 .title {
-  font-size: var(--fs-xl); font-weight: 900; line-height: 1.02; letter-spacing: -.02em;
-  font-variation-settings: 'wdth' var(--wdth-marquee); overflow-wrap: anywhere;
+  font-size: clamp(1.5rem, 7vw, var(--fs-xl)); font-weight: 900; line-height: 1.02; letter-spacing: -.02em;
+  font-variation-settings: 'wdth' var(--wdth-marquee); hyphens: auto; overflow-wrap: break-word;
+  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
 }
 .artist { color: var(--ink-2); font-size: var(--fs-md); }
 .album { color: var(--muted); }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { admin } from '../services/api'
@@ -29,9 +29,10 @@ const TAB_CONFIG: { key: Tab; label: string; icon: IconName; lead: string }[] = 
   { key: 'errors', label: 'Fehler', icon: 'alert', lead: 'Fehler aus Pipeline und API. Erledigte kannst du aufräumen.' },
 ]
 
-/** Pending approvals and open errors for the red tab badges. */
-function useBackstageCounts(path: string, enabled: boolean) {
+/** Pending approvals and open errors for the red tab badges: loaded once, refreshed after a tab changes them. */
+function useBackstageCounts(enabled: boolean) {
   const [counts, setCounts] = useState<{ pending: number; errors: number }>({ pending: 0, errors: 0 })
+  const [version, setVersion] = useState(0)
   useEffect(() => {
     if (!enabled) return
     let cancelled = false
@@ -43,8 +44,9 @@ function useBackstageCounts(path: string, enabled: boolean) {
       }))
     })
     return () => { cancelled = true }
-  }, [path, enabled])
-  return counts
+  }, [enabled, version])
+  const refresh = useCallback(() => setVersion(v => v + 1), [])
+  return { counts, refresh }
 }
 
 export function AdminPage() {
@@ -63,7 +65,7 @@ export function AdminPage() {
     if (['users', 'keys', 'usage', 'songs', 'status', 'logs', 'errors'].includes(path)) return path as Tab
     return 'users'
   }, [location.pathname, songDetailId])
-  const counts = useBackstageCounts(location.pathname, checked && authenticated && isAdmin && !songDetailId)
+  const { counts, refresh: refreshCounts } = useBackstageCounts(checked && authenticated && isAdmin)
   const current = TAB_CONFIG.find(t => t.key === tab)!
 
   useEffect(() => {
@@ -101,13 +103,13 @@ export function AdminPage() {
             })}
           </nav>
 
-          {tab === 'users' && <UsersTab />}
+          {tab === 'users' && <UsersTab onChanged={refreshCounts} />}
           {tab === 'keys' && <KeysTab />}
           {tab === 'usage' && <UsageTab />}
           {tab === 'songs' && <SongsTab />}
           {tab === 'status' && <StatusTab />}
           {tab === 'logs' && <LogsTab />}
-          {tab === 'errors' && <ErrorsTab />}
+          {tab === 'errors' && <ErrorsTab onChanged={refreshCounts} />}
         </>
       )}
     </AppShell>

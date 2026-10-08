@@ -214,7 +214,7 @@ export const SearchBar = forwardRef<SearchBarHandle, Props>(function SearchBar({
           {processing && <span className={`meter meter--inst meter--thin ${styles.bar}`} aria-hidden="true"><i style={{ '--v': `${queued.progress}%` } as CSSProperties} /></span>}
         </div>
         <span className={styles.action}>
-          {playing ? <span className="chip chip--live"><span className="live-dot" aria-hidden="true" />Läuft</span>
+          {playing ? <span className="chip chip--live chip--solid"><span className="live-dot" aria-hidden="true" />Läuft</span>
             : processing ? <span className="chip chip--work">{pipelineLabel(queued.status, queued.progress)}</span>
             : <span className={styles.addLabel}><Icon name="plus" size={16} /><span className={styles.addText}>{inLibrary ? 'Setlist' : 'Hinzufügen'}</span></span>}
         </span>

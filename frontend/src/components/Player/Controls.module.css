@@ -127,6 +127,7 @@
 
 /* Presets and tools */
 .presets { flex: none; }
+.presets > button { gap: 6px; }
 .customPreset {
   display: inline-flex;
   align-items: center;
@@ -148,9 +149,20 @@
   .deskRow { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: var(--s-5); }
   .soundButton, .mobileStage { display: none; }
   .compactFaders { display: grid; gap: var(--s-1); max-width: 360px; }
-  .right { display: grid; justify-items: end; gap: var(--s-2); }
+  /* One row, so the desk never outgrows its fixed --desk-h row (stacking cut off A−/A+ on laptops). */
+  .right { display: flex; flex-wrap: nowrap; align-items: center; justify-content: flex-end; gap: var(--s-2); min-width: 0; }
   .skip { width: var(--tap); height: var(--tap); }
   .play { width: 68px; height: 68px; }
+}
+
+/* 900–1199: the preset labels do not fit next to A−/A+ and Bühnenmodus; keep the icons, labels stay readable for AT. */
+@media (min-width: 900px) {
+  .presets > button { min-width: var(--tap); padding: 0 var(--s-3); }
+  .presetLabel { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+}
+@media (min-width: 1200px) {
+  .presets > button { padding: 0 var(--s-4); }
+  .presetLabel { position: static; width: auto; height: auto; overflow: visible; clip: auto; clip-path: none; }
 }
 
 /* ── Desk ≥ 1440: two 280 px faders side by side, one-row right cluster ── */
@@ -216,5 +228,10 @@
   .tv { padding: 0 var(--s-6) var(--s-4); }
   .tvRow { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
   .tvMeter { display: inline-flex; }
-  .hints { display: inline; }
+}
+@media (min-width: 1200px) {
+  .hints { display: inline; white-space: nowrap; }
+}
+@media (pointer: coarse) {
+  .hints { display: none; }
 }

@@ -87,10 +87,9 @@ export function QueuePanel({ queue, currentIndex, onPlay, onRemove, onReorder, o
                 <span className={styles.title}>{item.title}</span>
                 <span className={styles.artist}>{item.artist}</span>
                 {processing && <span className={`meter meter--inst meter--thin ${styles.bar}`} aria-hidden="true"><i style={{ '--v': `${item.progress}%` } as CSSProperties} /></span>}
-                {item.error && <span className={styles.errorLine}>Konnte nicht vorbereitet werden.</span>}
               </span>
               <span className={styles.slot} onClick={e => e.stopPropagation()}>
-                {isActive && <span className="chip chip--live">Läuft</span>}
+                {isActive && <span className="chip chip--live chip--solid">Läuft</span>}
                 {processing && <span className="chip chip--work">{Math.round(item.progress)} %</span>}
                 {item.error && (
                   <button type="button" className="btn btn--sm" onClick={() => onRetry(i)} aria-label={`${item.title} erneut versuchen`}>
@@ -104,6 +103,7 @@ export function QueuePanel({ queue, currentIndex, onPlay, onRemove, onReorder, o
                   </button>
                 )}
               </span>
+              {item.error && <span className={styles.errorLine}>Konnte nicht vorbereitet werden.</span>}
             </li>
           )
         })}

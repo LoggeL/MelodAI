@@ -91,7 +91,7 @@ export function SongsTab() {
         <tbody>{filtered.slice((currentPage - 1) * 20, currentPage * 20).map(song => {
           const present = filesPresent(song)
           const broken = !song.complete
-          return <tr key={song.id}>
+          return <tr key={song.id} data-testid="admin-song-row">
             <td className="cell-main"><Link className={styles.songCell} to={'/admin/songs/' + song.id}>
               <Cover src={song.img_url} className={styles.cover} />
               <span className={styles.cellStack}><span className={styles.cellTitle}>{song.title}</span><span className={styles.cellSub}>{song.artist}</span><span className={`${styles.subtle} ${styles.mono}`}>#{song.id}</span></span>

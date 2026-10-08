@@ -30,7 +30,7 @@ class FakeContext {
 
 const song = (id = '1') => queueItem({ id, title: id, artist: '', thumbnail: '' })
 const settings = { vocalsVolume: 50, instrumentalVolume: 50, karaokeMode: false }
-const makeCallbacks = () => ({ onState: vi.fn(), onTime: vi.fn(), onEnded: vi.fn(), onInit: vi.fn() })
+const makeCallbacks = () => ({ onState: vi.fn(), onTime: vi.fn(), onEnded: vi.fn() })
 let callbacks: ReturnType<typeof makeCallbacks>
 let player: AudioPlayback
 

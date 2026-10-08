@@ -39,7 +39,10 @@
   font-feature-settings: 'tnum';
 }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--spot); }
+/* 36 px to look at, 44 px to hit. */
+.avatarCircle::before { content: ''; position: absolute; inset: -4px; border-radius: 50%; }
 .avatarCircle {
+  position: relative;
   display: inline-grid;
   place-items: center;
   width: 36px;

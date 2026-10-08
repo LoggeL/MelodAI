@@ -52,16 +52,19 @@ export function formatMonthYear(iso: string | null | undefined): string {
   return date ? date.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' }) : '–'
 }
 
+/** Number and unit never wrap apart. */
+const NBSP = '\u00a0'
+
 export function formatBytes(bytes: number | null | undefined): string {
   if (!bytes) return '–'
-  if (bytes >= 1073741824) return `${formatNumber(bytes / 1073741824, 2)} GB`
-  if (bytes >= 1048576) return `${formatNumber(bytes / 1048576, 1)} MB`
-  if (bytes >= 1024) return `${formatNumber(bytes / 1024, 0)} KB`
-  return `${bytes} B`
+  if (bytes >= 1073741824) return `${formatNumber(bytes / 1073741824, 2)}${NBSP}GB`
+  if (bytes >= 1048576) return `${formatNumber(bytes / 1048576, 1)}${NBSP}MB`
+  if (bytes >= 1024) return `${formatNumber(bytes / 1024, 0)}${NBSP}KB`
+  return `${bytes}${NBSP}B`
 }
 
 export function formatPercent(fraction: number, digits = 0): string {
-  return `${formatNumber(fraction * 100, digits)} %`
+  return `${formatNumber(fraction * 100, digits)}${NBSP}%`
 }
 
 export function plural(count: number, one: string, many: string): string {

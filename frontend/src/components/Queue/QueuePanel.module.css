@@ -5,6 +5,7 @@
 .count { font: 500 var(--fs-xs)/1 var(--mono); color: var(--muted); white-space: nowrap; }
 .actionBtns { display: flex; gap: 2px; }
 .actionBtn { width: 40px; height: 40px; }
+@media (max-width: 899px), (pointer: coarse) { .actionBtn { width: var(--tap); height: var(--tap); } }
 .actionBtn:disabled { opacity: .4; cursor: not-allowed; }
 
 .list { list-style: none; margin: 0; padding: var(--s-1) var(--s-2); display: grid; gap: 2px; }
@@ -26,10 +27,13 @@
 .pos { font: 500 var(--fs-xs)/1 var(--mono); color: var(--muted); text-align: center; font-feature-settings: 'tnum'; }
 .thumb { width: 44px; height: 44px; border-radius: var(--r-sm); object-fit: cover; overflow: hidden; }
 .info { display: grid; gap: 2px; min-width: 0; }
-.title { font-weight: 700; font-size: var(--fs-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.title {
+  font-weight: 700; font-size: var(--fs-sm); line-height: 1.25; overflow-wrap: break-word;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
 .artist { color: var(--ink-2); font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bar { margin-top: 4px; }
-.errorLine { color: var(--vocal); font-size: var(--fs-xs); font-weight: 600; }
+.errorLine { grid-column: 4 / -1; margin-top: -4px; color: var(--vocal); font-size: var(--fs-xs); font-weight: 600; }
 .slot { display: inline-flex; align-items: center; gap: var(--s-1); justify-content: flex-end; }
 .remove { opacity: 0; transition: opacity var(--dur-1) var(--ease); }
 .item:hover .remove, .item:focus-within .remove, .remove:focus-visible { opacity: 1; }

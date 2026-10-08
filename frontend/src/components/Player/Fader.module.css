@@ -141,5 +141,5 @@
   padding-right: 10px;
 }
 .scale i { font-style: normal; }
-.vertical .label { font-size: var(--fs-lg); font-weight: 800; }
+.vertical .label { font-size: clamp(1rem, 4.4vw, var(--fs-lg)); font-weight: 800; white-space: normal; min-width: 0; }
 .description { font-size: var(--fs-sm); color: var(--ink-2); line-height: 1.35; max-width: 18ch; }

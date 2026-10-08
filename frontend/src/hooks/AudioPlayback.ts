@@ -7,7 +7,6 @@ interface PlaybackCallbacks {
   onState: (state: PlaybackState) => void
   onTime: (time: number) => void
   onEnded: () => void
-  onInit: (analyser: AnalyserNode) => void
 }
 
 /** Owns Web Audio resources and cancels obsolete asynchronous loads. */
@@ -46,13 +45,7 @@ export class AudioPlayback {
     this.musicGain = context.createGain()
     this.vocalsGain.connect(context.destination)
     this.musicGain.connect(context.destination)
-    const analyser = context.createAnalyser()
-    analyser.fftSize = 256
-    analyser.smoothingTimeConstant = 0.8
-    this.vocalsGain.connect(analyser)
-    this.musicGain.connect(analyser)
     this.applySettings()
-    this.callbacks.onInit(analyser)
     return context
   }
 

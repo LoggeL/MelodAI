@@ -165,8 +165,8 @@ export function Controls({
 
   const presets = (
     <div className={`seg ${styles.presets}`} role="group" aria-label="Voreinstellung">
-      <button type="button" aria-pressed={preset === 'karaoke'} onClick={() => applyPreset('karaoke')}><Icon name="mic-off" size={16} /> Karaoke</button>
-      <button type="button" aria-pressed={preset === 'withVocals'} onClick={() => applyPreset('withVocals')}><Icon name="mic" size={16} /> Mit Gesang</button>
+      <button type="button" aria-pressed={preset === 'karaoke'} title="Karaoke: Gesang aus" onClick={() => applyPreset('karaoke')}><Icon name="mic-off" size={16} /><span className={styles.presetLabel}>Karaoke</span></button>
+      <button type="button" aria-pressed={preset === 'withVocals'} title="Mit Gesang" onClick={() => applyPreset('withVocals')}><Icon name="mic" size={16} /><span className={styles.presetLabel}>Mit Gesang</span></button>
       {preset === 'custom' && <span className={styles.customPreset} aria-current="true">Eigene</span>}
     </div>
   )

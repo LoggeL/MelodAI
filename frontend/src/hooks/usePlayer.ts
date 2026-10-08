@@ -34,7 +34,6 @@ export function usePlayer(options: UsePlayerOptions = {}) {
   optionsRef.current = options
   favoritesRef.current = favorites
   const audioRef = useRef<AudioPlayback | null>(null)
-  const analyserRef = useRef<AnalyserNode | null>(null)
   const mountedRef = useRef(true)
   const lyricsVersionRef = useRef(0)
   const lyricsTrackRef = useRef<string | null>(null)
@@ -68,7 +67,6 @@ export function usePlayer(options: UsePlayerOptions = {}) {
   const getAudio = useCallback(() => {
     if (!audioRef.current) {
       audioRef.current = new AudioPlayback(settingsRef.current, {
-        onInit: analyser => { analyserRef.current = analyser },
         onState: state => {
           if (!mountedRef.current) return
           setPlayback(state)
@@ -101,7 +99,6 @@ export function usePlayer(options: UsePlayerOptions = {}) {
       invalidatePendingWork()
       audioRef.current?.dispose()
       audioRef.current = null
-      analyserRef.current = null
       if (syncTimerRef.current) clearTimeout(syncTimerRef.current)
     }
   }, [invalidatePendingWork])
@@ -367,7 +364,7 @@ export function usePlayer(options: UsePlayerOptions = {}) {
     setSettings(settingsRef.current)
     audioRef.current?.setSettings(settingsRef.current)
   }, [])
-  const setVocalsVolume = useCallback((volume: number) => updateSettings({ vocalsVolume: normalizeVolume(volume) }), [updateSettings])
+  const setVocalsVolume = useCallback((volume: number) => updateSettings({ vocalsVolume: normalizeVolume(volume), karaokeMode: false }), [updateSettings])
   const setInstrumentalVolume = useCallback((volume: number) => updateSettings({ instrumentalVolume: normalizeVolume(volume) }), [updateSettings])
   const toggleKaraokeMode = useCallback(() => {
     const karaokeMode = !settingsRef.current.karaokeMode
@@ -493,7 +490,7 @@ export function usePlayer(options: UsePlayerOptions = {}) {
 
   return {
     queue, currentIndex, currentTrack: queue[currentIndex] ?? null, ...playback, lyrics, lyricsLoading,
-    karaokeMode: settings.karaokeMode, favorites, analyserRef,
+    karaokeMode: settings.karaokeMode, favorites,
     initialVocalsVolume: settings.vocalsVolume, initialInstrumentalVolume: settings.instrumentalVolume,
     addToQueue, playIndex, togglePlay, seek, prev, next, removeFromQueue,
     setVocalsVolume, setInstrumentalVolume, toggleKaraokeMode, toggleFavorite, editWord,

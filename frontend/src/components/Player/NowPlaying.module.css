@@ -16,7 +16,7 @@
   box-shadow: var(--shadow-2);
   overflow: hidden;
 }
-.info { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.info { display: grid; gap: 2px; min-width: min(45%, 18rem); flex: 1; }
 .live { color: var(--ink-2); }
 .title {
   font-size: var(--fs-lg);
@@ -35,7 +35,9 @@
 .noteWarn { color: var(--warn); }
 .noteLong { display: none; }
 .actions { display: flex; align-items: center; gap: var(--s-1); margin-left: auto; flex: none; }
-.chipBtn { gap: 6px; padding: 0 var(--s-3) 0 var(--s-4); }
+/* < 1440 the translation chip is a 44 px icon button so the title keeps its room. */
+.chipBtn { gap: 6px; width: var(--tap); min-width: var(--tap); padding: 0; justify-content: center; }
+.chipLabel { display: none; }
 .flip { transform: rotate(180deg); }
 .menuAnchor { position: relative; }
 .popover {
@@ -80,12 +82,18 @@
 @media (min-width: 900px) {
   .wrapper { gap: var(--s-4); padding: var(--s-5) var(--s-6) 0; }
   .art { width: 72px; height: 72px; }
-  .title { font-size: var(--fs-xl); display: block; white-space: nowrap; text-overflow: ellipsis; }
+  .title { font-size: var(--fs-xl); }
   .artist { font-size: var(--fs-md); }
   .actions { gap: var(--s-2); }
   .noteLong { display: inline; }
   .desktopOnly { display: inline-flex !important; }
   .mobileOnly { display: none; }
+}
+@media (min-width: 1440px) {
+  .title { display: block; white-space: nowrap; text-overflow: ellipsis; }
+  .chipBtn { width: auto; padding: 0 var(--s-3) 0 var(--s-4); }
+  .chipLabel { display: inline; }
+  svg.chipLabel { display: inline-block; }
 }
 @keyframes pop { from { opacity: 0; transform: translateY(4px); } }
 .sheet :global(.seg) { width: 100%; }

@@ -15,7 +15,7 @@ const TYPES = [{ value: '', label: 'Alle Bereiche' }, { value: 'pipeline', label
 const RESOLUTION = [{ value: '0', label: 'Offen' }, { value: '1', label: 'Erledigt' }, { value: '', label: 'Alle' }]
 
 // ─── Errors Tab ───
-export function ErrorsTab() {
+export function ErrorsTab({ onChanged }: { onChanged?: () => void }) {
   const [errors, setErrors] = useState<ErrorLogEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [total, setTotal] = useState(0)
@@ -92,11 +92,11 @@ export function ErrorsTab() {
                 <tr>
                   <td className="cell-main"><button type="button" className={`${styles.messageButton} ${styles.mono}`} aria-expanded={expandedId === err.id} onClick={() => setExpandedId(expandedId === err.id ? null : err.id)}>{err.error_message}</button></td>
                   <td data-label="Bereich" className="cell-inline"><span className={`chip ${err.error_type === 'pipeline' ? 'chip--warn' : 'chip--err'}`}>{err.error_type === 'pipeline' ? 'Pipeline' : 'API'}</span><span className={styles.cellSub}>{err.source}</span></td>
-                  <td data-label="Song" className={`cell-inline ${styles.mono}`}>{err.track_id ? <Link to={'/admin/songs/' + err.track_id}>#{err.track_id}</Link> : '–'}</td>
+                  <td data-label="Song" className={`cell-inline ${styles.mono}`}>{err.track_id ? <Link className={styles.trackLink} to={'/admin/songs/' + err.track_id}>#{err.track_id}</Link> : '–'}</td>
                   <td data-label="Nutzer" className="cell-inline">{err.username || '–'}</td>
                   <td data-label="Zeit" className={`cell-inline ${styles.mono} ${styles.nowrap}`}>{formatDateTime(err.created_at)}</td>
                   <td className="cell-acts num">
-                    <button type="button" className={`${styles.actionBtn} ${styles.iconOnly}`} disabled={busy} aria-pressed={err.resolved} onClick={async () => { if (await run(() => admin.resolveError(err.id), err.resolved ? 'Fehler wieder geöffnet.' : 'Fehler erledigt.')) void load() }} aria-label={err.resolved ? 'Wieder öffnen' : 'Als erledigt markieren'}
+                    <button type="button" className={`${styles.actionBtn} ${styles.iconOnly}`} disabled={busy} aria-pressed={err.resolved} onClick={async () => { if (await run(() => admin.resolveError(err.id), err.resolved ? 'Fehler wieder geöffnet.' : 'Fehler erledigt.')) { void load(); onChanged?.() } }} aria-label={err.resolved ? 'Wieder öffnen' : 'Als erledigt markieren'}
                       title={err.resolved ? 'Wieder öffnen' : 'Als erledigt markieren'}>
                       <Icon name={err.resolved ? 'redo' : 'check'} size={16} />
                     </button>
@@ -123,7 +123,7 @@ export function ErrorsTab() {
       </div>}
 
       <Pagination page={page} pages={totalPages} onPage={setPage} label="Seiten des Fehlerprotokolls" />
-      {confirmation && <ConfirmAction confirmation={confirmation} onClose={() => setConfirmation(null)} onSuccess={() => { setPage(1); void load() }} />}
+      {confirmation && <ConfirmAction confirmation={confirmation} onClose={() => setConfirmation(null)} onSuccess={() => { setPage(1); void load(); onChanged?.() }} />}
     </section>
   )
 }

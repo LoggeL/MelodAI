@@ -127,9 +127,12 @@ describe('Admin Page E2E', () => {
       await page.click('[data-testid="admin-tab-songs"]')
       await waitForIdle(page, 2000)
 
-      const pageText = await page.evaluate(() => document.body.textContent || '')
-      const hasSongsContent = pageText.includes('Songs') || pageText.includes('Noch keine verarbeiteten Songs')
-      expect(hasSongsContent).toBe(true)
+      // Either real rows or the explicit empty state; the tab label alone must not count.
+      const state = await page.evaluate(() => ({
+        rows: document.querySelectorAll('[data-testid="admin-song-row"]').length,
+        empty: (document.body.textContent || '').includes('Noch keine verarbeiteten Songs.'),
+      }))
+      expect(state.rows > 0 || state.empty).toBe(true)
     })
   })
 
@@ -154,9 +157,10 @@ describe('Admin Page E2E', () => {
       })
       await waitForIdle(page, 5000)
 
-      const pageText = await page.evaluate(() => document.body.textContent || '')
-      const hasResults = pageText.includes('Datenbank') || pageText.includes('OK')
-      expect(hasResults).toBe(true)
+      await page.waitForSelector('[data-check="database"]', { timeout: 10000 })
+      const database = await page.$eval('[data-check="database"]', el => ({ status: el.getAttribute('data-status'), text: el.textContent || '' }))
+      expect(database.text).toContain('Datenbank')
+      expect(database.status).toBe('ok')
     })
   })
 })

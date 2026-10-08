@@ -14,7 +14,8 @@
 @font-face { font-family: 'JetBrains Mono'; font-style: normal; font-display: swap; font-weight: 400; src: url('../assets/fonts/jetbrains-mono-400.woff2') format('woff2'); }
 @font-face { font-family: 'JetBrains Mono'; font-style: normal; font-display: swap; font-weight: 500; src: url('../assets/fonts/jetbrains-mono-500.woff2') format('woff2'); }
 @font-face { font-family: 'JetBrains Mono'; font-style: normal; font-display: swap; font-weight: 600; src: url('../assets/fonts/jetbrains-mono-600.woff2') format('woff2'); }
-@font-face { font-family: 'Archivo Fallback'; src: local('Arial'); size-adjust: 98%; }
+/* Arial tuned to Archivo's line box (typo metrics 878 / 210 / 0 per 1000, divided by size-adjust) so the swap does not shift lines. */
+@font-face { font-family: 'Archivo Fallback'; src: local('Arial'), local('ArialMT'), local('Liberation Sans'); size-adjust: 98%; ascent-override: 89.6%; descent-override: 21.4%; line-gap-override: 0%; }
 
 :root {
   /* type */

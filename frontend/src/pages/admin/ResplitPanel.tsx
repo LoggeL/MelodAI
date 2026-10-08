@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { admin } from '../../services/api'
 import type { SeparationStatus } from '../../types'
+import { Icon } from '../../components/common/Icon'
 import { errorMessage } from '../account/errors'
 import { ConfirmAction, type Confirmation } from './AdminAction'
-import { resplitAction, resplitSummary, workerLabel } from './resplit'
+import { resplitAction, resplitDetail, resplitSummary, workerLabel } from './resplit'
 import styles from '../AdminPage.module.css'
 
 /** Status and controls for re-splitting every song's stems with the local separation model. */
@@ -12,6 +13,7 @@ export function ResplitPanel({ onFinished }: { onFinished?: () => void }) {
   const [error, setError] = useState('')
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null)
   const wasRunning = useRef(false)
+  const headingId = useId()
   const load = useCallback(async () => {
     try {
       const next = await admin.separation()
@@ -31,32 +33,39 @@ export function ResplitPanel({ onFinished }: { onFinished?: () => void }) {
     return () => clearInterval(timer)
   }, [running, load])
 
-  if (!status) return error ? <p className={styles.subtle} role="alert">Separation status unavailable: {error}</p> : null
+  if (!status) return error ? <p className={styles.alert} role="alert">Status der Stimmtrennung nicht verfügbar: {error}</p> : null
   const batch = status.batch
   const action = resplitAction(status)
   const failed = batch.counts.failed ?? 0
-  return <div className={styles.filters} aria-label="Stem re-split">
-    <div>
-      <div><strong>Stem re-split</strong> <span className={styles.subtle}>{workerLabel(status)}</span></div>
-      <div className={styles.subtle} role="status">
-        {resplitSummary(batch)}
-        {batch.current && <> · now: {batch.current.title} — {batch.current.detail}</>}
-        {batch.status === 'stopped' && ' · stopped'}
-        {batch.status === 'error' && batch.error && <> · {batch.error}</>}
+  return <section className={styles.resplit} aria-labelledby={headingId}>
+    <div className={styles.resplitInfo}>
+      <div className={styles.resplitHead}>
+        <h3 id={headingId}>Stimmtrennung erneuern</h3>
+        <span className={`chip ${batch.status === 'running' ? 'chip--live' : batch.status === 'error' ? 'chip--err' : ''}`}>
+          {batch.status === 'running' ? 'Läuft' : batch.status === 'stopped' ? 'Gestoppt' : batch.status === 'error' ? 'Fehler' : batch.status === 'done' ? 'Fertig' : 'Bereit'}
+        </span>
       </div>
-      {failed > 0 && <details className={styles.subtle}><summary>{failed} failed {failed === 1 ? 'song' : 'songs'} (old stems kept)</summary>
+      <p className={styles.subtle}>{workerLabel(status)}</p>
+      <p className={styles.resplitStatus} role="status">
+        {resplitSummary(batch)}
+        {batch.current && <> · jetzt: {batch.current.title} – {resplitDetail(batch.current.detail)}</>}
+        {batch.status === 'error' && batch.error && <> · {batch.error}</>}
+      </p>
+      {failed > 0 && <details className={styles.detailBox}><summary>{failed} {failed === 1 ? 'Song' : 'Songs'} fehlgeschlagen (alte Stems bleiben)</summary>
         <ul>{batch.failures.map(f => <li key={f.track_id}>{f.title}: {f.error}</li>)}</ul>
       </details>}
     </div>
-    {action === 'stop' && <button className={styles.actionBtn} onClick={() => setConfirmation({
-      title: 'Stop the re-split?', description: 'The current song is abandoned and keeps its old stems. You can resume later.',
-      label: 'Stop re-split', action: () => admin.stopResplit(), success: 'Re-split stopped',
-    })}>Stop</button>}
-    {(action === 'start' || action === 'resume') && <button className={styles.primaryBtn} disabled={!status.worker.available} onClick={() => setConfirmation({
-      title: action === 'resume' ? 'Resume the re-split?' : 'Re-split all songs?',
-      description: 'Each song is separated again with the local model on the server CPU, one song at a time (about 3 minutes per song). New user requests go first. Previous stems are kept as a backup and lyrics are not changed.',
-      label: action === 'resume' ? 'Resume re-split' : 'Start re-split', action: () => admin.startResplit(), success: action === 'resume' ? 'Re-split resumed' : 'Re-split started',
-    })}>{action === 'resume' ? 'Resume re-split' : 'Re-split all songs'}</button>}
+    <div className={styles.rowActions}>
+      {action === 'stop' && <button type="button" className={styles.actionBtn} onClick={() => setConfirmation({
+        title: 'Neutrennung stoppen?', description: 'Der aktuelle Song wird abgebrochen und behält seine alten Stems. Du kannst später weitermachen.',
+        label: 'Neutrennung stoppen', tone: 'neutral', action: () => admin.stopResplit(), success: 'Neutrennung gestoppt.',
+      })}><Icon name="x" size={16} /> Stoppen</button>}
+      {(action === 'start' || action === 'resume') && <button type="button" className="btn btn--primary" disabled={!status.worker.available} onClick={() => setConfirmation({
+        title: action === 'resume' ? 'Neutrennung fortsetzen?' : 'Alle Songs neu trennen?',
+        description: 'Jeder Song wird mit dem lokalen Modell auf der Server-CPU neu getrennt, einer nach dem anderen (etwa 3 Minuten pro Song). Neue Anfragen von Nutzern gehen vor. Die bisherigen Stems bleiben als Sicherung, die Lyrics ändern sich nicht.',
+        label: action === 'resume' ? 'Fortsetzen' : 'Neutrennung starten', tone: 'neutral', action: () => admin.startResplit(), success: action === 'resume' ? 'Neutrennung läuft weiter.' : 'Neutrennung gestartet.',
+      })}><Icon name="redo" size={16} /> {action === 'resume' ? 'Neutrennung fortsetzen' : 'Alle Songs neu trennen'}</button>}
+    </div>
     {confirmation && <ConfirmAction confirmation={confirmation} onClose={() => setConfirmation(null)} onSuccess={load} />}
-  </div>
+  </section>
 }

@@ -10,12 +10,13 @@ import { de } from '../../utils/messages'
 import { PIPELINE_STEPS, pipelineIndex, pipelineLabel } from '../../utils/pipeline'
 import { ConfirmAction, type Confirmation } from './AdminAction'
 import { LoadError, Pagination, SectionHead } from './shared'
+import { workerState } from './resplit'
 import styles from '../AdminPage.module.css'
 
 const PAGE_SIZE = 20
 
 const CHECK_NAMES: Record<string, string> = {
-  database: 'Datenbank', deezer: 'Deezer', filesystem: 'Speicher', replicate: 'Replicate', queue: 'Warteschlange', lrclib: 'lrclib', openrouter: 'OpenRouter', voxtral: 'Voxtral',
+  database: 'Datenbank', deezer: 'Deezer', filesystem: 'Speicher', replicate: 'Replicate', queue: 'Warteschlange', lrclib: 'lrclib', openrouter: 'OpenRouter', voxtral: 'Voxtral', separation: 'Stimmtrennung',
 }
 
 /** Health check texts come from the backend in English; translate the known shapes. */
@@ -24,6 +25,11 @@ function checkMessage(message: string) {
   if (processing) return `${processing[1]} ${processing[1] === '1' ? 'Song' : 'Songs'} in Arbeit.`
   const free = message.match(/^([\d.]+) GB free$/)
   if (free) return `${free[1].replace('.', ',')} GB frei.`
+  if (message === 'Local separation disabled; using Replicate Demucs') return 'Lokale Trennung aus, Replicate Demucs übernimmt.'
+  const worker = message.match(/^Worker (\w+)(?: \((.+)\))?, (\d+) queued$/)
+  if (worker) return `Worker ${workerState(worker[1])}${worker[2] ? ` (${worker[2]})` : ''}, ${worker[3]} in der Warteschlange.`
+  const down = message.match(/^Worker unavailable \((.+)\); falling back to Replicate$/)
+  if (down) return `Worker nicht verfügbar (${down[1]}), Replicate übernimmt.`
   return de(message)
 }
 
@@ -170,7 +176,7 @@ export function StatusTab() {
           ? <p className={styles.subtle}>Starte die Prüfung, um Datenbank, Speicher, Deezer, Replicate und lrclib zu testen.</p>
           : <div className={styles.healthGrid}>
             {checkEntries.map(([name, check]) => (
-              <div key={name} className={styles.healthCard}>
+              <div key={name} className={styles.healthCard} data-check={name} data-status={check.status}>
                 <div className={styles.healthHead}>
                   <span className={styles.healthTitle}>{CHECK_NAMES[name] ?? name}</span>
                   <span className={`chip ${check.status === 'ok' ? 'chip--ok' : 'chip--err'}`}>{check.status === 'ok' ? 'OK' : 'Fehler'}</span>

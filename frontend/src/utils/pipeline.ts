@@ -10,7 +10,7 @@ export const PIPELINE_STEPS = [
 
 const STAGE_INDEX: Record<string, number> = {
   pending: 1, queued: 1, metadata: 1, downloading: 1,
-  splitting: 2, lyrics: 3, processing: 4, complete: 5, ready: 5,
+  splitting: 2, lyrics: 3, complete: 5, ready: 5,
 }
 
 /** Index (0–5) of the step that is running for a backend status or progress value. */

@@ -137,8 +137,9 @@ export function NowPlaying({
       <div className={styles.actions}>
         <div ref={translationRef} className={`${styles.menuAnchor} ${styles.desktopOnly}`}>
           <button type="button" className={`btn btn--pill ${styles.chipBtn}`} aria-expanded={menu === 'translation'} aria-controls={translationPanelId}
+            aria-label="Übersetzung" title="Übersetzung"
             onClick={() => setMenu(menu === 'translation' ? null : 'translation')}>
-            <Icon name="lang" /> Übersetzung <Icon name="chevron" size={16} className={menu === 'translation' ? styles.flip : undefined} />
+            <Icon name="lang" /><span className={styles.chipLabel}>Übersetzung</span><Icon name="chevron" size={16} className={`${styles.chipLabel} ${menu === 'translation' ? styles.flip : ''}`} />
           </button>
           <div id={translationPanelId} className={styles.popover} hidden={menu !== 'translation'}>{translationPanel}</div>
         </div>

@@ -21,7 +21,13 @@ const COLUMNS: { key: SortKey; label: string; num?: boolean }[] = [
   { key: 'last_online', label: 'Zuletzt aktiv' }, { key: 'created_at', label: 'Dabei seit' },
 ]
 
-export function UsersTab() {
+/** Long e-mail usernames break before the „@“, not in the middle of a word. */
+function Breakable({ text }: { text: string }) {
+  const at = text.indexOf('@')
+  return at > 0 ? <>{text.slice(0, at)}<wbr />{text.slice(at)}</> : <>{text}</>
+}
+
+export function UsersTab({ onChanged }: { onChanged?: () => void }) {
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -89,10 +95,10 @@ export function UsersTab() {
         <table className="table table--cards">
           <thead><tr><th scope="col">Name</th><th scope="col">Registriert</th><th scope="col" className="num"><span className="sr-only">Aktionen</span></th></tr></thead>
           <tbody>{pending.map(user => <tr key={user.id}>
-            <td className="cell-main"><div className={styles.person}><span className={styles.avatar} aria-hidden="true">{initials(user.display_name, user.username)}</span><div className={styles.cellStack}><span className={styles.cellTitle}>{user.username}</span>{user.display_name && user.display_name !== user.username && <span className={styles.cellSub}>{user.display_name}</span>}</div></div></td>
+            <td className="cell-main"><div className={styles.person}><span className={styles.avatar} aria-hidden="true">{initials(user.display_name, user.username)}</span><div className={styles.cellStack}><span className={styles.cellTitle} title={user.username}><Breakable text={user.username} /></span>{user.display_name && user.display_name !== user.username && <span className={styles.cellSub}>{user.display_name}</span>}</div></div></td>
             <td data-label="Registriert" className={`cell-inline ${styles.mono} ${styles.nowrap}`}>{formatDateTime(user.created_at)}</td>
             <td className="num"><div className={styles.tableActions}>
-              <button type="button" className={`${styles.actionBtn} ${styles.primary}`} disabled={busy} onClick={async () => { if (await run(() => admin.approveUser(user.id), `${user.username} ist freigegeben.`)) void load() }}><Icon name="check" size={16} /> Freigeben</button>
+              <button type="button" className={`${styles.actionBtn} ${styles.primary}`} disabled={busy} onClick={async () => { if (await run(() => admin.approveUser(user.id), `${user.username} ist freigegeben.`)) { void load(); onChanged?.() } }}><Icon name="check" size={16} /> Freigeben</button>
               <button type="button" className={`${styles.actionBtn} ${styles.danger}`} disabled={busy} onClick={() => confirmDelete(user, true)} aria-label={`${user.username} ablehnen`}>Ablehnen</button>
             </div></td>
           </tr>)}</tbody>
@@ -110,7 +116,7 @@ export function UsersTab() {
           </th>)}<th scope="col" className="num"><span className="sr-only">Aktionen</span></th></tr></thead><tbody>{paged.map(user => {
             const self = username === user.username
             return <tr key={user.id}>
-              <td className="cell-main"><div className={styles.person}><span className={styles.avatar} aria-hidden="true">{initials(user.display_name, user.username)}</span><div className={styles.cellStack}><span className={styles.cellTitle}>{user.username}{self && <span className={styles.you}> (du)</span>}</span>{user.display_name && user.display_name !== user.username && <span className={styles.cellSub}>{user.display_name}</span>}</div></div></td>
+              <td className="cell-main"><div className={styles.person}><span className={styles.avatar} aria-hidden="true">{initials(user.display_name, user.username)}</span><div className={styles.cellStack}><span className={styles.cellTitle} title={user.username}><Breakable text={user.username} />{self && <span className={styles.you}> (du)</span>}</span>{user.display_name && user.display_name !== user.username && <span className={styles.cellSub}>{user.display_name}</span>}</div></div></td>
               <td data-label="Rolle" className="cell-inline"><span className={`chip ${user.is_admin ? 'chip--work' : ''}`}>{user.is_admin ? 'Admin' : 'Mitglied'}</span></td>
               <td data-label="Credits" className="num cell-inline"><span className={styles.creditCell}>{formatInt(user.credits)}
                 <button type="button" className={`${styles.actionBtn} ${styles.iconOnly}`} disabled={busy} onClick={() => { setCreditUser(user); setCredits(String(user.credits)) }} aria-label={`Credits für ${user.username} festlegen`} title="Credits festlegen"><Icon name="sliders" size={16} /></button></span></td>
@@ -127,7 +133,7 @@ export function UsersTab() {
         <Pagination page={currentPage} pages={pages} onPage={setPage} label="Seiten der Kontenliste" />
       </>}
     </section>
-    {confirmation && <ConfirmAction confirmation={confirmation} onClose={() => setConfirmation(null)} onSuccess={load} />}
+    {confirmation && <ConfirmAction confirmation={confirmation} onClose={() => setConfirmation(null)} onSuccess={() => { void load(); onChanged?.() }} />}
     {creditUser && <Modal title={`Credits für ${creditUser.username}`} onClose={() => setCreditUser(null)} busy={busy} size="small">
       <form className={styles.dialogForm} onSubmit={async e => {
         e.preventDefault()

@@ -21,4 +21,8 @@ describe('player persistence', () => {
     vi.stubGlobal('localStorage', { getItem: () => JSON.stringify({ vocalsVolume: 500, instrumentalVolume: 'loud', karaokeMode: 'false' }) })
     expect(loadPlayerSettings()).toEqual({ vocalsVolume: 100, instrumentalVolume: 50, karaokeMode: false })
   })
+  it('turns the old karaoke switch into a visible vocals fader at 0', () => {
+    vi.stubGlobal('localStorage', { getItem: () => JSON.stringify({ vocalsVolume: 80, instrumentalVolume: 70, karaokeMode: true }) })
+    expect(loadPlayerSettings()).toEqual({ vocalsVolume: 0, instrumentalVolume: 70, karaokeMode: false })
+  })
 })

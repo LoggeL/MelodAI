@@ -23,6 +23,10 @@ export function normalizeVolume(value: unknown, fallback = 50): number {
 export function loadPlayerSettings(): PlayerSettings {
   try {
     const data = JSON.parse(localStorage.getItem(PLAYER_STORAGE_KEY) || 'null')
-    return { vocalsVolume: normalizeVolume(data?.vocalsVolume), instrumentalVolume: normalizeVolume(data?.instrumentalVolume), karaokeMode: data?.karaokeMode === true }
+    const instrumentalVolume = normalizeVolume(data?.instrumentalVolume)
+    // The old UI had a separate karaoke switch. The new desk only has faders, so a stored switch becomes vocals at 0
+    // (still visible and undoable on the Gesang fader) instead of a hidden mute nobody can turn off.
+    if (data?.karaokeMode === true) return { vocalsVolume: 0, instrumentalVolume, karaokeMode: false }
+    return { vocalsVolume: normalizeVolume(data?.vocalsVolume), instrumentalVolume, karaokeMode: false }
   } catch { return { vocalsVolume: 50, instrumentalVolume: 50, karaokeMode: false } }
 }

@@ -172,7 +172,7 @@ export function SongDetailView({ trackId }: SongDetailViewProps) {
         <Cover className={styles.cover} src={hiResCover(meta.img_url)} />
         <div className={styles.headInfo}>
           <span className="kicker">Backstage · Song <span className={styles.mono}>#{data.id}</span></span>
-          <h1 className={styles.title}>{meta.title}</h1>
+          <h1 className={styles.title} title={meta.title}>{meta.title}</h1>
           <div className={styles.artist}>{meta.artist}{meta.album ? <span className={styles.album}> · {meta.album}</span> : null}{meta.duration > 0 ? <span className={styles.album}> · {formatDuration(meta.duration)}</span> : null}</div>
           <div className={styles.chips}>
             <span className={`chip ${data.complete ? 'chip--ok' : 'chip--err'}`}>{data.complete ? 'Fertig' : 'Unvollständig'}</span>
