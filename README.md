@@ -50,7 +50,7 @@ Screenshots use a demo song store with self-written lyrics.
 - **Audio:** Web Audio API with dual GainNodes (vocals + instrumental)
 - **Vocal separation:** local BS-RoFormer via turbo-roformer (CPU, PyTorch), Replicate Demucs as fallback
 - **Transcription:** local Whisper + wav2vec2 alignment via turbo-lyrics (CPU), Replicate WhisperX as fallback
-- **AI Services:** Replicate (WhisperX and Demucs fallbacks), OpenRouter (LLM lyrics processing)
+- **AI Services:** Replicate (WhisperX and Demucs fallbacks), GPT-6 Luna through OpenAI or OpenRouter (lyrics correction and translation)
 - **Song Source:** Deezer
 
 ## Setup
@@ -59,7 +59,7 @@ Screenshots use a demo song store with self-written lyrics.
 
 - Python 3.12+ with [uv](https://docs.astral.sh/uv/)
 - Node.js 22+
-- API keys for: Replicate, OpenRouter, Deezer ARL cookie
+- API keys for: Replicate, OpenAI or OpenRouter, Deezer ARL cookie
 - Optional: Resend (for password reset emails)
 
 ### Installation
@@ -88,9 +88,15 @@ Copy `example.env` to `.env` and fill in your API keys:
 DEEZER_ARL=<your deezer ARL cookie>
 REPLICATE_API_TOKEN=<your replicate token>
 HF_READ_TOKEN=<your huggingface token>
-OPENROUTER_API_KEY=<your openrouter key>
+OPENAI_API_KEY=<your OpenAI key, preferred when set>
+OPENROUTER_API_KEY=<alternative OpenRouter key>
 RESEND_API_KEY=<optional, for password reset emails>
 ```
+
+Lyrics correction and translations use GPT-6 Luna. `OPENAI_API_KEY` sends requests directly to OpenAI;
+without it, `OPENROUTER_API_KEY` sends them through OpenRouter. Set at least one. Translations can use a
+different model through `LYRICS_TRANSLATION_MODEL`; non-OpenAI models require OpenRouter. Provider and model
+are recorded with each result. A failed request is not automatically repeated on the other provider.
 
 ### Running
 

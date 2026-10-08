@@ -85,7 +85,7 @@ class ReferenceTest(unittest.TestCase):
 @patch("src.utils.error_logging.log_event")
 class CorrectionTest(unittest.TestCase):
     def setUp(self):
-        env = patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-only"})
+        env = patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-only", "OPENAI_API_KEY": ""})
         env.start()
         self.addCleanup(env.stop)
         self.original = copy.deepcopy(RAW)
@@ -100,7 +100,8 @@ class CorrectionTest(unittest.TestCase):
         self.assertEqual(starts, [0, 3])
         self.assertTrue(stats["applied"])
         self.assertEqual(stats["model"], MODEL)
-        self.assertEqual(post.call_args.kwargs["json"]["model"], "openai/gpt-5.6-luna")
+        self.assertEqual(post.call_args.kwargs["json"]["model"], "openai/gpt-6-luna")
+        self.assertEqual(post.call_args.kwargs["json"]["reasoning_effort"], "none")
         self.assertNotIn("input_audio", json.dumps(post.call_args.kwargs["json"]))
 
     def test_rejects_invalid_or_hallucinated_edits_atomically(self, _log):

@@ -1,13 +1,11 @@
 """Conservative GPT correction of ASR words; timestamps stay owned by WhisperX."""
 import copy
 import json
-import os
 
-import requests
-
+from src.services.llm import chat_completion, has_api_key
 from src.services.reference_lyrics import normalize, text_similarity
 
-MODEL = "openai/gpt-5.6-luna"
+MODEL = "openai/gpt-6-luna"
 SCHEMA = {
     "type": "object", "additionalProperties": False,
     "required": ["matched", "corrections", "line_starts"],
@@ -37,9 +35,8 @@ def correct_lyrics_with_luna(raw_data, reference_lines, track_id=None):
     words = [word for segment in raw_data.get("segments", []) for word in segment.get("words", []) if word.get("word", "").strip()]
     if not reference_lines or not words:
         return skipped("missing_reference_or_words")
-    key = os.getenv("OPENROUTER_API_KEY", "").strip()
-    if not key:
-        log_event("WARNING", "lyric_correction", "OpenRouter key missing; keeping original WhisperX lyrics", track_id=track_id)
+    if not has_api_key(MODEL):
+        log_event("WARNING", "lyric_correction", "LLM API key missing; keeping original WhisperX lyrics", track_id=track_id)
         return skipped("missing_api_key")
     transcript = " ".join(word["word"] for word in words)
     if len(words) > 2500 or len(transcript) + sum(map(len, reference_lines)) > 70000:
@@ -50,6 +47,7 @@ def correct_lyrics_with_luna(raw_data, reference_lines, track_id=None):
         return skipped("reference_mismatch")
     payload = {
         "model": MODEL,
+        "reasoning_effort": "none",
         "messages": [
             {"role": "system", "content": (
                 "Correct WhisperX song transcription using the supplied untimed reference lyrics. "
@@ -70,11 +68,9 @@ def correct_lyrics_with_luna(raw_data, reference_lines, track_id=None):
         "max_tokens": 12000,
     }
     try:
-        response = requests.post("https://openrouter.ai/api/v1/chat/completions",
-            headers={"Authorization": f"Bearer {key}", "HTTP-Referer": "https://melodai.logge.top", "X-Title": "MelodAI"},
-            json=payload, timeout=(5, 120))
-        response.raise_for_status()
-        choice = response.json()["choices"][0]
+        response, producer = chat_completion(payload, timeout=(5, 120))
+        stats.update(producer)
+        choice = response["choices"][0]
         if choice.get("finish_reason") != "stop":
             return skipped("incomplete_response")
         result = json.loads(choice["message"]["content"])
@@ -106,7 +102,7 @@ def correct_lyrics_with_luna(raw_data, reference_lines, track_id=None):
         for edit in corrections:
             targets[edit["index"]]["word"] = edit["text"].strip()
         stats.update(applied=True, corrections=len(corrections), total_words=len(words))
-        log_event("INFO", "lyric_correction", f"GPT-5.6 Luna validated lyrics and corrected {len(corrections)} words", track_id=track_id)
+        log_event("INFO", "lyric_correction", f"GPT-6 Luna validated lyrics and corrected {len(corrections)} words via {producer['provider']}", track_id=track_id)
         return corrected, starts, stats
     except Exception as error:
         log_event("WARNING", "lyric_correction", f"Luna correction failed ({type(error).__name__}); keeping original WhisperX lyrics", track_id=track_id)
