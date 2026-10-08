@@ -186,3 +186,70 @@ def get_audio_bitrate(file_path):
         return bps // 1000
     except Exception:
         return None
+
+
+def file_mtime_iso(path):
+    """Modification time of *path* as a UTC ISO string ("2026-10-08T14:21:00Z"), or None."""
+    try:
+        stamp = os.path.getmtime(path)
+    except OSError:
+        return None
+    from datetime import datetime, timezone
+    return datetime.fromtimestamp(stamp, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def probe_duration(path):
+    """Length of an audio file in seconds (rounded) via ffprobe, or None."""
+    if not os.path.isfile(path):
+        return None
+    try:
+        result = subprocess.run(
+            ["ffprobe", "-v", "quiet", "-show_entries", "format=duration", "-of", "csv=p=0", path],
+            capture_output=True, text=True, check=True, timeout=30,
+        )
+        seconds = float(result.stdout.strip())
+    except Exception:
+        return None
+    return int(round(seconds)) if seconds > 0 else None
+
+
+# Tracks whose song.mp3 could not be measured in this process; they are not probed again.
+_DURATION_MISSES = set()
+
+
+def stored_duration(meta):
+    """Duration in whole seconds from metadata.json (Deezer value or a cached probe), else 0."""
+    value = (meta or {}).get("duration")
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
+        return 0
+    return int(round(value))
+
+
+def track_duration(track_id, meta, probe_budget=None):
+    """Duration of a song in seconds for lists.
+
+    Uses metadata.json first. Older songs without a Deezer duration are measured once with ffprobe and the
+    result is cached in metadata.json, so list requests never re-run ffprobe for the same song. probe_budget
+    (a one-element list with the number of probes this request may still run) bounds the work per request;
+    None disables probing.
+    """
+    seconds = stored_duration(meta)
+    if seconds or meta is None or probe_budget is None or probe_budget[0] <= 0:
+        return seconds
+    key = (get_songs_path(), str(track_id))
+    if key in _DURATION_MISSES or not is_track_complete(track_id):
+        return 0
+    from src.utils.status_checks import get_processing_status
+    if get_processing_status(track_id):
+        return 0  # the pipeline may be rewriting metadata.json right now
+    probe_budget[0] -= 1
+    seconds = probe_duration(get_track_file_path(track_id, "song", create=False))
+    if not seconds:
+        _DURATION_MISSES.add(key)
+        return 0
+    current = load_metadata(track_id)
+    if current is not None and not stored_duration(current):
+        current["duration"] = seconds
+        save_metadata(track_id, current)
+    meta["duration"] = seconds
+    return seconds

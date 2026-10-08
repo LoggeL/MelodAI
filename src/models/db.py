@@ -106,6 +106,9 @@ def _run_migrations(db):
         "CREATE INDEX IF NOT EXISTS password_resets_user ON password_resets(user_id)",
         "CREATE INDEX IF NOT EXISTS playlists_user ON playlists(user_id)",
         "CREATE INDEX IF NOT EXISTS processing_failures_track ON processing_failures(track_id)",
+        # Daily usage table and the „Hinzugefügt“ date per song (additive, safe on existing databases).
+        "CREATE INDEX IF NOT EXISTS usage_logs_created ON usage_logs(created_at)",
+        "CREATE INDEX IF NOT EXISTS usage_logs_action_detail ON usage_logs(action, detail)",
     ):
         db.execute(statement)
     db.commit()

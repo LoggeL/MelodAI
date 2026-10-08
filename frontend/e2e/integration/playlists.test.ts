@@ -150,6 +150,8 @@ describe('Playlists API - /playlists/*', () => {
       const found = data.find((p: { id: number }) => p.id === playlistId)
       expect(found).toBeDefined()
       expect(found.track_count).toBe(2)
+      expect(Array.isArray(found.covers)).toBe(true)
+      expect(found.covers.length).toBeLessThanOrEqual(4)
     })
   })
 

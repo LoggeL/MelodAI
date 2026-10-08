@@ -223,6 +223,7 @@ describe('Admin API - /admin/*', () => {
       expect(data[0]).toHaveProperty('artist')
       expect(data[0]).toHaveProperty('complete')
       expect(data[0]).toHaveProperty('file_sizes')
+      expect(data[0].added_at).toMatch(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/)
     })
   })
 

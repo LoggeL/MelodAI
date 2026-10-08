@@ -70,7 +70,7 @@ def main():
         unexpected.append("Unexpected provider/network call")
         raise AssertionError("External network is forbidden in offline integration tests")
 
-    def search(_query, _kind):
+    def search(_query, _kind=None):
         return copy.deepcopy(FIXTURES["tracks"])
 
     def health_checks():
@@ -88,6 +88,7 @@ def main():
         patches.enter_context(patch("socket.socket.connect", side_effect=forbid_network))
         patches.enter_context(patch("requests.sessions.Session.request", side_effect=forbid_network))
         patches.enter_context(patch("src.services.deezer.deezer_search", side_effect=search))
+        patches.enter_context(patch("src.services.catalog.search_tracks", side_effect=search))
         patches.enter_context(patch("src.utils.status_checks.run_health_checks", side_effect=health_checks))
         patches.enter_context(patch("src.routes.track.process_track", side_effect=forbid_network))
         patches.enter_context(patch("src.routes.auth.send_password_reset_email", side_effect=forbid_network))

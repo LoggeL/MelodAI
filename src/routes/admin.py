@@ -3,7 +3,7 @@ import os
 import sqlite3
 from src.utils.validation import json_object, text_field, integer_field
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from flask import Blueprint, request, jsonify, current_app
 
 from src.utils.decorators import admin_required
@@ -122,6 +122,20 @@ def generate_invite_key():
     return jsonify({"key": key})
 
 
+@admin_bp.route("/invite-keys/<int:key_id>", methods=["DELETE"])
+@admin_required
+def revoke_invite_key(key_id):
+    """Revoke (delete) an unused invite key. Used keys stay as the record of who registered with them."""
+    with transaction() as db:
+        row = db.execute("SELECT used_by FROM invite_keys WHERE id = ?", [key_id]).fetchone()
+        if not row:
+            return jsonify({"error": "Invite key not found"}), 404
+        if row["used_by"] is not None:
+            return jsonify({"error": "Invite key has already been used"}), 409
+        db.execute("DELETE FROM invite_keys WHERE id = ? AND used_by IS NULL", [key_id])
+    return jsonify({"success": True})
+
+
 @admin_bp.route("/invite-keys/used", methods=["DELETE"])
 @admin_required
 def delete_used_invite_keys():
@@ -150,6 +164,47 @@ def stats():
         "most_active_user": most_active["username"] if most_active else None,
         "most_active_count": most_active["c"] if most_active else 0,
     })
+
+
+# Credits per action, as charged by /api/add (processing) and /api/play/<id>/credit (playback).
+_ACTION_CREDITS = {"download": 5, "play": 1}
+
+
+@admin_bp.route("/usage/daily")
+@admin_required
+def usage_daily():
+    """Per-day totals of the usage log for the last `days` days (default 14, at most 90), newest first.
+
+    Credits are estimated from the logged actions of non-admin accounts (admins are not charged): 5 per
+    processed song, 1 per play. Days are UTC calendar days, like the stored timestamps.
+    """
+    days = min(max(request.args.get("days", 14, type=int) or 14, 1), 90)
+    rows = query_db("""
+        SELECT date(usage_logs.created_at) AS day,
+               SUM(usage_logs.action = 'play') AS plays,
+               SUM(usage_logs.action = 'search') AS searches,
+               SUM(usage_logs.action = 'download') AS downloads,
+               SUM(CASE WHEN COALESCE(users.is_admin, 0) = 0 AND usage_logs.action = 'download' THEN ?
+                        WHEN COALESCE(users.is_admin, 0) = 0 AND usage_logs.action = 'play' THEN ?
+                        ELSE 0 END) AS credits
+        FROM usage_logs LEFT JOIN users ON users.id = usage_logs.user_id
+        WHERE usage_logs.created_at >= date('now', ?)
+        GROUP BY day ORDER BY day DESC
+    """, [_ACTION_CREDITS["download"], _ACTION_CREDITS["play"], f"-{days - 1} days"])
+    by_day = {r["day"]: r for r in rows}
+    today = datetime.now(timezone.utc).date()
+    result = []
+    for offset in range(days):
+        day = (today - timedelta(days=offset)).isoformat()
+        r = by_day.get(day)
+        result.append({
+            "day": day,
+            "plays": (r["plays"] or 0) if r else 0,
+            "searches": (r["searches"] or 0) if r else 0,
+            "downloads": (r["downloads"] or 0) if r else 0,
+            "credits": (r["credits"] or 0) if r else 0,
+        })
+    return jsonify(result)
 
 
 @admin_bp.route("/usage-logs")
@@ -237,6 +292,11 @@ def list_songs():
     from src.services.transcription import load_record as load_transcription_record
 
     track_ids = get_all_track_ids()
+    first_added = {
+        r["detail"]: r["first"] for r in query_db(
+            "SELECT detail, MIN(created_at) AS first FROM usage_logs WHERE action = 'download' GROUP BY detail"
+        )
+    }
     songs = []
     for tid in track_ids:
         meta = load_metadata(tid)
@@ -259,8 +319,30 @@ def list_songs():
                 "has_lyrics": has_lyrics,
                 "separation_backend": (load_record(tid) or {}).get("backend"),
                 "transcription_backend": (load_transcription_record(tid) or {}).get("backend"),
+                "added_at": _added_at(tid, first_added.get(tid)),
             })
     return jsonify(songs)
+
+
+def _sqlite_to_iso(value):
+    """SQLite CURRENT_TIMESTAMP ("2026-10-08 14:21:00", UTC) → "2026-10-08T14:21:00Z"."""
+    if not value:
+        return None
+    text = str(value).replace(" ", "T", 1)
+    return text if text.endswith("Z") or "+" in text[10:] else text + "Z"
+
+
+def _added_at(track_id, logged):
+    """When a song entered the library: the first logged processing request, else the download time of song.mp3.
+
+    The earlier of both wins, because songs copied from another store carry newer file times.
+    """
+    from src.utils.file_handling import file_mtime_iso, get_song_dir, get_track_file_path
+    candidates = [_sqlite_to_iso(logged)]
+    song_path = get_track_file_path(track_id, "song", create=False)
+    candidates.append(file_mtime_iso(song_path) or file_mtime_iso(os.path.join(get_song_dir(track_id, create=False), "metadata.json")))
+    candidates = [c for c in candidates if c]
+    return min(candidates) if candidates else None
 
 
 @admin_bp.route("/songs/<track_id>/details")
@@ -268,7 +350,7 @@ def list_songs():
 def song_details(track_id):
     import json
     from src.utils.file_handling import (
-        load_metadata, load_lyrics, is_track_complete, get_song_dir
+        load_metadata, load_lyrics, is_track_complete, get_song_dir, file_mtime_iso
     )
     from src.utils.constants import TRACK_FILES
     if not is_valid_track_id(track_id):
@@ -286,6 +368,7 @@ def song_details(track_id):
         files[key] = {
             "exists": exists,
             "size": os.path.getsize(path) if exists else 0,
+            "modified": file_mtime_iso(path) if exists else None,
         }
 
     lyrics = load_lyrics(track_id)
