@@ -3,7 +3,10 @@ import os
 import re
 from typing import Any
 
-import requests
+from src.services.llm import chat_completion, has_api_key
+
+
+DEFAULT_MODEL = "openai/gpt-6-luna"
 
 
 SUPPORTED_TRANSLATION_LANGUAGES = {
@@ -62,19 +65,17 @@ def _parse_json_object(text: str) -> dict[str, Any]:
 
 
 def translate_lines(lines: list[str], target_language: str, *, track_id: str | None = None) -> dict[str, Any]:
-    """Translate lyrics line-by-line through the configured OpenRouter LLM endpoint."""
+    """Translate lyrics line-by-line through the configured LLM provider."""
     from src.utils.error_logging import log_event
 
     target_language = normalize_language(target_language)
     target_label = SUPPORTED_TRANSLATION_LANGUAGES[target_language]
 
-    api_key = os.getenv("OPENROUTER_API_KEY", "")
-    if not api_key:
-        raise RuntimeError("OPENROUTER_API_KEY not set")
+    model = os.getenv("LYRICS_TRANSLATION_MODEL") or os.getenv("LYRICS_GEMINI_MODEL") or DEFAULT_MODEL
+    if not has_api_key(model):
+        raise RuntimeError("OPENAI_API_KEY or OPENROUTER_API_KEY not set for the lyrics model")
     if not lines:
         raise ValueError("no_lyrics")
-
-    model = os.getenv("LYRICS_TRANSLATION_MODEL", os.getenv("LYRICS_GEMINI_MODEL", "google/gemini-3.1-flash-lite"))
 
     prompt = {
         "task": "Translate song lyrics line-by-line for live karaoke reading.",
@@ -97,12 +98,6 @@ def translate_lines(lines: list[str], target_language: str, *, track_id: str | N
         "lyrics": [{"index": idx, "text": line} for idx, line in enumerate(lines)],
     }
 
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "HTTP-Referer": "https://melodai.logge.top",
-        "X-Title": "MelodAI",
-        "Content-Type": "application/json",
-    }
     payload = {
         "model": model,
         "messages": [
@@ -110,20 +105,14 @@ def translate_lines(lines: list[str], target_language: str, *, track_id: str | N
             {"role": "user", "content": json.dumps(prompt, ensure_ascii=False)},
         ],
         "response_format": {"type": "json_object"},
-        "temperature": 0.35,
         "max_tokens": min(6000, max(1200, len(lines) * 80)),
     }
+    if model in (DEFAULT_MODEL, "gpt-6-luna"):
+        payload["reasoning_effort"] = "none"
+    else:
+        payload["temperature"] = 0.35
 
-    resp = requests.post(
-        "https://openrouter.ai/api/v1/chat/completions",
-        headers=headers,
-        json=payload,
-        timeout=120,
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    if "error" in data:
-        raise RuntimeError(data["error"])
+    data, producer = chat_completion(payload, timeout=120)
 
     content = data["choices"][0]["message"]["content"]
     parsed = _parse_json_object(content)
@@ -150,10 +139,10 @@ def translate_lines(lines: list[str], target_language: str, *, track_id: str | N
             "translation": item.get("translation") or original,
         })
 
-    log_event("INFO", "lyrics_translation", f"Translated {len(aligned)} lyric lines to {target_language} using {model}", track_id=track_id)
+    log_event("INFO", "lyrics_translation", f"Translated {len(aligned)} lyric lines to {target_language} using {producer['model']} via {producer['provider']}", track_id=track_id)
     return {
         "source_language": str(parsed.get("source_language") or "auto").lower(),
         "target_language": target_language,
-        "model": model,
+        **producer,
         "lines": aligned,
     }

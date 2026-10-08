@@ -89,7 +89,7 @@ Vite dev server (port 3000) proxies `/api/*` and `/songs/*` to Flask (port 5000)
 - **Replicate** — WhisperX + Demucs fallback (requires `REPLICATE_API_TOKEN`, `HF_READ_TOKEN`)
 - **turbo-roformer** — local vocal separation (optional `separation` extra; weights downloaded from the model author's Hugging Face upload)
 - **turbo-lyrics** — local transcription (optional `transcription` extra; Whisper large-v3-turbo + Apache-licensed wav2vec2 aligners from Hugging Face)
-- **OpenRouter** — LLM for lyrics processing (requires `OPENROUTER_API_KEY`, model set via `LLM_MODEL`)
+- **OpenAI / OpenRouter** — GPT-6 Luna for lyrics correction and translations (`OPENAI_API_KEY` uses OpenAI directly; otherwise `OPENROUTER_API_KEY` is used; translations can override the model through `LYRICS_TRANSLATION_MODEL`)
 - **lrclib.net** — Reference lyrics fetching (no API key required)
 - **Resend** — Password reset emails (optional, requires `RESEND_API_KEY`)
 

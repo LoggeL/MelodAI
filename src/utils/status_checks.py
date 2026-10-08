@@ -194,20 +194,23 @@ def run_health_checks():
     except Exception as e:
         results["voxtral"] = {"status": "error", "message": str(e)}
 
-    # OpenRouter check
+    # Check the preferred lyrics provider.
+    openai_key = os.getenv("OPENAI_API_KEY", "").strip()
+    provider = "openai" if openai_key else "openrouter"
     try:
-        api_key = os.getenv("OPENROUTER_API_KEY", "")
-        resp = requests.get(
-            "https://openrouter.ai/api/v1/models",
-            headers={"Authorization": f"Bearer {api_key}"},
-            timeout=10,
-        )
-        if resp.status_code == 200:
-            results["openrouter"] = {"status": "ok", "message": "OpenRouter API accessible"}
+        api_key = openai_key or os.getenv("OPENROUTER_API_KEY", "").strip()
+        if not api_key:
+            results[provider] = {"status": "error", "message": "OPENAI_API_KEY or OPENROUTER_API_KEY not set"}
         else:
-            results["openrouter"] = {"status": "error", "message": f"HTTP {resp.status_code}"}
+            endpoint = "https://api.openai.com/v1/models/gpt-6-luna" if openai_key else "https://openrouter.ai/api/v1/models"
+            resp = requests.get(endpoint, headers={"Authorization": f"Bearer {api_key}"}, timeout=10)
+            if resp.status_code == 200:
+                label = "OpenAI GPT-6 Luna" if openai_key else "OpenRouter"
+                results[provider] = {"status": "ok", "message": f"{label} API accessible"}
+            else:
+                results[provider] = {"status": "error", "message": f"HTTP {resp.status_code}"}
     except Exception as e:
-        results["openrouter"] = {"status": "error", "message": str(e)}
+        results[provider] = {"status": "error", "message": str(e)}
 
     return results
 
