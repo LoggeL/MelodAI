@@ -93,26 +93,11 @@ def run_health_checks():
     except Exception as e:
         results["filesystem"] = {"status": "error", "message": str(e)}
 
-    # Replicate check
-    try:
-        token = os.getenv("REPLICATE_API_TOKEN", "")
-        resp = requests.get(
-            "https://api.replicate.com/v1/models",
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=10,
-        )
-        if resp.status_code == 200:
-            results["replicate"] = {"status": "ok", "message": "Replicate API accessible"}
-        else:
-            results["replicate"] = {"status": "error", "message": f"HTTP {resp.status_code}"}
-    except Exception as e:
-        results["replicate"] = {"status": "error", "message": str(e)}
-
     # Local separation worker check
     try:
         from src.services.separation import get_manager, split_backend
         if split_backend() != "local":
-            results["separation"] = {"status": "ok", "message": "Local separation disabled; using Replicate Demucs"}
+            results["separation"] = {"status": "ok", "message": "Local separation unavailable; processing stopped"}
         else:
             worker = get_manager().status()
             info = worker.get("info") or {}
@@ -126,7 +111,7 @@ def run_health_checks():
             else:
                 results["separation"] = {
                     "status": "error",
-                    "message": f"Worker unavailable ({worker.get('error') or worker.get('state')}); falling back to Replicate",
+                    "message": f"Worker unavailable ({worker.get('error') or worker.get('state')}); processing stopped",
                 }
     except Exception as e:
         results["separation"] = {"status": "error", "message": str(e)}
@@ -135,7 +120,7 @@ def run_health_checks():
     try:
         from src.services.transcription import get_manager as get_transcription_manager, transcribe_backend
         if transcribe_backend() != "local":
-            results["transcription"] = {"status": "ok", "message": "Local transcription disabled; using Replicate WhisperX"}
+            results["transcription"] = {"status": "ok", "message": "Local transcription unavailable; processing stopped"}
         else:
             worker = get_transcription_manager().status()
             info = worker.get("info") or {}
@@ -149,7 +134,7 @@ def run_health_checks():
             else:
                 results["transcription"] = {
                     "status": "error",
-                    "message": f"Worker unavailable ({worker.get('error') or worker.get('state')}); falling back to Replicate",
+                    "message": f"Worker unavailable ({worker.get('error') or worker.get('state')}); processing stopped",
                 }
     except Exception as e:
         results["transcription"] = {"status": "error", "message": str(e)}
@@ -175,24 +160,6 @@ def run_health_checks():
             results["lrclib"] = {"status": "error", "message": f"HTTP {resp.status_code}"}
     except Exception as e:
         results["lrclib"] = {"status": "error", "message": str(e)}
-
-    # Voxtral (Mistral) check
-    try:
-        mistral_key = os.getenv("MISTRAL_API_KEY", "")
-        if not mistral_key:
-            results["voxtral"] = {"status": "error", "message": "MISTRAL_API_KEY not set"}
-        else:
-            resp = requests.get(
-                "https://api.mistral.ai/v1/models",
-                headers={"Authorization": f"Bearer {mistral_key}"},
-                timeout=10,
-            )
-            if resp.status_code == 200:
-                results["voxtral"] = {"status": "ok", "message": "Mistral API accessible (Voxtral fallback)"}
-            else:
-                results["voxtral"] = {"status": "error", "message": f"HTTP {resp.status_code}"}
-    except Exception as e:
-        results["voxtral"] = {"status": "error", "message": str(e)}
 
     # Check the preferred lyrics provider.
     openai_key = os.getenv("OPENAI_API_KEY", "").strip()
@@ -221,7 +188,7 @@ def reprocess_unfinished_tracks(app):
     from src.utils.constants import STATUS_METADATA, PROGRESS
 
     # Tracks that keep failing (e.g. region-blocked) would otherwise re-run
-    # on every restart, burning Replicate/OpenRouter cost each time.
+    # on every restart, repeating processing and LLM requests each time.
     max_auto_retries = 5
     with app.app_context():
         from src.models.db import query_db

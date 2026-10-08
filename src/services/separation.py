@@ -4,7 +4,7 @@ Local separation runs in ``src/services/separation_worker.py``, a separate long-
 starts on demand (``WorkerManager``) and talks to over a unix socket. ``separate_track_locally`` runs one track
 through it, writes the stems via temporary files and atomic renames, and records the producer in
 ``songs/<id>/separation.json``. Any problem reaching the worker raises ``SeparationUnavailable`` so the pipeline
-can fall back to Replicate.
+stops and records the local failure without uploading audio.
 """
 
 from __future__ import annotations
@@ -36,7 +36,6 @@ STALE_TEMP_SECONDS = 6 * 3600
 # At startup only folders older than this are removed: during a start-first deploy the previous container's worker
 # may still be writing into its temp folder on the shared volume for a few more seconds.
 STARTUP_TEMP_MIN_AGE = 30 * 60
-DEMUCS_MODEL = "cjwbw/demucs:25a173108cff36ef9f80f854c162d01df9e6528be175794b81158fa03836d953"
 
 DEFAULTS = {
     "SPLIT_BACKEND": "local",
@@ -59,7 +58,7 @@ DEFAULTS = {
     "SEPARATION_JOB_TIMEOUT": 1800.0,
     "SEPARATION_QUEUE_TIMEOUT": 900.0,
     "SEPARATION_MAX_DURATION": 1200.0,
-    "SEPARATION_INTERACTIVE_REQUIRE_KERNELS": True,
+    "SEPARATION_INTERACTIVE_REQUIRE_KERNELS": False,
     # CPU gate shared with the transcription worker; default: melodai-compute.lock next to the socket
     "COMPUTE_LOCK": None,
 }
@@ -102,7 +101,7 @@ def config_from_env(environ=None, defaults=None):
         else:
             config[key] = raw
     if "SPLIT_BACKEND" in config:
-        config["SPLIT_BACKEND"] = str(config["SPLIT_BACKEND"]).strip().lower()
+        config["SPLIT_BACKEND"] = "local"
     return config
 
 
@@ -121,8 +120,8 @@ def settings(app=None, defaults=None):
 
 
 def split_backend(app=None):
-    backend = str(settings(app)["SPLIT_BACKEND"]).lower()
-    return backend if backend in ("local", "replicate") else "local"
+    """Audio separation is always local, including with legacy backend settings."""
+    return "local"
 
 
 def installed_version():
@@ -279,7 +278,7 @@ class WorkerManager:
 
     def mark_crashed(self, pid=None):
         """A job lost its worker. The next job restarts it; a second crash within the backoff window disables
-        local separation for the backoff period (the pipeline then falls back to Replicate). Several clients
+        local separation for the backoff period (processing fails during that time). Several clients
         that lose the same worker process (``pid``) count as one crash."""
         with self._lock:
             if pid is not None:
@@ -493,11 +492,6 @@ def remove_record(track_id):
         pass
 
 
-def replicate_record():
-    return {"backend": "replicate", "engine": "demucs", "model": DEMUCS_MODEL, "version": None,
-            "created_at": _now()}
-
-
 def is_current(record, cfg=None, version=None):
     """True when the stems already come from the configured local model, package version and overlap."""
     cfg = cfg or settings()
@@ -605,7 +599,7 @@ def separate_track_locally(track_id, *, priority="interactive", on_event=None, s
         raise SeparationFailed("song.mp3 is missing")
     if priority == "interactive" and cfg["SEPARATION_INTERACTIVE_REQUIRE_KERNELS"] and manager.ensure_running():
         backend = ((manager.ping() or {}).get("info") or {}).get("compute_backend")
-        if backend == "torch":  # several times slower than the kernels: users are better served by Replicate
+        if backend == "torch":
             raise SeparationUnavailable("the local worker runs without its fast kernels")
     song_dir = get_song_dir(track_id, create=False)
     _clean_stale_temp_dirs(song_dir)

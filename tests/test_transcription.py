@@ -1,5 +1,5 @@
 """Local transcription: worker protocol (real worker process with the fake engine), the CPU gate shared with the
-separation worker, the lyrics stage with its Replicate fallback, and stage 5 with force-aligned reference lyrics.
+separation worker, local failure handling, and stage 5 with force-aligned reference lyrics.
 Offline; no models needed.
 
 Run: uv run python -m unittest tests.test_transcription -v
@@ -267,7 +267,8 @@ class StageLyricsTest(TranscriptionTestBase):
             statuses.append((progress, detail))
             real(track_id, status, progress, detail)
 
-        with self.app.app_context(), patch("src.routes.track.set_processing_status", side_effect=record):
+        with self.app.app_context(), patch("src.routes.track.set_processing_status", side_effect=record), \
+                patch("requests.sessions.Session.request", side_effect=AssertionError("Audio must stay local")):
             getattr(track, stage)("123")
         return statuses
 
@@ -279,9 +280,7 @@ class StageLyricsTest(TranscriptionTestBase):
     def test_local_transcription_saves_lyrics_raw_and_record(self):
         song_dir = self.make_vocals()
         self.write_references(song_dir)
-        with patch("src.routes.track._transcribe_replicate") as replicate:
-            statuses = self.run_stage()
-        replicate.assert_not_called()
+        statuses = self.run_stage()
         raw = json.loads(Path(song_dir / "lyrics_raw.json").read_text())
         self.assertTrue(raw["segments"])
         record = json.loads((song_dir / tr.RECORD_FILE).read_text())
@@ -300,44 +299,56 @@ class StageLyricsTest(TranscriptionTestBase):
             {"word": word, "start": i, "end": i + 0.5} for i, word in enumerate(words)
         ]}]}
         record = {"backend": "local", "engine": "turbo-lyrics", "chosen": "asr"}
-        with patch("src.services.transcription.transcribe_track_locally", return_value=(raw, record)), \
-                patch("src.routes.track._transcribe_replicate", return_value={"segments": []}) as replicate:
+        with patch("src.services.transcription.transcribe_track_locally", return_value=(raw, record)):
             self.run_stage()
-        replicate.assert_not_called()
         self.assertEqual(json.loads((song_dir / "lyrics_raw.json").read_text()), raw)
         self.assertEqual(json.loads((song_dir / tr.RECORD_FILE).read_text()), record)
 
-    def test_falls_back_to_replicate_when_the_worker_is_unavailable(self):
+    def test_worker_unavailable_stops_without_uploading_audio(self):
         self.app = self.make_app(TRANSCRIBE_WORKER_AUTOSTART=False,
                                  TRANSCRIBE_SOCKET=os.path.join(self.sock_dir, "none.sock"))
         song_dir = self.make_vocals()
         self.write_references(song_dir)
-        replicated = {"segments": [{"start": 1, "end": 2, "words": [{"word": "cloud", "start": 1, "end": 2}]}]}
-        with patch("src.routes.track._transcribe_replicate", return_value=replicated) as replicate:
-            statuses = self.run_stage()
-        replicate.assert_called_once_with("123", REFERENCE)
-        self.assertIn("Switching to cloud transcription...", [d for _, d in statuses])
-        self.assertEqual(json.loads((song_dir / "lyrics_raw.json").read_text()), replicated)
-        record = json.loads((song_dir / tr.RECORD_FILE).read_text())
-        self.assertEqual(record["backend"], "replicate")
-        self.assertIn("autostart", record["local_error"])
+        with self.assertRaisesRegex(sep.SeparationUnavailable, "autostart"):
+            self.run_stage()
+        self.assertFalse((song_dir / "lyrics_raw.json").exists())
+        self.assertFalse((song_dir / tr.RECORD_FILE).exists())
 
-    def test_broken_local_output_falls_back_to_replicate(self):
+    def test_broken_local_output_stops_without_uploading_audio(self):
         song_dir = self.make_vocals()
         with patch.dict(os.environ, {"MELODAI_FAKE_ASR_MODE": "empty"}), \
-                patch("src.routes.track._transcribe_replicate", return_value={"segments": []}) as replicate:
+                self.assertRaisesRegex(RuntimeError, "local transcription output looks broken"):
             self.run_stage()
-        replicate.assert_called_once()
-        self.assertEqual(json.loads((song_dir / tr.RECORD_FILE).read_text())["backend"], "replicate")
+        self.assertFalse((song_dir / "lyrics_raw.json").exists())
+        self.assertFalse((song_dir / tr.RECORD_FILE).exists())
 
-    def test_replicate_backend_skips_the_worker(self):
+    def test_local_failure_is_recorded_and_refunds_processing_credits(self):
+        from src.models.db import execute_db, query_db
+        from src.routes.track import process_track
+
+        self.app = self.make_app(TRANSCRIBE_WORKER_AUTOSTART=False,
+                                 TRANSCRIBE_SOCKET=os.path.join(self.sock_dir, "none.sock"))
+        song_dir = self.make_vocals()
+        self.write_references(song_dir)
+        with self.app.app_context(), patch("src.routes.track._stage_metadata"), \
+                patch("src.routes.track._stage_download"), \
+                patch("requests.sessions.Session.request", side_effect=AssertionError("Audio must stay local")):
+            execute_db("INSERT INTO users (username, password_hash, credits) VALUES (?, ?, ?)",
+                       ["local-failure-test", "test-only", 45])
+            user_id = query_db("SELECT id FROM users WHERE username = ?", ["local-failure-test"])[0]["id"]
+            process_track("123", self.app, charged_user_id=user_id)
+            self.assertEqual(query_db("SELECT credits FROM users WHERE id = ?", [user_id])[0]["credits"], 50)
+            failures = query_db("SELECT stage FROM processing_failures WHERE track_id = ?", ["123"])
+            self.assertEqual(failures[0]["stage"], "lyrics")
+        self.assertFalse((song_dir / "lyrics_raw.json").exists())
+
+    def test_legacy_replicate_setting_still_uses_the_local_worker(self):
         self.app = self.make_app(TRANSCRIBE_BACKEND="replicate")
         self.make_vocals()
-        with patch("src.services.transcription.transcribe_track_locally") as local, \
-                patch("src.routes.track._transcribe_replicate", return_value={"segments": []}) as replicate:
-            self.run_stage()
-        local.assert_not_called()
-        replicate.assert_called_once()
+        self.run_stage()
+        with self.app.app_context():
+            record = tr.load_record("123")
+        self.assertEqual(record["backend"], "local")
 
     def test_unverified_references_are_not_passed_on(self):
         song_dir = self.make_vocals()
@@ -394,7 +405,7 @@ class HelpersTest(unittest.TestCase):
     def test_config_from_env(self):
         cfg = tr.config_from_env({"TRANSCRIBE_BACKEND": "Replicate", "TRANSCRIBE_THREADS": "6",
                                   "TRANSCRIBE_REFERENCE_MODE": "Prefer"})
-        self.assertEqual(cfg["TRANSCRIBE_BACKEND"], "replicate")
+        self.assertEqual(cfg["TRANSCRIBE_BACKEND"], "local")
         self.assertEqual(cfg["TRANSCRIBE_THREADS"], 6)
         self.assertEqual(cfg["TRANSCRIBE_REFERENCE_MODE"], "prefer")
         self.assertEqual(tr.config_from_env({})["TRANSCRIBE_BACKEND"], "local")

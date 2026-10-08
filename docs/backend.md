@@ -42,21 +42,21 @@ The frontend API integration suite (`cd frontend && npm run test:integration`) s
 - Song durations come from `metadata.json` (`duration`) or the search result. A complete local song without a stored duration is probed once with ffprobe and the result is written back into `metadata.json`; a request probes at most a few songs (`DURATION_PROBES_PER_REQUEST`), misses are remembered per process. Playlists include `covers` (up to four cover URLs, in playlist order).
 - Admin: `DELETE /api/admin/invite-keys/<id>` revokes an unused key (409 once redeemed), `GET /api/admin/usage/daily?days=14` (1–90) returns per-day plays, searches, downloads and estimated credits (UTC days), `GET /api/admin/songs` adds `added_at`, song details add the file `modified` time. `GET /api/auth/profile/stats` adds `favorite_song` and `plays_this_month`. The migration only adds two indexes on `usage_logs` (`created_at`; `action, detail`).
 - Search results use a bounded cache. Processing status, rate limits, cached searches and SSE subscribers belong to the app instance.
-- Replicate prediction creation retries explicit HTTP 429 responses at most three times, with at most 30 seconds of cumulative waiting. Accepted jobs, ambiguous network failures and HTTP 5xx responses are not resubmitted. WhisperX skips speaker detection when `HF_READ_TOKEN` is absent while retaining word alignment.
+- Separation and transcription are local only. Their failures stop processing and refund charged credits; no audio is uploaded to Replicate. Legacy backend settings cannot enable cloud processing.
 
 ## Local vocal separation
 
-Splitting (pipeline stage 3) runs BS-RoFormer locally with [turbo-roformer](https://github.com/LoggeL/turbo-roformer) when `SPLIT_BACKEND=local` (the default) and falls back to Demucs on Replicate when the local worker is unavailable, crashes, stalls or reports an error. `SPLIT_BACKEND=replicate` skips the worker entirely.
+Splitting (pipeline stage 3) runs BS-RoFormer locally with [turbo-roformer](https://github.com/LoggeL/turbo-roformer) exclusively. If the local worker is unavailable, crashes, stalls or reports an error, the stage fails without uploading audio.
 
-**Process model.** `src/services/separation.py` (`WorkerManager`) starts `python -m src.services.separation_worker` as a child of the Flask process: at startup when startup hooks are enabled, otherwise on the first split. The worker loads the model once and serves a unix socket (`SEPARATION_SOCKET`, mode 0600) with newline-delimited JSON. It runs exactly one separation at a time, always on its main thread, with `SEPARATION_THREADS` torch threads at `nice` `SEPARATION_NICE`. A lock file next to the socket keeps it a singleton, and it exits when its parent process exits. If it crashes, the next job restarts it. A second crash, or a model that fails to load, disables local separation for `SEPARATION_FAILURE_BACKOFF` seconds; during that time every split goes to Replicate.
+**Process model.** `src/services/separation.py` (`WorkerManager`) starts `python -m src.services.separation_worker` as a child of the Flask process: at startup when startup hooks are enabled, otherwise on the first split. The worker loads the model once and serves a unix socket (`SEPARATION_SOCKET`, mode 0600) with newline-delimited JSON. It runs exactly one separation at a time, always on its main thread, with `SEPARATION_THREADS` torch threads at `nice` `SEPARATION_NICE`. A lock file next to the socket keeps it a singleton, and it exits when its parent process exits. If it crashes, the next job restarts it. A second crash, or a model that fails to load, disables local separation for `SEPARATION_FAILURE_BACKOFF` seconds; during that time splitting fails locally.
 
 **Priorities.** Pipeline jobs are `interactive`; re-split jobs are `batch`. Interactive jobs always run first. With `SEPARATION_PREEMPT` (on by default), a running batch job stops at the next chunk boundary (about 6 s) when an interactive job arrives, and goes back to the head of the batch queue. Closing a job's connection cancels it. The client raises `SeparationUnavailable` when the worker sends nothing for `SEPARATION_IDLE_TIMEOUT` seconds (it sends a heartbeat every `SEPARATION_HEARTBEAT` s), when a running job makes no chunk progress for `SEPARATION_STALL_TIMEOUT` seconds, when an interactive job exceeds `SEPARATION_JOB_TIMEOUT` seconds, or when an interactive job waits longer than `SEPARATION_QUEUE_TIMEOUT` seconds in the queue.
 
-**Hangs.** A job stuck inside native code never reaches a cancellation point while the worker's socket threads keep answering. Heartbeats therefore carry `running_idle_s` (seconds since the running job's last chunk). Any client that sees the running job idle for more than `SEPARATION_STALL_TIMEOUT` seconds, or that gets no message for `SEPARATION_IDLE_TIMEOUT` seconds, SIGKILLs the worker (`WorkerManager.kill_worker`) and raises `WorkerLost`; the next job starts a fresh worker. Several clients losing the same worker process count as one crash. Interactive jobs also skip the worker when it runs without its fast kernels (`SEPARATION_INTERACTIVE_REQUIRE_KERNELS`), and inputs longer than `SEPARATION_MAX_DURATION` seconds are refused (both fall back to Replicate).
+**Hangs.** A job stuck inside native code never reaches a cancellation point while the worker's socket threads keep answering. Heartbeats therefore carry `running_idle_s` (seconds since the running job's last chunk). Any client that sees the running job idle for more than `SEPARATION_STALL_TIMEOUT` seconds, or that gets no message for `SEPARATION_IDLE_TIMEOUT` seconds, SIGKILLs the worker (`WorkerManager.kill_worker`) and raises `WorkerLost`; the next job starts a fresh worker. Several clients losing the same worker process count as one crash. The portable torch path is allowed by default. `SEPARATION_INTERACTIVE_REQUIRE_KERNELS=1` can require the fast kernels, and inputs longer than `SEPARATION_MAX_DURATION` seconds are refused. These failures stay local.
 
-**Status texts.** While splitting, the status detail shows `Waiting in queue (position p)...`, `Loading separation model...` and `Separating vocals (k/n)...` (chunk k of n), with progress moving from 26 to 34 %. If the stage falls back, the detail reads `Switching to cloud separation...`.
+**Status texts.** While splitting, the status detail shows `Waiting in queue (position p)...`, `Loading separation model...` and `Separating vocals (k/n)...` (chunk k of n), with progress moving from 26 to 34 %. A worker failure stops the stage.
 
-**Files.** The worker decodes `song.mp3` with ffmpeg and writes the separated instrumental to `no_vocals.mp3`. `vocals.mp3` is the mix minus the instrumental. Both are 128 kbit/s MP3, like the compressed Replicate stems. Outputs go into a temporary `.separation-*` directory inside the song folder and are moved into place with `os.replace` only after both exist. `separation.json` records the producer:
+**Files.** The worker decodes `song.mp3` with ffmpeg and writes the separated instrumental to `no_vocals.mp3`. `vocals.mp3` is the mix minus the instrumental. Both are 128 kbit/s MP3. Outputs go into a temporary `.separation-*` directory inside the song folder and are moved into place with `os.replace` only after both exist. `separation.json` records the producer:
 
 ```json
 {"backend": "local", "engine": "turbo-roformer", "model": "resurrection", "model_key": "resurrection", "version": "0.1.0",
@@ -64,7 +64,7 @@ Splitting (pipeline stage 3) runs BS-RoFormer locally with [turbo-roformer](http
  "wall_s": 180.2, "rtf": 0.714, "created_at": "..."}
 ```
 
-Replicate splits write `{"backend": "replicate", "engine": "demucs", "model": "cjwbw/demucs:...", ...}`. Reprocessing from `splitting` or `all` deletes the record together with the stems.
+Historical cloud-produced stems and their producer records remain readable; they do not trigger provider requests. Reprocessing from `splitting` or `all` deletes the record together with the stems.
 
 **Re-split batch.** `python -m src.tools.resplit --all` (foreground) or `POST /api/admin/separation/resplit` (the admin Songs tab) re-separates every song that has `song.mp3`:
 
@@ -82,7 +82,7 @@ The batch state is `resplit_state.json` in the database directory (`/data/db` in
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `SPLIT_BACKEND` | `local` | `local` (worker, Replicate fallback) or `replicate` |
+| `SPLIT_BACKEND` | `local` | local only; legacy values are ignored |
 | `SEPARATION_THREADS` | `8` | torch threads; use the physical core count |
 | `SEPARATION_NICE` | `10` | niceness of the worker process |
 | `SEPARATION_OVERLAP` | `2.0` | predictions per sample (quality/speed) |
@@ -92,25 +92,22 @@ The batch state is `resplit_state.json` in the database directory (`/data/db` in
 | `SEPARATION_PREEMPT` | `1` | interactive jobs interrupt running batch jobs |
 | `SEPARATION_WORKER_AUTOSTART` | `1` | start the worker on demand |
 | `SEPARATION_IDLE_TIMEOUT` / `SEPARATION_STALL_TIMEOUT` / `SEPARATION_JOB_TIMEOUT` | `60` / `300` / `1800` | seconds, see above |
-| `SEPARATION_QUEUE_TIMEOUT` | `900` | seconds an interactive job may wait in the queue before falling back to Replicate |
+| `SEPARATION_QUEUE_TIMEOUT` | `900` | seconds an interactive job may wait in the queue before failing |
 | `SEPARATION_HEARTBEAT` | `5` | seconds between worker heartbeats |
-| `SEPARATION_MAX_DURATION` | `1200` | longest input (seconds) separated locally; longer songs go to Replicate |
-| `SEPARATION_INTERACTIVE_REQUIRE_KERNELS` | `1` | send interactive jobs to Replicate when the worker runs on the slow torch path |
+| `SEPARATION_MAX_DURATION` | `1200` | longest input (seconds); longer songs are refused |
+| `SEPARATION_INTERACTIVE_REQUIRE_KERNELS` | `0` | refuse interactive jobs on the portable torch path when explicitly enabled |
 | `SEPARATION_FAILURE_BACKOFF` | `600` | seconds without local separation after a load failure or repeated crash |
 | `MELODAI_RESPLIT_STATE_PATH` | next to the database | re-split state file |
 
 **Docker image.** The image installs the `separation` extra (CPU-only torch from the PyTorch CPU index) and runs `scripts/prepare_separation.py` at build time. That script downloads and sha256-checks the checkpoint into `/opt/turbo-roformer/models`, compiles the AVX512-BF16 kernels with `-march=native` into `/opt/turbo-roformer/kernels`, and runs a short smoke separation; a failing smoke test fails the build, and so does a kernel build failure on a CPU that supports the kernels (override with the build env `SEPARATION_ALLOW_TORCH_FALLBACK=1`). The image runs under `tini`, which forwards signals and reaps orphaned processes; `git` is needed by uv to install turbo-roformer from its tag. Dokploy builds on the production host, so the kernels match its CPU. `g++` stays in the image: on a different CPU the kernels are rebuilt on first use, and on a CPU without AVX512-BF16 the worker logs that it is using the slower exact fp32 torch path.
 
-**Tests.** `tests/test_separation.py` starts real worker processes with the fake engine (`SEPARATION_ENGINE=fake`, no torch). It covers the protocol, priorities and preemption, cancellation, crashes, stalls, uncancellable hangs (worker killed and replaced, also from a waiting client), queue timeouts, load failures, the Replicate fallback, atomic installs, backups, the batch (skip, failure, poison songs, resume incl. waiting for the lock, deferral, single runner) and the admin endpoints.
+**Tests.** `tests/test_separation.py` starts real worker processes with the fake engine (`SEPARATION_ENGINE=fake`, no torch). It covers the protocol, priorities and preemption, cancellation, crashes, stalls, uncancellable hangs (worker killed and replaced, also from a waiting client), queue timeouts, load failures, local failure handling, atomic installs, backups, the batch (skip, failure, poison songs, resume incl. waiting for the lock, deferral, single runner) and the admin endpoints.
 
 ## Local lyrics transcription
 
-The lyrics stage (pipeline stage 4) runs [turbo-lyrics](https://github.com/LoggeL/turbo-lyrics) locally when `TRANSCRIBE_BACKEND=local` (the default). It falls back to WhisperX on Replicate when:
+The lyrics stage (pipeline stage 4) always runs [turbo-lyrics](https://github.com/LoggeL/turbo-lyrics) locally. A missing, crashed or stalled worker, a job error, or an unusable transcript fails the stage without an audio upload. Legacy `TRANSCRIBE_BACKEND` values cannot enable a cloud backend.
 
-- the worker is unavailable, crashes, stalls or reports an error;
-- the result fails the existing output check (`_is_bad_output`: no words, character-level output, or text unlike the verified reference lyrics).
-
-`TRANSCRIBE_BACKEND=replicate` skips the worker. The engine transcribes the separated vocal stem in five steps:
+The engine transcribes the separated vocal stem in five steps:
 
 1. An energy VAD finds the voiced regions.
 2. Those regions are packed into as few 30 s Whisper windows as possible.
@@ -147,7 +144,7 @@ A killed worker cannot leave the gate locked, because flock locks disappear with
 
 - **Prefetch.** They are fetched in the background while the vocals are being separated, and the lyrics stage waits up to 20 s for them.
 - **Synced times.** lrclib's synced line times are kept as `times` on the candidate. They help the alignment, and the cache stays version 2.
-- **Language.** The language comes from the lyrics text, through a stopword count. Otherwise Whisper detects it on the fullest windows. Replicate WhisperX also gets the language from the reference text now.
+- **Language.** The language comes from the lyrics text, through a stopword count. Otherwise Whisper detects it on the fullest windows.
 
 `TRANSCRIBE_REFERENCE_MODE` decides what happens to the lyrics:
 
@@ -170,9 +167,9 @@ The gate rejects an alignment for any of these reasons:
 
 **Status texts and files.**
 
-- Progress runs from 37 to 65 %, with these status texts: `Waiting in queue (position p)...`, `Loading transcription model...`, `Transcribing vocals...`, and on fallback `Switching to cloud transcription...`.
+- Progress runs from 37 to 65 %, with these status texts: `Waiting in queue (position p)...`, `Loading transcription model...`, `Transcribing vocals...`.
 - Outputs go into a temporary `.transcription-*` folder in the song directory.
-- `transcription.json` records the producer, for example `{"backend": "local", "engine": "turbo-lyrics", "mode": "shadow", "chosen": "asr", "language": "de", "rtf": 0.16, ...}`, or `{"backend": "replicate", "engine": "whisperx", "local_error": "..."}` after a fallback.
+- `transcription.json` records the producer, for example `{"backend": "local", "engine": "turbo-lyrics", "mode": "shadow", "chosen": "asr", "language": "de", "rtf": 0.16, ...}`.
 - The record is shown in the admin song details.
 - Reprocessing from `lyrics`, `splitting` or `all` deletes it.
 - `GET /api/admin/transcription` returns the worker state, and the status checks include a `transcription` entry.
@@ -181,7 +178,7 @@ The gate rejects an alignment for any of these reasons:
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `TRANSCRIBE_BACKEND` | `local` | `local` (worker, Replicate fallback) or `replicate` |
+| `TRANSCRIBE_BACKEND` | `local` | local only; legacy values are ignored |
 | `TRANSCRIBE_REFERENCE_MODE` | `shadow` | `shadow`, `prefer` or `off`, see above |
 | `TRANSCRIBE_THREADS` | `8` | CTranslate2/torch threads; use the physical core count |
 | `TRANSCRIBE_MODEL` / `TRANSCRIBE_COMPUTE_TYPE` | `large-v3-turbo` / `int8` | Whisper model and weight type |
@@ -200,7 +197,7 @@ The gate rejects an alignment for any of these reasons:
 - the protocol and the three reference modes;
 - job validation;
 - the shared gate: interactive transcription preempts a batch re-split, and interactive jobs never overlap;
-- the lyrics stage with its Replicate fallbacks and the reference prefetch;
+- the lyrics stage with local failures, credit refunds and the reference prefetch;
 - stage 5 with force-aligned lyrics.
 
 ## Deployment boundary

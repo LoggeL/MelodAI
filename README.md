@@ -18,8 +18,8 @@ Search for a song, and MelodAI separates vocals from instrumentals, extracts wor
 
 1. **Search** for a song via Deezer's catalog
 2. **Download** and decrypt the audio
-3. **Split** vocals and instrumentals locally on the CPU with [turbo-roformer](https://github.com/LoggeL/turbo-roformer) (BS-RoFormer, about 0.7× real time on an 8-core Zen 4), falling back to [Demucs](https://github.com/adefossez/demucs) on Replicate when the local worker is unavailable
-4. **Transcribe** lyrics with word-level timestamps locally on the CPU with [turbo-lyrics](https://github.com/LoggeL/turbo-lyrics) (Whisper large-v3-turbo + wav2vec2 alignment, or forced alignment of known lyrics), falling back to [WhisperX](https://github.com/m-bain/whisperX) on Replicate
+3. **Split** vocals and instrumentals locally on the CPU with [turbo-roformer](https://github.com/LoggeL/turbo-roformer) (BS-RoFormer, about 0.7× real time on an 8-core Zen 4)
+4. **Transcribe** lyrics with word-level timestamps locally on the CPU with [turbo-lyrics](https://github.com/LoggeL/turbo-lyrics) (Whisper large-v3-turbo + wav2vec2 alignment, or forced alignment of known lyrics)
 5. **Process** lyrics into karaoke lines using an LLM (via OpenRouter)
 6. **Play** with real-time word-highlighting, independent vocal/instrumental volume, and speaker colorization
 
@@ -48,9 +48,9 @@ Screenshots use a demo song store with self-written lyrics.
 - **Backend:** Python 3.12, Flask, SQLite
 - **Frontend:** React, TypeScript, Vite, CSS Modules with design tokens, self-hosted Archivo and JetBrains Mono
 - **Audio:** Web Audio API with dual GainNodes (vocals + instrumental)
-- **Vocal separation:** local BS-RoFormer via turbo-roformer (CPU, PyTorch), Replicate Demucs as fallback
-- **Transcription:** local Whisper + wav2vec2 alignment via turbo-lyrics (CPU), Replicate WhisperX as fallback
-- **AI Services:** Replicate (WhisperX and Demucs fallbacks), GPT-6 Luna through OpenAI or OpenRouter (lyrics correction and translation)
+- **Vocal separation:** local BS-RoFormer via turbo-roformer (CPU, PyTorch)
+- **Transcription:** local Whisper + wav2vec2 alignment via turbo-lyrics (CPU)
+- **AI Services:** GPT-6 Luna through OpenAI or OpenRouter (lyrics correction and translation)
 - **Song Source:** Deezer
 
 ## Setup
@@ -59,7 +59,7 @@ Screenshots use a demo song store with self-written lyrics.
 
 - Python 3.12+ with [uv](https://docs.astral.sh/uv/)
 - Node.js 22+
-- API keys for: Replicate, OpenAI or OpenRouter, Deezer ARL cookie
+- API keys for: OpenAI or OpenRouter, Deezer ARL cookie
 - Optional: Resend (for password reset emails)
 
 ### Installation
@@ -72,7 +72,7 @@ cd frontend && npm ci
 ```
 
 Local separation and transcription are optional extras (CPU-only PyTorch, about 1 GB, plus about 3 GB of models for
-transcription). Without them, splitting and transcription use Replicate:
+transcription). Without them, audio processing is unavailable:
 
 ```bash
 uv sync --extra separation --extra transcription   # turbo-roformer, turbo-lyrics + torch (CPU wheel)
@@ -80,13 +80,16 @@ uv sync --extra separation --extra transcription   # turbo-roformer, turbo-lyric
 
 The Docker image always includes both, downloads the models and compiles the AVX512-BF16 kernels at build time.
 
+Audio separation and transcription run exclusively locally. There are no Replicate uploads, predictions, or
+health requests. A local worker or output-check failure stops processing and refunds charged processing credits.
+Legacy backend settings cannot enable cloud audio processing.
+
 ### Configuration
 
 Copy `example.env` to `.env` and fill in your API keys:
 
 ```
 DEEZER_ARL=<your deezer ARL cookie>
-REPLICATE_API_TOKEN=<your replicate token>
 HF_READ_TOKEN=<your huggingface token>
 OPENAI_API_KEY=<your OpenAI key, preferred when set>
 OPENROUTER_API_KEY=<alternative OpenRouter key>
@@ -167,7 +170,7 @@ MelodAI/
 MelodAI has real ongoing maintenance surface area:
 
 - reviewing and testing frontend/player changes
-- triaging processing failures across Deezer, Replicate, WhisperX, and OpenRouter
+- triaging processing failures across Deezer, the local audio workers, and the lyrics provider
 - hardening auth, admin routes, file serving, and credit accounting
 - improving release confidence with CI, integration tests, and browser tests
 - documenting operational edge cases for self-hosted deployments

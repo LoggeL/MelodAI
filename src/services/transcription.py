@@ -4,7 +4,7 @@ The work happens in ``src/services/transcription_worker.py`` (turbo-lyrics), a l
 supervision and job client of the separation worker (``WorkerManager``/``run_job`` in ``separation.py``) and its CPU
 gate. ``transcribe_track_locally`` runs the vocals of one track through it and returns WhisperX-shaped lyrics; the
 caller decides whether to keep them and records the producer with ``save_record``. Any problem reaching the worker
-raises ``SeparationUnavailable`` (shared exception types) so the pipeline can fall back to Replicate WhisperX.
+raises ``SeparationUnavailable`` (shared exception types) and stops the pipeline without uploading audio.
 
 ``TRANSCRIBE_REFERENCE_MODE``:
 
@@ -60,7 +60,7 @@ DEFAULTS = {
 
 def config_from_env(environ=None):
     config = separation.config_from_env(environ, defaults=DEFAULTS)
-    config["TRANSCRIBE_BACKEND"] = str(config["TRANSCRIBE_BACKEND"]).strip().lower()
+    config["TRANSCRIBE_BACKEND"] = "local"
     config["TRANSCRIBE_REFERENCE_MODE"] = str(config["TRANSCRIBE_REFERENCE_MODE"]).strip().lower()
     return config
 
@@ -70,8 +70,8 @@ def settings(app=None):
 
 
 def transcribe_backend(app=None):
-    backend = str(settings(app)["TRANSCRIBE_BACKEND"]).lower()
-    return backend if backend in ("local", "replicate") else "local"
+    """Audio transcription is always local, including with legacy backend settings."""
+    return "local"
 
 
 def installed_version():
@@ -179,13 +179,6 @@ def save_record(track_id, record):
     _write_json(_song_file(track_id, RECORD_FILE), record)
 
 
-def replicate_record(reason=None):
-    record = {"backend": "replicate", "engine": "whisperx", "created_at": _now()}
-    if reason:
-        record["local_error"] = str(reason)[:300]
-    return record
-
-
 def _load_output(path):
     with open(path, encoding="utf-8") as handle:
         data = json.load(handle)
@@ -260,4 +253,3 @@ def transcribe_track_locally(track_id, *, reference_lines=None, reference_times=
         return lyrics_raw, record
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
-

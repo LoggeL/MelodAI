@@ -32,8 +32,8 @@ describe('re-split panel helpers', () => {
   it('describes the worker', () => {
     expect(workerLabel(status({}))).toBe('Lokaler Worker bereit · resurrection, kernels, bf16')
     expect(workerLabel(status({}, { worker: { available: false, state: 'stopped', error: 'turbo-roformer is not installed' } })))
-      .toBe('Lokaler Worker nicht verfügbar (turbo-roformer is not installed). Neue Songs nutzen ersatzweise Replicate Demucs.')
-    expect(workerLabel(status({}, { split_backend: 'replicate' }))).toBe('Lokale Trennung ist aus. Neue Songs nutzen Replicate Demucs.')
+      .toBe('Lokaler Worker nicht verfügbar (turbo-roformer is not installed). Die Verarbeitung ist angehalten.')
+    expect(workerLabel(status({}, { split_backend: 'replicate' }))).toBe('Lokale Stimmtrennung ist nicht verfügbar. Die Verarbeitung ist angehalten.')
   })
 
   it('translates the per-song progress detail', () => {
