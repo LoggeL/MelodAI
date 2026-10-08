@@ -6,7 +6,7 @@
 
 ## App Overview
 
-MelodAI is an AI-powered karaoke web app. Users search for songs, the backend downloads them from Deezer, splits audio into vocals + instrumental using AI (Demucs), extracts word-level timed lyrics with speaker diarization (WhisperX), and presents a synchronized karaoke player.
+MelodAI is an AI-powered karaoke web app. Users search for songs, the backend downloads them from Deezer, splits audio into vocals + instrumental using AI (local BS-RoFormer via turbo-roformer, Replicate Demucs as fallback), extracts word-level timed lyrics with speaker diarization (WhisperX), and presents a synchronized karaoke player.
 
 ---
 
@@ -239,10 +239,11 @@ Downloads via blob fetch + programmatic anchor click. Filenames formatted as `Ar
 - Search/filter songs
 - Shows which components exist (audio, vocals, instrumental, lyrics)
 - Delete songs
+- Stem re-split panel: re-separate every song with the local model (resumable batch, start/resume/stop, progress, failures); each song shows whether its stems come from RoFormer or Demucs
 
 ### 11.4 System Status
 
-- Health checks: Database, Deezer API, File System (disk space), Replicate API, Processing Queue, OpenRouter API
+- Health checks: Database, Deezer API, File System (disk space), Replicate API, local separation worker, Processing Queue, OpenRouter API
 - Processing queue view with real-time progress (3s polling)
 - Unfinished tracks view with failure counts (5s polling)
 - Reprocess failed tracks
@@ -257,7 +258,7 @@ Downloads via blob fetch + programmatic anchor click. Filenames formatted as `Ar
 
 1. **Metadata fetch** (0-10%) - fetch song info from Deezer
 2. **Download** (10-20%) - download + decrypt audio from Deezer
-3. **Audio splitting** (20-50%) - Demucs via Replicate separates vocals from instrumental
+3. **Audio splitting** (20-50%) - the local separation worker (BS-RoFormer, turbo-roformer) separates vocals from instrumental and reports "Waiting in queue (position p)..." / "Separating vocals (k/n)..."; Demucs via Replicate is the fallback
 4. **Lyrics extraction** (50-85%) - WhisperX via Replicate produces word-level timestamps + speaker diarization
 5. **Lyrics post-processing** (85-90%) - LLM (via OpenRouter) splits long lines naturally
 6. **Complete** (100%)
@@ -273,7 +274,8 @@ Downloads via blob fetch + programmatic anchor click. Filenames formatted as `Ar
 | Service | Purpose |
 |---------|---------|
 | Deezer | Song search, download, metadata, cover art |
-| Replicate (Demucs) | Vocal/instrumental separation |
+| Local worker (turbo-roformer) | Vocal/instrumental separation on the server CPU |
+| Replicate (Demucs) | Fallback vocal/instrumental separation |
 | Replicate (WhisperX) | Lyrics extraction with timing + diarization |
 | OpenRouter (LLM) | Intelligent lyrics line splitting |
 | SMTP (optional) | Password reset emails |
